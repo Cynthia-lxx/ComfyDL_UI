@@ -155,7 +155,9 @@ try:
 except:
     ixuca_available = False
 
-if args.cpu:
+# Dehydrate: 无任何可用 GPU 后端（CPU 版 torch / 核显设备）时自动降级 CPU 模式，
+# 免去用户手动传 --cpu 参数，保证便携软件开箱即用。
+if args.cpu or not (torch.cuda.is_available() or xpu_available or npu_available or mlu_available or ixuca_available or directml_enabled):
     cpu_state = CPUState.CPU
 
 def is_intel_xpu():

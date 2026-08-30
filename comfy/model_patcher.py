@@ -31,7 +31,11 @@ import tqdm
 
 import comfy.float
 import comfy.hooks
-import comfy.lora
+from comfy._lazy_modules import install_lazy_submodules
+
+# Dehydrate: comfy.lora 等生成层模块惰性化，不随 model_patcher 顶层加载
+install_lazy_submodules()
+
 import comfy.model_management
 import comfy.ops
 import comfy.patcher_extension

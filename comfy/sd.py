@@ -3,101 +3,36 @@ import torch
 from enum import Enum
 import logging
 
+import comfy
 from comfy import model_management
 from comfy.utils import ProgressBar
-from .ldm.models.autoencoder import AutoencoderKL, AutoencodingEngine
-from .ldm.cascade.stage_a import StageA
-from .ldm.cascade.stage_c_coder import StageC_coder
-from .ldm.audio.autoencoder import AudioOobleckVAE
-import comfy.ldm.genmo.vae.model
-import comfy.ldm.lightricks.vae.causal_video_autoencoder
-import comfy.ldm.lightricks.vae.na_diffusion_decoder
-import comfy.ldm.lightricks.vae.audio_vae
-import comfy.ldm.cosmos.vae
-import comfy.ldm.wan.vae
-import comfy.ldm.trellis2.vae
-import comfy.ldm.wan.vae2_2
-import comfy.ldm.hunyuan3d.vae
-import comfy.ldm.seedvr.vae
-import comfy.ldm.mage_flow.vae
-import comfy.ldm.triposplat.vae
-import comfy.ldm.ace.vae.music_dcae_pipeline
-import comfy.ldm.cogvideo.vae
-import comfy.ldm.hunyuan_video.vae
-import comfy.ldm.mmaudio.vae.autoencoder
-import comfy.ldm.audio.vae_sa3
-import comfy.ldm.minimax_music.dav
-import comfy.pixel_space_convert
-import comfy.weight_adapter
+from comfy._lazy_modules import install_lazy_submodules, _LazyCallable
+
+# ---- Dehydrate: 生成实现层全部惰性化，仅保留 CLIP/VAE 类骨架与数据协议 ----
+install_lazy_submodules()
+
+AutoencoderKL = _LazyCallable("comfy.ldm.models.autoencoder", "AutoencoderKL")
+AutoencodingEngine = _LazyCallable("comfy.ldm.models.autoencoder", "AutoencodingEngine")
+StageA = _LazyCallable("comfy.ldm.cascade.stage_a", "StageA")
+StageC_coder = _LazyCallable("comfy.ldm.cascade.stage_c_coder", "StageC_coder")
+AudioOobleckVAE = _LazyCallable("comfy.ldm.audio.autoencoder", "AudioOobleckVAE")
+
 import yaml
 import math
 import os
 
 import comfy.utils
 import comfy.ops
-
-from . import clip_vision
-from . import gligen
-from . import diffusers_convert
-from . import model_detection
-
-from . import sd1_clip
-from . import sdxl_clip
-import comfy.text_encoders.sd2_clip
-import comfy.text_encoders.sd3_clip
-import comfy.text_encoders.sa_t5
-import comfy.text_encoders.aura_t5
-import comfy.text_encoders.pixart_t5
-import comfy.text_encoders.hydit
-import comfy.text_encoders.flux
-import comfy.text_encoders.long_clipl
-import comfy.text_encoders.genmo
-import comfy.text_encoders.lt
-import comfy.text_encoders.hunyuan_video
-import comfy.text_encoders.cosmos
-import comfy.text_encoders.lumina2
-import comfy.text_encoders.pixeldit
-import comfy.text_encoders.wan
-import comfy.text_encoders.hidream
-import comfy.text_encoders.ace
-import comfy.text_encoders.omnigen2
-import comfy.text_encoders.qwen_image
-import comfy.text_encoders.hunyuan_image
-import comfy.text_encoders.z_image
-import comfy.text_encoders.krea2
-import comfy.text_encoders.mage_flow
-import comfy.text_encoders.ideogram4
-import comfy.text_encoders.ovis
-import comfy.text_encoders.kandinsky5
-import comfy.text_encoders.jina_clip_2
-import comfy.text_encoders.newbie
-import comfy.text_encoders.anima
-import comfy.text_encoders.ace15
-import comfy.text_encoders.longcat_image
-import comfy.text_encoders.qwen35
-import comfy.text_encoders.qwen3vl
-import comfy.text_encoders.minimax
-import comfy.text_encoders.minimax_music
-import comfy.ldm.minimax.vae
-import comfy.ldm.minimax.audio_vae
-import comfy.text_encoders.boogu
-import comfy.text_encoders.ernie
-import comfy.text_encoders.gemma4
-import comfy.text_encoders.cogvideo
-import comfy.text_encoders.sa3
-import comfy.text_encoders.gpt_oss
-import comfy.text_encoders.joyimage
-
 import comfy.model_patcher
-import comfy.lora
-import comfy.lora_convert
 import comfy.hooks
-import comfy.t2i_adapter.adapter
-import comfy.taesd.taesd
-import comfy.taesd.taehv
-import comfy.latent_formats
 
-import comfy.ldm.flux.redux
+# 生成模块绑定为惰性代理（访问时才加载；文件删除后抛明确 ImportError）
+clip_vision = comfy.clip_vision
+gligen = comfy.gligen
+diffusers_convert = comfy.diffusers_convert
+model_detection = comfy.model_detection
+sd1_clip = comfy.sd1_clip
+sdxl_clip = comfy.sdxl_clip
 
 def load_lora_for_models(model, clip, lora, strength_model, strength_clip, lora_metadata=None):
     key_map = {}

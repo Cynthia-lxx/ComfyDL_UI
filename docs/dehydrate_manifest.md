@@ -74,25 +74,33 @@ nodes_toolkit.py
 
 ## 5. 改造清单（锚点，必须先于删除执行）
 
+> **当前状态：5.1~5.5 全部完成（2026-08-30），改造后 `main.py --quick-test-for-ci` 启动验证通过。**
+> 惰性代理实现：新增 `comfy/_lazy_modules.py`（`_LazyModule` / `_LazyCallable` / `install_lazy_submodules`），
+> 将 ldm/text_encoders/taesd/k_diffusion/lora 等 33 个生成子模块注册为惰性属性，访问时才 import。
+
 本版本生成层经 4 处锚点**强制进入入口 import 链**，不改造则无法删除。顺序：先 5.5 → 再 5.1~5.4。
 
-### 5.1 `nodes.py`（任务 3）
+### 5.0 `comfy/model_management.py`（新增：CPU 自动降级）
+- `args.cpu` 判断处扩展为：无任何 GPU 后端（`cuda/xpu/npu/mlu/ixuca/directml` 全不可用）时自动 `CPUState.CPU`。
+- 核显设备 + CPU 版 torch 开箱即用，免手动传 `--cpu`。
+
+### 5.1 `nodes.py`（任务 3）✅ 已完成
 - 移除顶层生成 import（第 23-34 行附近）：
   `comfy.diffusers_load` / `comfy.samplers` / `comfy.sample` / `comfy.sd` / `comfy.controlnet` / `comfy.clip_vision`
 - 删除生成节点类及映射（约 60 个）：KSampler、KSamplerAdvanced、CheckpointLoaderSimple、CLIPTextEncode、CLIPSetLastLayer、VAE 系（Decode/Encode/EncodeForInpaint/Loader/DecodeTiled/EncodeTiled）、EmptyLatentImage、Latent 系、Conditioning 系、LoraLoader、CLIPLoader、UNETLoader、DualCLIPLoader、CLIPVision*、StyleModel*、ControlNet*、DiffControlNetLoader、GLIGEN*、unCLIP*、DiffusersLoader、LoadLatent/SaveLatent、InpaintModelConditioning 等。
 - **保留**：LoadImage、LoadImageMask、LoadImageOutput、SaveImage、PreviewImage、ImageScale、ImageScaleBy、ImageInvert、ImageBatch、EmptyImage、ImagePadForOutpaint（待定，看依赖）。
 - 保留 `load_custom_node` / `init_extra_nodes` / `init_builtin_api_nodes` 机制不变。
 
-### 5.2 `model_patcher.py`（任务 2）
+### 5.2 `model_patcher.py`（任务 2）✅ 已完成
 - 第 34 行 `import comfy.lora`：改为延迟注入。`calculate_weight` 相关逻辑提供 stub，注册 `lora.calculate_weight` 为可替换钩子；无 lora 时返回原始权重。
 
-### 5.3 `hooks.py`（任务 2）
+### 5.3 `hooks.py`（任务 2）✅ 已完成
 - 第 14 行 `import comfy.lora`：同样延迟化或删除（hooks 本身被 model_patcher/samplers 使用；samplers 删除后 hooks 仅服务 model_patcher）。
 
-### 5.4 `latent_preview.py`（任务 2）
+### 5.4 `latent_preview.py`（任务 2）✅ 已完成
 - 第 4 行 `from comfy.taesd.taesd import TAESD`、第 5 行 `from comfy.sd import VAE`：改为惰性导入，preview 方法缺 VAE/TAESD 时降级为"无预览"或仅保存图像。
 
-### 5.5 `comfy/sd.py` 拆分（任务 2）
+### 5.5 `comfy/sd.py` 拆分（任务 2）✅ 已完成
 - 保留：`CLIP`、`VAE`、`ModelPatcher`（实际在 model_patcher.py）的**类定义与数据约定**（encode/decode 签名不变）。
 - 所有 ldm/text_encoders import 改为函数内 lazy import；模型构造入口在缺少模块时抛出明确错误（如 `ComfyDL 脱水模式：SD 生成功能未内置`）。
 - 拆分完成后，`comfy.sd` 不再触发 ldm/text_encoders/k_diffusion 加载。

@@ -11,7 +11,11 @@ if TYPE_CHECKING:
     from comfy.model_patcher import ModelPatcher, PatcherInjection
     from comfy.model_base import BaseModel
     from comfy.sd import CLIP
-import comfy.lora
+from comfy._lazy_modules import install_lazy_submodules
+
+# Dehydrate: comfy.lora 等生成层模块惰性化
+install_lazy_submodules()
+
 import comfy.model_management
 import comfy.patcher_extension
 from node_helpers import conditioning_set_values

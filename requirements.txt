@@ -1,18 +1,27 @@
+# ComfyUI Dehydrate 精简依赖清单（2026-08-30）
+# 依据：.codebuddy/scripts/dep_audit.py / req_audit.py 对脱水后保留文件集的 AST 审计
+# 环境：Python 3.14（P:\python）+ ComfyDL_UI/penv（虚拟环境）；核显设备，torch 用 CPU 版
+#
+# 已剔除（生成链专用/保留集零使用，从 ComfyUI-original 回捞时可按需恢复）：
+#   torchsde        # k_diffusion SDE 采样器专用
+#   torchvision     # 保留集零 import（LoadImage 走 PIL）
+#   transformers    # text_encoders 专用
+#   tokenizers      # text_encoders 专用
+#   sentencepiece   # text_encoders 专用
+#   yarl            # aiohttp 传递依赖，pip 自动携带
+#   PyOpenGL        # 3D 节点专用
+#   comfy-angle     # 保留集零使用
+
 comfyui-frontend-package==1.51.9
 comfyui-workflow-templates==0.11.50
 comfyui-embedded-docs==0.5.10
+# CPU 版 torch（核显设备无 CUDA/DML 需求）：
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
 torch
-torchsde
-torchvision
-torchaudio
 numpy>=1.25.0
 einops
-transformers>=4.50.3
-tokenizers>=0.13.3
-sentencepiece
 safetensors>=0.4.2
 aiohttp>=3.11.8
-yarl>=1.18.0
 pyyaml
 Pillow
 scipy
@@ -30,8 +39,8 @@ blake3
 
 #non essential dependencies:
 kornia>=0.7.1
-spandrel
 pydantic~=2.0
 pydantic-settings~=2.0
-PyOpenGL>=3.1.8
-comfy-angle
+# 可选（未来 ComfyDL 教学扩展用，当前保留集仅 try/except / TYPE_CHECKING 引用，不装不报错）：
+#   torchaudio   # comfy_api/latest/_ui.py 音频重采样（AUDIO 类型可选功能）
+#   spandrel     # comfy_api/latest/_io.py 仅 TYPE_CHECKING 引用（upscale 模型描述符）

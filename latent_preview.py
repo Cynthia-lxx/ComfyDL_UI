@@ -1,8 +1,6 @@
 import torch
 from PIL import Image
 from comfy.cli_args import args, LatentPreviewMethod
-from comfy.taesd.taesd import TAESD
-from comfy.sd import VAE
 import comfy.model_management
 import folder_paths
 import comfy.utils
@@ -95,10 +93,12 @@ def get_previewer(device, latent_format):
         if method == LatentPreviewMethod.TAESD:
             if taesd_decoder_path:
                 if latent_format.taesd_decoder_name in VIDEO_TAES:
+                    from comfy.sd import VAE
                     taesd = VAE(comfy.utils.load_torch_file(taesd_decoder_path))
                     taesd.first_stage_model.show_progress_bar = False
                     previewer = TAEHVPreviewerImpl(taesd)
                 else:
+                    from comfy.taesd.taesd import TAESD
                     taesd = TAESD(None, taesd_decoder_path, latent_channels=latent_format.latent_channels).to(device)
                     previewer = TAESDPreviewerImpl(taesd)
             else:
