@@ -44,3 +44,10 @@ pydantic-settings~=2.0
 # 可选（未来 ComfyDL 教学扩展用，当前保留集仅 try/except / TYPE_CHECKING 引用，不装不报错）：
 #   torchaudio   # comfy_api/latest/_ui.py 音频重采样（AUDIO 类型可选功能）
 #   spandrel     # comfy_api/latest/_io.py 仅 TYPE_CHECKING 引用（upscale 模型描述符）
+
+# ComfyDL 教学插件（custom_nodes/ComfyDL，独立 git 仓库，本清单外）运行依赖：
+# d2lcore 运行时导入 IPython，可视化模块与数值绘图依赖 matplotlib/matplotlib-inline。
+# 缺装时插件将降级至 80/106 节点，故重建环境必须补装以下三项：
+matplotlib
+IPython
+matplotlib-inline
