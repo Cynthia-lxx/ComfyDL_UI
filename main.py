@@ -11,6 +11,21 @@ if args.list_feature_flags:
     raise SystemExit(0)
 
 import os
+import sys
+
+# On Windows, stdout/stderr default to the system ANSI codepage (e.g. gbk/cp936
+# on zh-CN), which cannot encode arbitrary non-ASCII output. Custom nodes may
+# print emoji/other scripts; once stdout is wrapped by app.logger.LogInterceptor
+# such output would crash the process with UnicodeEncodeError. Reconfigure both
+# streams to UTF-8 up front so a plain `python main.py` works on any codepage.
+if os.name == "nt":
+    for _stream in (sys.stdout, sys.stderr):
+        if _stream is not None and hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
 import importlib.util
 import shutil
 import importlib.metadata
