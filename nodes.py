@@ -715,6 +715,48 @@ async def init_builtin_api_nodes():
 
     return import_failed
 
+
+async def init_builtin_dl_nodes():
+    """Register the ComfyDL teaching nodes as built-in core nodes.
+
+    ComfyDL lives in the ``./comfydl`` git submodule (github.com/Cynthia-lxx/ComfyDL)
+    and is imported here as a real top-level package so that its relative imports
+    and the sys.path bootstrap inside ``comfydl/__init__.py`` keep working. Node
+    mappings are merged into the core registry exactly like any built-in module;
+    the frontend picks them up automatically through the shared global dicts.
+
+    On a fresh clone where the submodule was not checked out yet, this degrades
+    gracefully to a warning with an actionable ``git submodule update --init``.
+    """
+    import_failed = []
+    try:
+        import comfydl
+    except Exception:
+        import_failed.append("comfydl")
+        logging.warning("WARNING: comfydl (ComfyDL built-in nodes) failed to import.")
+        logging.warning("comfydl is a git submodule; if it is missing, run: git submodule update --init")
+        logging.warning("  repo: https://github.com/Cynthia-lxx/ComfyDL.git")
+        logging.warning(traceback.format_exc())
+        return import_failed
+
+    dl_class_mappings = getattr(comfydl, "NODE_CLASS_MAPPINGS", {}) or {}
+    if not dl_class_mappings:
+        import_failed.append("comfydl")
+        logging.warning("WARNING: comfydl registered 0 nodes (expected ~106 'cdl*' nodes);")
+        logging.warning("this may indicate an import/aggregation issue inside the comfydl submodule.")
+
+    for name, node_cls in dl_class_mappings.items():
+        if name in NODE_CLASS_MAPPINGS:
+            logging.warning("ComfyDL node '{}' collides with an existing core node; skipping.".format(name))
+            continue
+        NODE_CLASS_MAPPINGS[name] = node_cls
+        node_cls.RELATIVE_PYTHON_MODULE = getattr(node_cls, "__module__", None) or "comfydl"
+    dl_display_mappings = getattr(comfydl, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
+    NODE_DISPLAY_NAME_MAPPINGS.update(dl_display_mappings)
+
+    return import_failed
+
+
 async def init_public_apis():
     register_versions([
         ComfyAPIWithVersion(
@@ -727,6 +769,7 @@ async def init_extra_nodes(init_custom_nodes=True, init_api_nodes=True):
     await init_public_apis()
 
     import_failed = await init_builtin_extra_nodes()
+    import_failed += await init_builtin_dl_nodes()
 
     import_failed_api = []
     if init_api_nodes:
