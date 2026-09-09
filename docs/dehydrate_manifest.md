@@ -192,6 +192,33 @@ custom_nodes/websocket_image_save.py   (演示节点，可选删)
 [3] nodes     nodes.py 生成节点移除
 [4] delete-1  comfy/ 生成目录与单文件删除
 [5] delete-2  comfy_extras/comfy_api_nodes/blueprints/tests 删除
-[6] verify    最终验证 + 文档更新
+[6] verify    最终验证 + 文档更新   2026-09-09 完成 → 见 §9 验证记录
 ```
 每阶段完成后 `git add -A && git commit`，异常时可 `git checkout` 回退上一检查点。
+
+## 9. 任务 6 收尾记录（2026-09-09）
+
+### 9.1 脱水后实测修复记录
+
+任务 1~5 完成后，默认启动（`penv\Scripts\python main.py`，无额外参数）实测暴露 3 项问题，均已修复：
+
+| # | 问题 | 根因 | 修复 | 归属 |
+|---|---|---|---|---|
+| 1 | Windows 默认 GBK 控制台下启动即 `UnicodeEncodeError` 崩溃 | ComfyDL 插件 banner 含 emoji/中文，stdout 默认 gbk 无法编码 | `main.py` 入口对 stdout/stderr 做 UTF-8 reconfigure（`errors=replace`），默认启动即稳定 | ComfyDL_UI（commit `744c25a`） |
+| 2 | `No module named 'src'`，ComfyDL 仅注册 80/106 节点 | 插件顶层 `import src.d2lcore` 缺插件根路径 | `custom_nodes/ComfyDL/__init__.py` 顶部将插件根目录加入 `sys.path` | 插件目录（gitignore 外独立仓库） |
+| 3 | `No module named 'IPython'`，d2lcore 部分模块降级 | venv 未装 IPython | venv 补装 `IPython` + `matplotlib-inline`；依赖登记见 §9.2 | venv / 依赖清单（commit `0e37979`） |
+
+> 附带环境清理：删除 venv `site-packages` 下 pip 无效发行版残骸 `~illow-12.3.0.dist-info`、`~il`、`~sutil`（Pillow/psutil 升级中断残留，触发 `Ignoring invalid distribution` 警告），删除后 `import PIL/psutil` 与 `pip check` 均正常（commit `0e37979`）。
+
+### 9.2 最终验证结果（对应 §7 六项标准）
+
+**环境与依赖**：宿主 `requirements.txt` 已补录 ComfyDL 教学插件运行依赖 `matplotlib` / `IPython` / `matplotlib-inline`（缺装会使插件降级至 80/106 节点），插件自身 `custom_nodes/ComfyDL/requirements.txt` 同步补录。
+
+| # | 验证项 | 方法 | 结果 |
+|---|---|---|---|
+| 1 | 启动成功 | `penv\Scripts\python.exe main.py --cpu --quick-test-for-ci`（默认编码，验证 GBK 修复） | 通过：exit 0，无 ModuleNotFoundError / UnicodeEncodeError |
+| 2 | 节点注册 | 启动日志 + `/object_info` | ComfyDL **106 节点 / 14 分类**完整：CV Models 5、Datasets 10、Device Utils 3、GAN 2、Image Tools 9、Misc 4、Model Utils 8、NLP Models 16、NLP Utils 5、ObjectDetection 10、Segmentation 4、Tensor Basic 8、TorchOps 10、Visualization 12 |
+| 3 | 基础工作流 | 真实 HTTP 链路：后台起 server → `POST /prompt`（LoadImage → **CdlImageGrayscale** → SaveImage）→ 轮询 `/history` | 通过：`status=success`，产物 `output/verify_e2e_out_00001_.png` 落盘；可复跑脚本 `../.codebuddy/scripts/e2e_verify.py`（自动起停 server、生成测试图） |
+| 4 | 无残留 import 报错 | 启动日志 | 无 IMPORT FAILED / Warning / Error |
+| 5 | 启动耗时 | `Measure-Command` 多次冷启动 quick-test | 最短 **≈18.76s**（首轮冷缓存 56.36s，warm 后 24.09/18.76s）；**无同机前置基线**：`ComfyUI-original` 在同一 venv 下无法跑通 quick-test（其生成链依赖的 triton/已剔除包缺失，且参照镜像缺 `comfy.ldm.lens`），故不伪造对照数据 |
+| 6 | 回捞可逆 | `.codebuddy/scripts/compare_dups.py` 全量哈希 + 抽样 dry-run | original 完好：`checked=1003 diffs=8 missing=813`（8 个 diff=改造保留文件，813 个 missing=可回捞删除项）；抽样 `comfy/samplers.py` 从 original 复制回捞 sha256 **MATCH** |
