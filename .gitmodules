@@ -1,0 +1,3 @@
+[submodule "comfydl"]
+	path = comfydl
+	url = https://github.com/Cynthia-lxx/ComfyDL.git
