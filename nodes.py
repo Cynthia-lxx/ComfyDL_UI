@@ -742,7 +742,7 @@ async def init_builtin_dl_nodes():
     dl_class_mappings = getattr(comfydl, "NODE_CLASS_MAPPINGS", {}) or {}
     if not dl_class_mappings:
         import_failed.append("comfydl")
-        logging.warning("WARNING: comfydl registered 0 nodes (expected ~106 'cdl*' nodes);")
+        logging.warning("WARNING: comfydl registered 0 nodes (expected ~102 'Cdl*' nodes);")
         logging.warning("this may indicate an import/aggregation issue inside the comfydl submodule.")
 
     for name, node_cls in dl_class_mappings.items():
