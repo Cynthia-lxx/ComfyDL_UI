@@ -745,7 +745,7 @@ async def init_builtin_dl_nodes():
     dl_class_mappings = getattr(comfydl, "NODE_CLASS_MAPPINGS", {}) or {}
     if not dl_class_mappings:
         import_failed.append("comfydl")
-        logging.warning("WARNING: comfydl registered 0 nodes (expected ~102 'Cdl*' nodes);")
+        logging.warning("WARNING: comfydl registered 0 nodes (expected ~108 'Cdl*' nodes);")
         logging.warning("this may indicate an import/aggregation issue inside the comfydl submodule.")
 
     for name, node_cls in dl_class_mappings.items():
@@ -753,7 +753,16 @@ async def init_builtin_dl_nodes():
             logging.warning("ComfyDL node '{}' collides with an existing core node; skipping.".format(name))
             continue
         NODE_CLASS_MAPPINGS[name] = node_cls
-        node_cls.RELATIVE_PYTHON_MODULE = getattr(node_cls, "__module__", None) or "comfydl"
+        # A node may declare the ``python_module`` it wants to report (ComfyDL nodes that
+        # were merged into a Comfy core category do). The node library picks the section a
+        # node lives in from the first segment of this string (``nodes`` / ``comfy_extras``
+        # / ``comfy_api_nodes`` = Comfy Core, anything else = Extensions), so the default
+        # ``comfydl.nodes.*`` is what keeps the teaching nodes under Extensions.
+        node_cls.RELATIVE_PYTHON_MODULE = (
+            getattr(node_cls, "PYTHON_MODULE", None)
+            or getattr(node_cls, "__module__", None)
+            or "comfydl"
+        )
     dl_display_mappings = getattr(comfydl, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
     NODE_DISPLAY_NAME_MAPPINGS.update(dl_display_mappings)
 
