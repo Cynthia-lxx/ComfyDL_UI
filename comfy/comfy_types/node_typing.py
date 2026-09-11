@@ -50,6 +50,8 @@ class IO(StrEnum):
     BBOX = "BBOX"
     SEGS = "SEGS"
     VIDEO = "VIDEO"
+    TENSOR = "TENSOR"
+    """Generic N-D tensor of arbitrary shape (shape-agnostic)."""
 
     ANY = "*"
     """Always matches any type, but at a price.

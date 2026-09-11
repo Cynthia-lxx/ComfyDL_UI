@@ -691,6 +691,7 @@ async def init_builtin_extra_nodes():
         "nodes_color.py",
         "nodes_toolkit.py",
         "nodes_math.py",
+        "nodes_activation.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",

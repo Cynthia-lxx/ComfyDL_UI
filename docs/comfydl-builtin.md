@@ -52,8 +52,13 @@ ComfyDL_UI/
 （`d2l/*`，以及并入的核心分类）下自动可见；若 submodule 缺失则告警提示且不崩溃。
 
 Verification baseline (验证基线)：`CORE_BEFORE=11` core classes →
-`CORE_AFTER=113` (11 core + 102 ComfyDL, key prefix `Cdl*`, 16 categories,
-no IMPORT FAILED).
+`CORE_AFTER=127` (11 core + 102 ComfyDL, key prefix `Cdl*`, 16 categories, plus the
+14 core `Activation` nodes of reform step 1 in a 17th category, no IMPORT FAILED).
+
+Measured after reform step 1 with
+`init_extra_nodes(init_api_nodes=False, init_custom_nodes=False)`: `IMPORT_FAILED []`,
+`CDL 102`, `ACTIVATION 14` (the raw `NODE_CLASS_MAPPINGS` dict holds 222 classes across
+30 categories in total, because it also contains every other `comfy_extras` file).
 
 ## Category Layout (分类布局)
 
@@ -102,6 +107,20 @@ Expected: `IMPORT_FAILED []`, `CDL_COUNT 102`, startup banner
 
 A full `python main.py --cpu` boot also works and logs the banner; optional full HTTP
 check: `GET /object_info/CdlAccuracy`.
+
+## Reform Step 1: Activation + TENSOR (reform 第一步)
+
+The host runtime gained 14 core activation nodes (`comfy_extras/nodes_activation.py`,
+category `Activation`) together with a new core `TENSOR` slot type. ComfyDL's own
+`cdlTensor` / `cdlBbox` names were merged into the core `TENSOR` / `BBOX` types, so
+ComfyDL nodes and core nodes now share the same slots. See
+[reform-step1-activation-tensor.md](./reform-step1-activation-tensor.md) for the node
+table, the `TENSOR` type/colour details and the rollback recipe.
+
+宿主新增 14 个核心激活节点（`comfy_extras/nodes_activation.py`，分类 `Activation`）以及
+新的核心插槽类型 `TENSOR`；ComfyDL 原有的 `cdlTensor` / `cdlBbox` 已并入核心的
+`TENSOR` / `BBOX`，两者现在共用同一插槽。节点清单、`TENSOR` 类型与配色细节、回退方式见
+[reform-step1-activation-tensor.md](./reform-step1-activation-tensor.md)。
 
 ### End-to-end (端到端)
 

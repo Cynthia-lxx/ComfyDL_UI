@@ -445,6 +445,18 @@ class Webcam(ComfyTypeIO):
 class Mask(ComfyTypeIO):
     Type = torch.Tensor
 
+
+@comfytype(io_type="TENSOR")
+class Tensor(ComfyTypeIO):
+    '''Generic N-D tensor of arbitrary shape.
+
+    Unlike IMAGE / MASK / LATENT (which carry a specific semantic meaning),
+    TENSOR is a shape-agnostic ``torch.Tensor`` slot. It is used by generic
+    tensor nodes (e.g. the Activation category) and by the ComfyDL nodes,
+    which previously exposed their own ``cdlTensor`` type.
+    '''
+    Type = torch.Tensor
+
 @comfytype(io_type="LATENT")
 class Latent(ComfyTypeIO):
     '''Latents are stored as a dictionary.'''
@@ -2407,6 +2419,7 @@ __all__ = [
     "WanCameraEmbedding",
     "Webcam",
     "Mask",
+    "Tensor",
     "Latent",
     "Conditioning",
     "Sampler",
