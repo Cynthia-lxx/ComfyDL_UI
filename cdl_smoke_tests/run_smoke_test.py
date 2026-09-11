@@ -381,6 +381,24 @@ def _f_vocab(cfg: dict, name: str) -> Any:
     return out[0] if isinstance(out, (tuple, list)) else out
 
 
+def _f_lora_model(cfg: dict, name: str) -> Any:
+    """A minimal ``LORA_MODEL``: two parameter tensors sharing one dtype.
+
+    The shapes differ on purpose so a pack/unpack round trip has to restore
+    more than one layout.
+    """
+    import torch
+
+    return {"lora_A.weight": torch.randn(2, 3), "lora_B.weight": torch.randn(4)}
+
+
+def _f_loss_map(cfg: dict, name: str) -> Any:
+    """A minimal ``LOSS_MAP``: an ordered list of loss tensors, one dtype."""
+    import torch
+
+    return {"loss": [torch.randn(2, 3), torch.randn(4)]}
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -465,6 +483,10 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     "CdlBarChart": {"values": _f_values6, "labels": _f_labels6},
     "CdlConfusionMatrix": {"class_labels": _f_labels3},
     "CdlPieChart": {"values": _f_values3},
+    # utilities/conversion: tensor collections have no generic dummy value, so
+    # the two pack nodes would otherwise be skipped instead of executed.
+    "CdlLoraModelToTensor": {"lora_model": _f_lora_model},
+    "CdlLossMapToTensor": {"loss_map": _f_loss_map},
 }
 
 
