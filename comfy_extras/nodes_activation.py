@@ -15,7 +15,7 @@ from typing_extensions import override
 
 from comfy_api.latest import ComfyExtension, io
 
-CATEGORY = "Activation"
+CATEGORY = "Network & Layers/Activation"
 
 
 def _activation_schema(

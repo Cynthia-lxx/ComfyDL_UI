@@ -140,6 +140,34 @@ now describes (core nodes replace the dropped `CdlImage*` ones).
 实例上执行成功（`success` / `completed=True`，`PreviewImage` 有输出），与示例工作流
 `example_workflows/Image Processing Chain.json` 一致。
 
+## Reform Step 2: Network & Layers (reform 第二步)
+
+The host runtime gained 8 core basic-layer nodes (`comfy_extras/nodes_layers.py`, category
+`Network & Layers/Basic`), and the 14 activation nodes were moved from the top-level
+`Activation` category to `Network & Layers/Activation`, so both groups now sit under one real
+`Network & Layers` parent under **Comfy nodes**. The planned-but-never-implemented empty
+categories (`Network & Layers`, `ComfyDL EX`) were dropped from the plan. A lightweight
+in-process smoke tester was added at `cdl_smoke_tests/run_smoke_test.py`. See
+[reform-step2-network-layers.md](./reform-step2-network-layers.md) for the node table, the
+deduplication decisions and the rollback recipe.
+
+宿主新增 8 个核心基础层节点（`comfy_extras/nodes_layers.py`，分类 `Network & Layers/Basic`），
+并把 14 个激活节点从顶层 `Activation` 迁到 `Network & Layers/Activation`，两组节点现收敛到
+**Comfy节点** 下一个真实的 `Network & Layers` 父分类；规划过但从未落地的空分类
+（`Network & Layers`、`ComfyDL EX`）已从规划中移除。同时新增轻量进程内冒烟测试器
+`cdl_smoke_tests/run_smoke_test.py`。节点清单、去重决策与回退方式见
+[reform-step2-network-layers.md](./reform-step2-network-layers.md)。
+
+Measured after reform step 2: `IMPORT_FAILED []`, `CDL 102`, `ACTIVATION 14`,
+`BASIC 8`; the `/object_info` tree shows `Network & Layers/Activation` (14) +
+`Network & Layers/Basic` (8), all with `python_module = comfy_extras.nodes_*`; the smoke
+tester reports `208 PASS / 22 SKIP / 0 FAIL` across 230 registered nodes.
+
+reform 第二步后实测：`IMPORT_FAILED []`、`CDL 102`、`ACTIVATION 14`、`BASIC 8`；
+`/object_info` 分类树为 `Network & Layers/Activation`(14) + `Network & Layers/Basic`(8)，
+`python_module` 均为 `comfy_extras.nodes_*`；冒烟测试器在 230 个已注册节点上给出
+`208 PASS / 22 SKIP / 0 FAIL`。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with

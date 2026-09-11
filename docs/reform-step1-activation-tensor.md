@@ -32,10 +32,12 @@ core names.
 
 ## 2. Node List (节点清单)
 
-All 14 nodes live in `comfy_extras/nodes_activation.py`, use the ComfyUI **V3 `io` API**, sit
-in the `Activation` category (`Comfy nodes → Activation` in the library), take exactly one
-`TENSOR` input (`tensor`), return exactly one `TENSOR` output (`output`), preserve the input
-dtype/device, and expose no learnable parameters.
+All 14 nodes live in `comfy_extras/nodes_activation.py`, use the ComfyUI **V3 `io` API**, and
+sat in a top-level `Activation` category when this step landed (`Comfy nodes → Activation`);
+reform step 2 moved the whole group to `Network & Layers/Activation` — see
+[reform-step2-network-layers.md](./reform-step2-network-layers.md). Each takes exactly one
+`TENSOR` input (`tensor`), returns exactly one `TENSOR` output (`output`), preserves the input
+dtype/device, and exposes no learnable parameters.
 
 | Node (node_id) | Display name | Extra widget | Purpose |
 |---|---|---|---|
