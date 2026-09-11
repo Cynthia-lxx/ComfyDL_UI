@@ -1,14 +1,15 @@
-"""Normalization nodes and the train/eval state helpers (reform step 3).
+"""Normalization and regularization nodes plus the train/eval state helpers.
 
-Provides the ``Normalization`` group of ``Network & Layers`` - the third family
-next to ``Basic`` and ``Activation`` - plus the two small ``Training`` nodes that
-tell the normalization nodes whether a graph is training or inferring:
+Provides the ``Normalization`` and ``Regularization`` groups of ``Network & Layers``
+- the families next to ``Basic`` and ``Activation`` - plus the two small ``Training``
+nodes that tell them whether a graph is training or inferring:
 
 * activation normalizers      - ``NormalizationBatchNorm``,
   ``NormalizationInstanceNorm``, ``NormalizationLayerNorm``,
   ``NormalizationGroupNorm``, ``NormalizationRMSNorm``
 * weight re-parameterizations - ``NormalizationWeightNorm``,
   ``NormalizationSpectralNorm``
+* regularizers                - ``RegularizationDropout``
 * train/eval state            - ``TrainingMode``, ``TrainingRunStats``
 
 Design notes
@@ -21,6 +22,10 @@ Design notes
   slots instead of being created inside a node, nothing is cached between two
   executions, and a wired ``running_mean`` / ``running_var`` is never written to,
   because in ComfyUI the same tensor may be shared by several nodes.
+* **Randomness is seeded, never implicit.** ``RegularizationDropout`` draws its mask
+  from a ``torch.Generator`` built for the tensor's own device and seeded by its
+  ``seed`` widget: the same seed reproduces the same mask bit for bit, and the
+  process-wide RNG of the host is left untouched for the other nodes to use.
 * **The train/eval switch travels through a real link.** ``TrainingMode`` publishes
   ``"train"`` / ``"eval"`` as a STRING that is wired into the ``mode`` slot of the
   normalization nodes. Only a link can do this reliably: ComfyUI derives a node's
@@ -49,6 +54,7 @@ from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 
 NORMALIZATION_CATEGORY = "Network & Layers/Normalization"
+REGULARIZATION_CATEGORY = "Network & Layers/Regularization"
 TRAINING_CATEGORY = "Network & Layers/Training"
 
 MODE_TRAIN = "train"
@@ -215,19 +221,26 @@ def _matrix_vector(provided: torch.Tensor | None, fallback: torch.Tensor) -> tor
     return provided.reshape(-1).to(dtype=fallback.dtype, device=fallback.device)
 
 
-def _mode_input() -> io.Input:
-    """The ``mode`` slot shared by BatchNorm / InstanceNorm.
+_DEFAULT_MODE_TOOLTIP = "Link the mode output of a Training Mode node: 'train' normalizes with the statistics of this call, 'eval' with the statistics wired below. Unconnected means 'train'."
+
+
+def _mode_input(tooltip: str = _DEFAULT_MODE_TOOLTIP) -> io.Input:
+    """The ``mode`` slot shared by the normalization and regularization nodes.
 
     It is a plain socket (``force_input``) rather than a dropdown, because the value
     is meant to arrive through a link, and STRING is the type ``TrainingMode``
     outputs, so the two connect without any type juggling.
+
+    Args:
+        tooltip: Hover text; callers whose semantics differ from "normalizes with"
+            pass their own wording, everything else keeps the default.
     """
     return io.String.Input(
         "mode",
         default=MODE_TRAIN,
         optional=True,
         force_input=True,
-        tooltip="Link the mode output of a Training Mode node: 'train' normalizes with the statistics of this call, 'eval' with the statistics wired below. Unconnected means 'train'.",
+        tooltip=tooltip,
     )
 
 
@@ -885,6 +898,108 @@ class NormalizationSpectralNorm(io.ComfyNode):
         return io.NodeOutput(weight / sigma.clamp_min(eps), sigma)
 
 
+def _dropout(tensor: torch.Tensor, p: float, seed: int) -> torch.Tensor:
+    """Drop each element of ``tensor`` independently with probability ``p``.
+
+    The mask is drawn from a generator built for the tensor's own device instead of the
+    process-wide RNG, so the result depends on ``seed`` alone and the RNG stream the
+    host hands to the other nodes is left untouched. Surviving elements are divided by
+    ``1 - p``, which keeps ``E[output] == E[input]``.
+
+    Args:
+        tensor: Input tensor of any shape.
+        p: Drop probability, strictly between 0 and 1 (the caller handles the edges).
+        seed: Seed of the mask draw.
+
+    Returns:
+        A new tensor with the same shape/dtype/device as ``tensor``.
+    """
+    generator = torch.Generator(device=tensor.device)
+    generator.manual_seed(int(seed))
+    keep = torch.rand(tensor.shape, generator=generator, device=tensor.device, dtype=torch.float32) >= p
+    return torch.where(keep, tensor / (1.0 - p), tensor.new_zeros(()))
+
+
+class RegularizationDropout(io.ComfyNode):
+    """Element-wise dropout: ``F.dropout``.
+
+    What: zeroes each element of the input independently with probability ``p`` and
+          divides the surviving elements by ``1 - p``, so the expectation of the output
+          equals the input (the ``torch.nn.Dropout`` semantics used to regularize a
+          training run, and a ready source of stochastic masks in general).
+          The mask is drawn element by element, so one node covers every rank -
+          ``(N, C)``, ``(N, C, H, W)`` or a bare scalar - with no 1d/2d/3d flavour to
+          pick. This is the plain element-wise dropout; the channel-wise variant some
+          recurrent networks use is a different operation and a different node.
+          The draw is seeded: the same ``seed`` and ``p`` reproduce the mask bit for
+          bit, which keeps ComfyUI's caching meaningful (an unchanged graph returns the
+          cached output instead of a fresh mask). The "control after generate"
+          dropdown next to the seed widget is what moves the seed between runs - set it
+          to "randomize" for a new mask every run, "fixed" to freeze the mask.
+          Nothing is stored in the node and the input is never written to, because the
+          same tensor may be shared with other nodes.
+    In:   tensor (TENSOR) - input of any shape; dtype/device preserved.
+          p (FLOAT) - probability that an element is dropped, 0 to 1. ``0`` passes the
+          input through unchanged, ``1`` returns zeros.
+          seed (INT) - seed of the mask draw; only used in ``train`` mode.
+          mode (STRING, optional) - link the ``mode`` output of a Training Mode node;
+          unconnected means ``train``. In ``eval`` mode the input is passed straight
+          through, which makes a Dropout left in an inference graph harmless.
+    Out:  output (TENSOR) - same shape/dtype/device as ``tensor``.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="RegularizationDropout",
+            display_name="Dropout",
+            category=REGULARIZATION_CATEGORY,
+            description="Zero each element with probability p and rescale the rest by 1/(1-p); eval mode passes the input through.",
+            search_aliases=["dropout", "drop out", "regularization", "regularizer", "dropout rate", "mask"],
+            inputs=[
+                io.Tensor.Input("tensor", tooltip="Input of any shape; dtype and device are preserved."),
+                io.Float.Input(
+                    "p",
+                    default=0.5,
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    tooltip="Probability that an element is dropped. 0 passes the input through, 1 returns zeros.",
+                ),
+                io.Int.Input(
+                    "seed",
+                    default=0,
+                    min=0,
+                    max=0xFFFFFFFFFFFFFFFF,
+                    control_after_generate=True,
+                    tooltip="Seed of the mask draw: the same seed reproduces the same mask. The dropdown decides whether the value changes after each run.",
+                ),
+                _mode_input(
+                    tooltip="Link the mode output of a Training Mode node: 'train' drops elements, 'eval' passes the input through unchanged. Unconnected means 'train'.",
+                ),
+            ],
+            outputs=[io.Tensor.Output(display_name="output")],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        tensor: torch.Tensor,
+        p: float = 0.5,
+        seed: int = 0,
+        mode: str = MODE_TRAIN,
+    ) -> io.NodeOutput:
+        if _normalize_mode(mode) == MODE_EVAL:
+            return io.NodeOutput(tensor)
+        if p <= 0.0:
+            return io.NodeOutput(tensor)
+        if p >= 1.0:
+            return io.NodeOutput(torch.zeros_like(tensor))
+        return io.NodeOutput(_dropout(tensor, p, seed))
+
+
+#: Every node this module registers, in node-library order. It spans three
+#: ``Network & Layers`` families: Normalization, Regularization and Training.
 NORMALIZATION_NODES: list[type[io.ComfyNode]] = [
     NormalizationBatchNorm,
     NormalizationInstanceNorm,
@@ -895,11 +1010,12 @@ NORMALIZATION_NODES: list[type[io.ComfyNode]] = [
     NormalizationSpectralNorm,
     TrainingMode,
     TrainingRunStats,
+    RegularizationDropout,
 ]
 
 
 class NormalizationExtension(ComfyExtension):
-    """Registers the core Normalization node family and the training-state helpers."""
+    """Registers the core Normalization / Regularization families and the training-state helpers."""
 
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
