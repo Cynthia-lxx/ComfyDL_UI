@@ -114,11 +114,14 @@ This is why `Basic` ends up with **8** nodes instead of the ~11 originally sketc
 `CdlReshape` and `CdlBroadcast` (`d2l/Tensor Basic`) overlap with `BasicReshape` /
 `BasicBroadcast`. Per the decision on this step they **coexist**: the `d2l` teaching nodes are
 left untouched, and the new core nodes reimplement the same semantics independently (differing
-only in robustness and in using the shared `TENSOR` slot). Removing or archiving the `d2l`
-duplicates is a later, separate decision.
+only in robustness and in using the shared `TENSOR` slot). They have since been **soft-archived**
+(id unchanged, old workflows still load; display name gains a `(DEPRECATED)` suffix, category moves
+to `d2l/_Legacy/Tensor Basic`) pointing users to `BasicReshape` / `BasicBroadcast`.
 
 `CdlReshape`、`CdlBroadcast`（`d2l/Tensor Basic`）与新核心节点功能重叠，本次决策为**并存**：
-`d2l` 教学节点原样不动，新核心节点独立实现同一语义。是否归档 `d2l` 重复项留待后续决定。
+`d2l` 教学节点原样不动，新核心节点独立实现同一语义。后续已做**软归档**（id 不变、旧工作流照常
+加载；显示名加 `(DEPRECATED)`、分类移入 `d2l/_Legacy/Tensor Basic`），引导改用
+`BasicReshape` / `BasicBroadcast`。
 
 ---
 

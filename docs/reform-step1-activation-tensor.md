@@ -179,6 +179,16 @@ Implementation:
 type-mismatched; re-dragging the link fixes it. Backend execution does not validate slot
 types, so graphs submitted via `/prompt` still run.
 
+Follow-up (2026-09-11): the stored type strings were rewritten in place (`"cdlTensor"` →
+`"TENSOR"`, `"cdlBbox"` → `"BBOX"`) across all `example_workflows/*.json`, and the generator
+(`_gen_full_test.py`) plus the re-runnable migration record (`_update_nodes.py`) were updated so
+regenerated workflows no longer write the legacy names. Node ids, link ids and widget values are
+untouched.
+
+后续（2026-09-11）：已就地重写所有 `example_workflows/*.json` 中的类型字符串
+（`"cdlTensor"` → `"TENSOR"`、`"cdlBbox"` → `"BBOX"`），并同步生成脚本 `_gen_full_test.py`
+与可重放迁移记录 `_update_nodes.py`，避免重新生成时写回旧名；节点 id、连线 id 与控件值均未改动。
+
 **旧工作流 JSON**：`example_workflows/*.json` 中仍写着旧的 `cdlTensor` 类型名，前端加载这类
 工作流时这些连线会显示为类型不匹配，重新拖一次连线即可；后端执行不做插槽类型校验，因此通过
 `/prompt` 提交仍能正常运行。
@@ -190,11 +200,14 @@ types, so graphs submitted via `/prompt` still run.
 ComfyDL already ships `CdlActivation` (in `d2l/Tensor Basic`), whose activation choice is a
 COMBO widget. The 14 new core nodes overlap with it functionally but differ in shape: one
 function per node, one input/one output, no widget-based dispatch. `CdlActivation` was left
-untouched in this step — removing or deprecating it is a separate decision for a later step.
+untouched in this step; it has since been **soft-archived**: the node id is unchanged and old
+workflows still load, but its display name now carries a `(DEPRECATED)` suffix, it lives in
+`d2l/_Legacy/Tensor Basic`, and its docstring points to the 14 core activation nodes.
 
 ComfyDL 原有的 `CdlActivation`（位于 `d2l/Tensor Basic`）用 COMBO 控件选择激活函数；14 个新
-核心节点与其功能重叠但形态不同（一函数一节点、单入单出、不用控件派发）。本次**未**改动
-`CdlActivation`，是否弃用留待后续决定。
+核心节点与其功能重叠但形态不同（一函数一节点、单入单出、不用控件派发）。本次**未**改动；
+后续已做**软归档**：节点 id 不变、旧工作流照常加载，但显示名加 `(DEPRECATED)` 后缀、归入
+`d2l/_Legacy/Tensor Basic`，docstring 指向 14 个核心激活节点。
 
 ---
 

@@ -70,7 +70,7 @@ unrelated branch). All of them preserve the input dtype/device and return one `T
 | `NormalizationGroupNorm` | GroupNorm | `tensor`, `weight`\*, `bias`\* | `num_groups` INT 1 (1–64), `eps` FLOAT 1e-5 | `F.group_norm`; `num_groups=1` normalizes over all channels |
 | `NormalizationRMSNorm` | RMSNorm | `tensor`, `weight`\* | `normalized_shape` STRING `"last"`, `eps` FLOAT 1e-6 | `F.rms_norm`; LLaMA-style (no mean subtraction, no bias) |
 | `NormalizationWeightNorm` | WeightNorm | `weight`, `g`\* | `dim` INT 0 (-8–7), `eps` FLOAT 1e-12 | Weight re-parameterization `g * v / ‖v‖₂` along `dim` |
-| `NormalizationSpectralNorm` | SpectralNorm | `weight`, `u`\*, `v`\* | `n_power_iterations` INT 1 (0–20), `dim` INT 0 (-8–7), `eps` FLOAT 1e-12 | Divides a weight by a deterministic power-iteration estimate of its largest singular value; extra output `sigma` |
+| `NormalizationSpectralNorm` | SpectralNorm | `weight`, `u`\*, `v`\* | `n_power_iterations` INT 10 (0–20), `dim` INT 0 (-8–7), `eps` FLOAT 1e-12 | Divides a weight by a deterministic power-iteration estimate of its largest singular value; extra output `sigma` |
 
 \* optional slot. Optional slots that are left unconnected are skipped, not replaced by a
 randomly initialised default — an unwired `weight` really means "no gamma".
@@ -259,22 +259,58 @@ difference being the remaining upstream ComfyUI core nodes that this project doe
 随节点库说明文档一起维护的总数为 **20 个分类 133 个节点** = ComfyDL 102 + 核心 31（14+8+7+2）。
 宿主注册表本身是 33 个分类 239 个节点，差额是本项目不负责记录的其余 ComfyUI 上游核心节点。
 
+> **Update (2026-09-11)**: after the conversion nodes and `Dropout` landed and 7 `d2l` nodes were
+> soft-archived, the shipped overview is now **140 nodes across 25 categories** = 108 ComfyDL +
+> 32 core (14 + 8 + 7 + 1 + 2). The four library docs (`FUNCTIONS*.md` / `README*.md`) are the live
+> source of truth.
+>
+> **更新（2026-09-11）**：转换节点与 `Dropout` 落地、7 个 `d2l` 节点软归档后，节点库总览现为
+> **25 个分类 140 个节点** = ComfyDL 108 + 核心 32（14+8+7+1+2）。四份说明文件
+> （`FUNCTIONS*.md` / `README*.md`）为准实时口径。
+
 ---
 
 ## 7. Relation to `d2l` (与 d2l 节点的关系)
 
 | `d2l` node | Overlap | Resolution |
 |---|---|---|
-| `CdlModelMode` (`d2l/Model Utils`) | also switches train/eval, but it **mutates a `cdlModel`** (`model.train()` / `model.eval()`) and passes the module on; it has no effect on a stateless tensor graph | coexist — different payload (`cdlModel` vs a STRING that reaches `TENSOR` nodes) |
-| `CdlAddNorm`, `CdlTransformerEncoder*` (`d2l/NLP Models`) | wrap residual + LayerNorm **inside a module**; they cannot normalize a bare tensor | coexist — `NormalizationLayerNorm` + `BasicAdd` compose the same math on `TENSOR`s |
+| `CdlModelMode` (`d2l/Model Utils`) | also switches train/eval, but it **mutates a `cdlModel`** (`model.train()` / `model.eval()`) and passes the module on; it has no effect on a stateless tensor graph | soft-archived — the tensor-graph equivalent is `TrainingMode`; `CdlModelMode` is kept for `cdlModel`-level switching |
+| `CdlAddNorm`, `CdlTransformerEncoder*` (`d2l/NLP Models`) | wrap residual + LayerNorm **inside a module**; they cannot normalize a bare tensor | soft-archived — `NormalizationLayerNorm` + `BasicAdd` compose the same math on `TENSOR`s; the module-level blocks are kept for `cdlModel` graphs |
 | nothing | there was no tensor-level BatchNorm / InstanceNorm / GroupNorm / RMSNorm / WeightNorm / SpectralNorm | new, no duplicate |
 
-As in step 2 the decision is **coexistence**: the `d2l` teaching nodes are untouched and the new
-core nodes reimplement the semantics independently. Dropping or archiving the model-level
-duplicates is a later, separate decision.
+As in step 2 the original decision was **coexistence**; these `d2l` nodes have since been
+**soft-archived**: the node ids are unchanged (old workflows still load), but their display names
+carry a `(DEPRECATED)` suffix and their categories moved to `d2l/_Legacy/*`. The nodes stay fully
+functional, so `cdlModel`-level train/eval switching or in-module Add & Norm can still be used.
 
-与第二步一致，本次决策是**并存**：`d2l` 教学节点原样不动，新核心节点独立实现同一语义；是否弃用
-模型级重复项留待后续决定。
+与第二步一致，最初的决策是**并存**；这些 `d2l` 节点后续已做**软归档**：节点 id 不变（旧工作流照常
+加载），但显示名加 `(DEPRECATED)` 后缀、分类移入 `d2l/_Legacy/*`。节点功能未变，因此
+`cdlModel` 级 train/eval 切换、模块内 Add & Norm 仍可继续使用。
+
+### Batch statistics export (批统计量导出)
+
+`NormalizationBatchNorm` and `NormalizationInstanceNorm` now export the per-channel statistics
+they actually used for this call, as two extra 1-D `TENSOR` outputs (`mean`, `var`), appended after
+`output` so existing links are untouched:
+
+- **BatchNorm**: the train branch computes `mean` / `var` once (`var` biased, matching
+  `F.batch_norm`) and normalizes with that single reduction instead of writing running stats;
+  the eval branch echoes the running statistics it used. `var`/`mean` reduce over the batch and
+  spatial dims `(0, 2, ...)`, so the shape is `(C,)` for a `(N, C, ...)` input.
+- **InstanceNorm**: `mean = gm.mean(0)` and `var = gv.mean(0) + gm.var(0, unbiased=False)` where
+  `gm` / `gv` are the per-sample per-channel mean/variance over the spatial dims — an exact
+  variance decomposition, so the exported numbers use the same per-channel convention as BatchNorm.
+- `TrainingRunStats` gained two optional `TENSOR` inputs (`mean` / `var`): when linked, the linked
+  tensors (flattened to 1-D) win; when not linked it falls back to the existing string-widget
+  parsing, so its output names and count are unchanged.
+
+`NormalizationBatchNorm` 与 `NormalizationInstanceNorm` 现额外导出本次调用实际使用的逐通道统计量，
+作为两个 1 维 `TENSOR` 输出（`mean`、`var`）追加在 `output` 之后，既有连线不受影响。BatchNorm 的
+train 分支只做一次归约（`var` 为有偏、与 `F.batch_norm` 口径一致）且不写 running stats，eval 分支
+回显所用 running 统计量，均按 `(0, 2, ...)` 归约，`(N, C, ...)` 输入得到 `(C,)`；InstanceNorm 用
+两次归约分解（`mean = gm.mean(0)`、`var = gv.mean(0) + gm.var(0, unbiased=False)`）对齐同一逐通道
+口径。`TrainingRunStats` 新增两个可选 `TENSOR` 输入（`mean` / `var`），有连线以连线为准、未连线
+回退原有字符串解析，输出名与数量不变。
 
 ---
 
@@ -309,19 +345,20 @@ duplicates is a later, separate decision.
   (with `sigma = 0`), as documented; BatchNorm on rank 2 is *valid* `(N, C)` input and normalizes
   normally.
 
-> **Measured characteristic of the `n_power_iterations` default.** The default of 1 iteration is
-> the same as `torch.nn.utils.spectral_norm`, but that module warm-starts `u`/`v` from the previous
-> call, whereas this node is stateless by design. Accuracy therefore depends on the weight size:
-> on a `(6, 5)` weight 1 iteration is already exact (est/true `0.996`), on `(64, 64)` it
-> under-estimates (`0.706`, so the output is normalized to ≈1.4 instead of 1.0), on `(256, 128)`
-> `0.783`. It converges as expected — `(64, 64)` reaches `1.000` and `(256, 128)` reaches `0.998`
-> at 20 iterations — so raise the widget when a tight Lipschitz bound matters.
+> **The `n_power_iterations` default.** It is **10** (raised from 1 on 2026-09-11). Unlike
+> `torch.nn.utils.spectral_norm`, which warm-starts `u`/`v` from the previous call, this node is
+> stateless by design, so accuracy depends on both the weight size and the iteration count. At 1
+> iteration a `(6, 5)` weight is already exact (est/true `0.996`) but `(64, 64)` under-estimates
+> (`0.706`, normalizing the output to ≈1.4 instead of 1.0) and `(256, 128)` reaches `0.783`; at 10
+> iterations the gap is negligible in practice, and 20 iterations converge to `1.000` / `0.998`.
+> The widget range stays `0..20`, so users can still trade cost for a tighter Lipschitz bound.
 >
-> **`n_power_iterations` 默认值的实测特性。** 默认 1 次迭代与 `torch.nn.utils.spectral_norm`
-> 相同，但后者会把上次的 `u`/`v` 热启动，而本节点按设计是无状态的。因此精度取决于权重规模：
-> `(6, 5)` 上 1 次迭代即精确（估计/真值 `0.996`），`(64, 64)` 上偏小（`0.706`，输出谱范数约为
-> 1.4 而非 1.0），`(256, 128)` 上 `0.783`；收敛性正常——20 次迭代时分别达到 `1.000` 与 `0.998`，
-> 需要严格 Lipschitz 界时把该控件调大即可。
+> **`n_power_iterations` 默认值。** 现为 **10**（2026-09-11 由 1 提升）。与
+> `torch.utils.spectral_norm` 不同（后者热启动上一次的 `u`/`v`），本节点按设计无状态，精度同时
+> 取决于权重规模与迭代次数：1 次迭代时 `(6, 5)` 已精确（估计/真值 `0.996`），但 `(64, 64)` 偏小
+> （`0.706`，输出谱范数约 1.4 而非 1.0），`(256, 128)` 为 `0.783`；10 次迭代时误差在实用上可忽略，
+> 20 次迭代收敛到 `1.000` / `0.998`。控件区间仍为 `0..20`，仍可按需在成本与紧密 Lipschitz 界之间
+> 取舍。
 
 ---
 

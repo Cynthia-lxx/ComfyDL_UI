@@ -78,6 +78,16 @@ Dropped in favour of the ComfyUI core nodes: `CdlImageResize` (→ `ImageScale` 
 `CdlImageCrop` (→ `ImageCrop` / `ImageCropV2`). `CdlImageRotate` was kept because the
 core `ImageRotate` only supports 90-degree steps.
 
+> **Update (2026-09-11)**: 7 overlapping teaching nodes were **soft-archived** into three
+> `d2l/_Legacy/*` subcategories — `CdlActivation` / `CdlReshape` / `CdlBroadcast` (→
+> `d2l/_Legacy/Tensor Basic`), `CdlAddNorm` / `CdlTransformerEncoderBlock` /
+> `CdlTransformerEncoder` (→ `d2l/_Legacy/NLP Models`) and `CdlModelMode` (→
+> `d2l/_Legacy/Model Utils`). Node ids are unchanged and the nodes still work, but their display
+> names carry a `(DEPRECATED)` suffix. The registry now reports **108 nodes in 20 categories**.
+>
+> **更新（2026-09-11）**：7 个功能重叠的教学节点已**软归档**进三个 `d2l/_Legacy/*` 子分类（同上）。
+> 节点 id 不变、仍可正常使用，仅显示名加 `(DEPRECATED)` 后缀。注册表现为 **108 个节点 / 20 个分类**。
+
 教学节点统一落在 `d2l/*`（前端分组：扩展 → d2l）；核心确实没有等价实现、又不属于 d2l
 内容的工具节点则并入 ComfyUI 原生分类（`utilities` / `image/color` / `image/transform` /
 `image`）。`CdlImageResize`、`CdlImageFlip`、`CdlImageBlur`、`CdlImageCrop` 因核心已有
