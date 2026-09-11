@@ -211,6 +211,76 @@ reform 第三步后实测：`IMPORT_FAILED []`、`CDL 102`；分类树为 `Netwo
 冒烟测试器在 239 个已注册节点上给出 `217 PASS / 22 SKIP / 0 FAIL`；翻转 `Training Mode` 下拉框会
 改变每个已连线消费者的缓存键。
 
+## Reform Step 4: Pooling + Convolution (reform 第四步)
+
+The host runtime gained 4 core nodes: `comfy_extras/nodes_pooling.py` (category
+`Network & Layers/Pooling`, `Pool` / `Adaptive Pool`) and `comfy_extras/nodes_convolution.py`
+(category `Network & Layers/Convolution`, `Conv` / `ConvTranspose`). Twelve pooling semantics
+collapse into two nodes because `mode` (max/avg) × `dims` (1/2/3) is just a dispatch table;
+`output_size=1` **is** global pooling, so no `GlobalAvgPool` / `GlobalMaxPool` node is shipped.
+The convolutions follow the `Linear` convention exactly — `weight` / `bias` arrive through
+`TENSOR` slots and nothing is initialised inside the node, so there is no `in_channels` /
+`out_channels` / `bias` widget to contradict the weights. `padding_mode` is implemented by hand
+(an `F.pad` pass plus `padding=0`), because `F.conv{1,2,3}d` has no such argument; `ConvTranspose`
+deliberately has no `padding_mode` widget at all. See
+[reform-step4-pooling-convolution.md](./reform-step4-pooling-convolution.md) for the node tables,
+the mode-specific-widget rules and the rollback recipe.
+
+宿主新增 4 个核心节点：`comfy_extras/nodes_pooling.py`（分类 `Network & Layers/Pooling`，`Pool` /
+`Adaptive Pool`）与 `comfy_extras/nodes_convolution.py`（分类 `Network & Layers/Convolution`，
+`Conv` / `ConvTranspose`）。十二种池化语义压缩成两个节点，因为 `mode`(max/avg) × `dims`(1/2/3)
+就是一张分派表；`output_size=1` **就是**全局池化，因此不单列 `GlobalAvgPool` / `GlobalMaxPool`。
+卷积与 `Linear` 完全同构——`weight` / `bias` 从 `TENSOR` 插槽传入、节点内不做初始化，因此没有
+`in_channels` / `out_channels` / `bias` 开关来和权重本身矛盾。`padding_mode` 手工实现（先 `F.pad`
+再以 `padding=0` 调用卷积），因为 `F.conv{1,2,3}d` 没有这个参数；`ConvTranspose` 刻意不提供
+`padding_mode` 控件。节点清单、模式专属控件规则与回退方式见
+[reform-step4-pooling-convolution.md](./reform-step4-pooling-convolution.md)。
+
+Measured after reform step 4: `IMPORT_FAILED []`, `CDL 109`; the tree shows
+`Network & Layers/Pooling` (2) + `Network & Layers/Convolution` (2), all with
+`python_module = comfy_extras.nodes_*`.
+
+reform 第四步后实测：`IMPORT_FAILED []`、`CDL 109`；分类树为 `Network & Layers/Pooling`(2) +
+`Network & Layers/Convolution`(2)，`python_module` 均为 `comfy_extras.nodes_*`。
+
+## Reform Step 5: The `model` protocol layer (reform 第五步)
+
+`MODEL` / `CLIP` / `VAE` are back as first-class values: 22 nodes in `model/loaders` (7),
+`model/merging` (11), `model/latent` (2) and `model/conditioning` (2), built on a new framework
+helper `comfy/model_protocol.py` that treats a checkpoint as a flat *state_dict* instead of a module
+tree. Nothing recognises an architecture any more — the only structure used is the documented key
+prefix (`diffusion_model.` → MODEL, `first_stage_model.` → VAE,
+`cond_stage_model.` / `conditioner.` / `text_encoders.` → CLIP), which is exactly why 16 of the 22
+nodes really execute: they read, split, merge and write weights. The merge nodes compute
+`w_base * base + w_other * other` directly on the tensors instead of building `ModelPatcher`
+patches, which would have to be applied through `comfy.lora.calculate_weight` and therefore crash.
+The remaining 6 nodes (the two LoRA loaders, `VAE Decode` / `VAE Encode`, `CLIP Text Encode` /
+`CLIP Set Last Layer`) keep the native IO contract so graphs can be wired today, and raise an
+actionable `RuntimeError` instead of a bare `ModuleNotFoundError`. `comfy/` itself is untouched —
+the module is a pure addition. See [reform-step5-model-protocol.md](./reform-step5-model-protocol.md)
+for the L1/L2 boundary, the `model_protocol` API and the rollback recipe.
+
+`MODEL` / `CLIP` / `VAE` 重新成为一等数据：`model/loaders`(7)、`model/merging`(11)、
+`model/latent`(2)、`model/conditioning`(2) 共 22 个节点，建立在新增的框架侧辅助模块
+`comfy/model_protocol.py` 之上，把 checkpoint 当作**扁平 state_dict** 而不是模块树来处理。这里不再
+做任何结构识别——用到的唯一"结构"是约定俗成的键前缀（`diffusion_model.` → MODEL、
+`first_stage_model.` → VAE、`cond_stage_model.` / `conditioner.` / `text_encoders.` → CLIP），
+这也正是 22 个节点里有 16 个能真正执行的原因：它们真的读文件、拆组、合并、落盘。合并节点直接对张量
+计算 `w_base * base + w_other * other`，而不是构造 `ModelPatcher` 补丁——补丁要在
+`comfy.lora.calculate_weight` 里应用，那条路径必然崩。其余 6 个节点（两个 LoRA 加载器、
+`VAE Decode` / `VAE Encode`、`CLIP Text Encode` / `CLIP Set Last Layer`）保留原生 IO 契约以便今天就能
+搭出流程图，执行时抛可操作的 `RuntimeError` 而不是裸的 `ModuleNotFoundError`。`comfy/` 框架层零改动，
+模块是纯新增。L1/L2 边界、`model_protocol` API 与回退方式见
+[reform-step5-model-protocol.md](./reform-step5-model-protocol.md)。
+
+Measured after reform step 5: `IMPORT_FAILED []`, `CDL 109`; the host registry holds 274 nodes across
+44 categories; the smoke tester reports `251 PASS / 23 SKIP / 0 FAIL` across those 274 registered
+nodes; the documented library totals 168 nodes across 32 categories (109 ComfyDL + 59 core).
+
+reform 第五步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 274 个节点、44 个分类；冒烟测试器
+在这 274 个已注册节点上给出 `251 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 168 个节点、
+32 个分类（109 个 ComfyDL + 59 个核心节点）。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with

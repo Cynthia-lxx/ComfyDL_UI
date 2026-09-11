@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import inspect
+import itertools
 import os
 import shutil
 import sys
@@ -102,6 +103,36 @@ def _seed_fixtures(sandbox: Path) -> None:
     import torch
 
     torch.save(_f_model({}, "model").state_dict(), sandbox / "model.pt")
+
+
+def _install_sandbox_paths(sandbox: Path) -> None:
+    """Redirect ComfyUI's file access into the sandbox and add a fake checkpoint.
+
+    ``folder_paths`` is imported long after :func:`_bootstrap` ran and derives the
+    output / input / temp roots from the repository itself, so they are redirected
+    here - otherwise the MODEL protocol save nodes would drop ``.safetensors`` files
+    into the checkout.
+
+    The protocol loaders read real files through ``folder_paths``, so one small fake
+    checkpoint is written into a scratch model tree and every model folder is
+    registered to point at it (prepended, so the loaders' default widget value
+    resolves to the fixture).  ``filename_list_cache`` is dropped afterwards: the
+    dropdowns would otherwise keep the empty list they were first built with.
+    """
+    import comfy.utils
+    import folder_paths
+
+    folder_paths.set_output_directory(str(sandbox / "output"))
+    folder_paths.set_input_directory(str(sandbox / "input"))
+    folder_paths.set_temp_directory(str(sandbox / "temp"))
+
+    sd = _fixture_state_dict(0)
+    for folder in ("checkpoints", "diffusion_models", "vae", "text_encoders", "loras"):
+        root = sandbox / "models" / folder
+        root.mkdir(parents=True, exist_ok=True)
+        comfy.utils.save_torch_file(sd, root / _FIXTURE_FILE)
+        folder_paths.add_model_folder_path(folder, str(root), is_default=True)
+    folder_paths.filename_list_cache.clear()
 
 
 def _load_registry(verbose: bool) -> dict[str, type]:
@@ -415,6 +446,28 @@ def _f_tensor_4d(cfg: dict, name: str) -> Any:
     return torch.randn(2, 3, 4, 4)
 
 
+def _f_conv_weight(cfg: dict, name: str) -> Any:
+    """A ``(out, in/groups, kH, kW)`` kernel matching :func:`_f_tensor_4d`.
+
+    ``(4, 3, 3, 3)`` pairs with the ``(2, 3, 4, 4)`` dummy: 3 input channels, 4
+    output channels, 3x3 kernel - the shape a ``nn.Conv2d(3, 4, 3)`` would own.
+    """
+    import torch
+
+    return torch.randn(4, 3, 3, 3)
+
+
+def _f_conv_transpose_weight(cfg: dict, name: str) -> Any:
+    """A ``(in, out/groups, kH, kW)`` kernel matching :func:`_f_tensor_4d`.
+
+    Same channel counts as :func:`_f_conv_weight` but the order is reversed,
+    which is exactly the trap the ``ConvTranspose`` docstring warns about.
+    """
+    import torch
+
+    return torch.randn(3, 4, 3, 3)
+
+
 def _f_stats_linked(cfg: dict, name: str) -> Any:
     """Per-channel statistics for the *linked* Training Run Stats slots.
 
@@ -454,6 +507,100 @@ def _f_file_3d(cfg: dict, name: str) -> Any:
     return Types.File3D(io.BytesIO(payload), file_format="obj")
 
 
+# --------------------------------------------------------------------------- #
+# MODEL protocol fixtures
+# --------------------------------------------------------------------------- #
+#: The fake weight file written into every sandbox model folder, so the loader
+#: nodes have something real to read instead of being skipped.
+_FIXTURE_FILE = "cdl_smoke_fixture.safetensors"
+
+#: ``key -> shape`` of the synthetic checkpoint.  The ``model.`` wrapper is what an
+#: SD1.5/SDXL file really uses, so the loaders have to detect and strip it; the keys
+#: then group into MODEL (``diffusion_model.*``), VAE (``first_stage_model.*``) and
+#: CLIP (``cond_stage_model.*``).  ``other.weight`` carries no known prefix on
+#: purpose: the "never drop a weight" rule puts it in the MODEL bucket, and the merge
+#: checks use it to prove a non-diffusion key is *not* blended.  ``position_ids`` is
+#: an integer tensor, which the CLIP merges must leave alone.
+_FIXTURE_SHAPES: dict[str, tuple[int, ...]] = {
+    "model.diffusion_model.input_blocks.0.weight": (2, 3),
+    "model.diffusion_model.middle_block.weight": (2, 2),
+    "model.diffusion_model.output_blocks.0.weight": (3, 2),
+    # Inside the diffusion model but in no block group, so ModelMergeBlocks has to
+    # fall back to the 'input' ratio for it.
+    "model.diffusion_model.time_embed.weight": (2, 2),
+    "other.weight": (2, 2),
+    "first_stage_model.decoder.conv.weight": (2, 2),
+    "cond_stage_model.transformer.weight": (2, 2),
+    "cond_stage_model.transformer.text_model.embeddings.position_ids": (1, 4),
+}
+
+#: Seeds handed out one at a time, so two dummies of the same type hold different
+#: weights and a merge check can tell "blended" apart from "returned the first input".
+_FIXTURE_SEEDS = itertools.count(1)
+
+
+def _fixture_state_dict(seed: int) -> dict[str, Any]:
+    """One deterministic fake checkpoint following :data:`_FIXTURE_SHAPES`."""
+    import torch
+
+    generator = torch.Generator().manual_seed(1000 + seed)
+    sd: dict[str, Any] = {}
+    for key, shape in _FIXTURE_SHAPES.items():
+        if key.endswith("position_ids"):
+            sd[key] = torch.arange(shape[-1], dtype=torch.int64).expand(*shape).clone()
+        else:
+            sd[key] = torch.randn(*shape, generator=generator)
+    return sd
+
+
+def _fixture_bucket(prefixes: tuple[str, ...], seed: int) -> tuple[dict[str, Any], dict[str, str]]:
+    """Take one bucket out of a fake checkpoint, with the container prefix normalised."""
+    import comfy.model_protocol as protocol
+
+    sd = {
+        key: value
+        for key, value in _fixture_state_dict(seed).items()
+        if key.startswith(prefixes)
+    }
+    return protocol.strip_outer_prefix(sd, "auto")
+
+
+def _f_protocol_model(cfg: dict, name: str) -> Any:
+    """A ``MODEL``: the diffusion-model bucket of a fresh fake checkpoint."""
+    import comfy.model_protocol as protocol
+
+    sd, prefixes = _fixture_bucket(("model.diffusion_model.", "other."), next(_FIXTURE_SEEDS))
+    return protocol.make_model_patcher(sd, prefixes)
+
+
+def _f_protocol_clip(cfg: dict, name: str) -> Any:
+    """A ``CLIP``: the ``cond_stage_model.*`` bucket of a fresh fake checkpoint."""
+    import comfy.model_protocol as protocol
+
+    sd, prefixes = _fixture_bucket(("cond_stage_model.",), next(_FIXTURE_SEEDS))
+    return protocol.make_container(sd, prefixes)
+
+
+def _f_protocol_vae(cfg: dict, name: str) -> Any:
+    """A ``VAE``: the ``first_stage_model.*`` bucket of a fresh fake checkpoint."""
+    import comfy.model_protocol as protocol
+
+    sd, prefixes = _fixture_bucket(("first_stage_model.",), next(_FIXTURE_SEEDS))
+    return protocol.make_container(sd, prefixes)
+
+
+def _f_fixture_file(cfg: dict, name: str) -> str:
+    """File-dropdown value: the fake checkpoint :func:`_install_fixture_models` wrote."""
+    return _FIXTURE_FILE
+
+
+def _protocol_weights(value: Any) -> dict[str, Any]:
+    """The weights behind a MODEL / CLIP / VAE dummy."""
+    import comfy.model_protocol as protocol
+
+    return protocol.container_state_dict(value)[0]
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -474,6 +621,9 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "BOUNDING_BOX": _f_bounding_box,
     "FILE_3D": _f_file_3d,
     "FILE_3D_OBJ": _f_file_3d,
+    "MODEL": _f_protocol_model,
+    "CLIP": _f_protocol_clip,
+    "VAE": _f_protocol_vae,
     "*": _f_any,
 }
 
@@ -506,6 +656,20 @@ _SKIPPED_NODES: dict[str, str] = {
     "CdlRNNLMScratch": "needs an RNN model built by the RNN scratch nodes, not a generic nn.Module",
     "CdlRNNLMScratchPredict": "needs an RNN model built by the RNN scratch nodes, not a generic nn.Module",
     "GetImageSize": "reports progress through PromptServer.instance, which only exists inside the server",
+}
+
+#: node id -> substring its raised error must contain.  These nodes are part of the
+#: MODEL protocol layer: they are registered with a correct IO contract but cannot do
+#: any work in a dehydrated build.  They are still executed here so that the "clear,
+#: actionable error instead of a bare ModuleNotFoundError" promise is *verified*
+#: rather than assumed, and so a regression that makes them crash differently shows up.
+_EXPECTED_ERRORS: dict[str, str] = {
+    "LoraLoader": "comfy/lora.py",
+    "LoraLoaderModelOnly": "comfy/lora.py",
+    "VAEDecode": "comfy/ldm",
+    "VAEEncode": "comfy/ldm",
+    "CLIPTextEncode": "comfy/text_encoders",
+    "CLIPSetLastLayer": "comfy/text_encoders",
 }
 
 #: node id -> {input name -> factory}.  Some inputs are semantically narrower
@@ -558,6 +722,25 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     "CdlHeatmapsTo3D": {"matrices": _f_tensor_large},
     # Preview3D: a real ``Types.File3D``, so a file is really written to disk.
     "Preview3D": {"model_file": _f_file_3d},
+    # Pooling / Convolution: rank matters.  The generic (2, 3) dummy is rank 2, so
+    # 2d pooling would run on a (1, 2, 3) "image" and the convolution kernels need
+    # a real (out, in/groups, kH, kW) / (in, out/groups, kH, kW) partner for the
+    # (2, 3, 4, 4) input.
+    "PoolingSliding": {"tensor": _f_tensor_4d},
+    "PoolingAdaptive": {"tensor": _f_tensor_4d},
+    "ConvolutionConv": {"tensor": _f_tensor_4d, "weight": _f_conv_weight},
+    "ConvolutionConvTranspose": {
+        "tensor": _f_tensor_4d,
+        "weight": _f_conv_transpose_weight,
+    },
+    # MODEL protocol: the loader combos are empty in a fresh checkout, so every
+    # loader is pointed at the fake checkpoint the harness writes into the sandbox
+    # model folders.  Without this they would be skipped instead of really reading.
+    "CheckpointLoaderSimple": {"ckpt_name": _f_fixture_file},
+    "UNETLoader": {"unet_name": _f_fixture_file},
+    "VAELoader": {"vae_name": _f_fixture_file},
+    "CLIPLoader": {"clip_name": _f_fixture_file},
+    "DualCLIPLoader": {"clip_name1": _f_fixture_file, "clip_name2": _f_fixture_file},
 }
 
 
@@ -634,6 +817,159 @@ def _check_training_run_stats(result: Any, args: dict[str, Any]) -> None:
     assert torch.allclose(var_out, torch.tensor([1.0])), (
         f"the unlinked 'var' widget was not parsed as before: {var_out}"
     )
+
+
+def _rerun_v3(node_id: str, **overrides: Any) -> tuple[Any, ...]:
+    """Run a V3 node again with a few inputs replaced.
+
+    The mirror image of :func:`_rerun_legacy` for ``io.ComfyNode`` classes: the
+    schema is re-read so overrides only have to name the inputs that change.
+    """
+    node_cls = _REGISTRY[node_id]
+    args, _, _, _ = _v3_inputs(node_id, node_cls)
+    args.update(overrides)
+    result = node_cls.execute(**args)
+    return _as_tuple(getattr(result, "result", result))
+
+
+def _check_pooling_sliding(result: Any, args: dict[str, Any]) -> None:
+    """``Pool`` must be a thin dispatcher over ``F.max_pool{1,2,3}d`` / ``avg_pool``.
+
+    The default widgets (dims=2, mode=max, kernel_size=2, stride=0 => 2,
+    padding=0, dilation=1, ceil_mode=False) are the textbook ``nn.MaxPool2d(2)``,
+    and every rank has to reach the matching kernel with the same widget set -
+    that dispatch table is the whole node, so a shape check is not enough.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    (output,) = _as_tuple(result)
+    expected = F.max_pool2d(tensor, 2, 2, 0, 1, False)
+    assert tuple(output.shape) == tuple(expected.shape), (
+        f"{tuple(output.shape)} != {tuple(expected.shape)}"
+    )
+    assert torch.allclose(output, expected, atol=1e-6), "mode=max did not reach F.max_pool2d"
+
+    (averaged,) = _rerun_v3("PoolingSliding", tensor=tensor, mode="avg")
+    expected_avg = F.avg_pool2d(tensor, 2, 2, 0, False, True)
+    assert torch.allclose(averaged, expected_avg, atol=1e-6), "mode=avg did not reach F.avg_pool2d"
+
+    rank_cases = {
+        1: (torch.randn(2, 3, 8), F.max_pool1d),
+        3: (torch.randn(2, 3, 8, 8, 8), F.max_pool3d),
+    }
+    for rank, (shaped, kernel) in rank_cases.items():
+        (pooled,) = _rerun_v3("PoolingSliding", tensor=shaped, dims=rank, kernel_size=2)
+        expected_rank = kernel(shaped, 2, 2, 0, 1, False)
+        assert pooled.dim() == shaped.dim(), f"dims={rank} changed the tensor rank"
+        assert torch.allclose(pooled, expected_rank, atol=1e-6), f"dims={rank} reached the wrong kernel"
+
+    # An unbatched (C, H, W) tensor has to survive the round trip unchanged in rank.
+    (unbatched,) = _rerun_v3("PoolingSliding", tensor=torch.randn(3, 8, 8))
+    assert unbatched.dim() == 3 and tuple(unbatched.shape[:1]) == (3,), tuple(unbatched.shape)
+
+
+def _check_pooling_adaptive(result: Any, args: dict[str, Any]) -> None:
+    """``Adaptive Pool`` must be ``F.adaptive_*_pool{1,2,3}d``, with 1 = global pooling."""
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    (output,) = _as_tuple(result)
+    expected = F.adaptive_avg_pool2d(tensor, 1)
+    assert tuple(output.shape) == tuple(expected.shape), (
+        f"output_size=1 must collapse every spatial dim, got {tuple(output.shape)}"
+    )
+    assert torch.allclose(output, expected, atol=1e-6), "Global Average Pooling is not adaptive_avg_pool2d(1)"
+
+    (maxed,) = _rerun_v3("PoolingAdaptive", tensor=tensor, mode="max", output_size=2)
+    assert torch.allclose(maxed, F.adaptive_max_pool2d(tensor, 2), atol=1e-6), (
+        "mode=max did not reach F.adaptive_max_pool2d"
+    )
+
+    (unbatched,) = _rerun_v3("PoolingAdaptive", tensor=torch.randn(3, 8, 8))
+    assert unbatched.dim() == 3, f"an unbatched tensor changed rank: {tuple(unbatched.shape)}"
+
+
+def _check_convolution_conv(result: Any, args: dict[str, Any]) -> None:
+    """``Conv`` must reach ``F.conv{1,2,3}d``, padding modes included.
+
+    The default widgets (dims=2, groups=1, stride=1, padding=1, padding_mode=zeros,
+    dilation=1) reproduce ``nn.Conv2d(3, 4, 3, padding=1)``; the ``reflect`` case
+    proves the explicit ``F.pad`` path really replaces ``padding`` instead of
+    padding twice.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    weight = args["weight"]
+    (output,) = _as_tuple(result)
+    expected = F.conv2d(tensor, weight, None, stride=1, padding=1)
+    assert tuple(output.shape) == tuple(expected.shape), (
+        f"{tuple(output.shape)} != {tuple(expected.shape)}"
+    )
+    assert torch.allclose(output, expected, atol=1e-5), (
+        "the default widgets are not nn.Conv2d(3, 4, 3, padding=1)"
+    )
+
+    (reflected,) = _rerun_v3(
+        "ConvolutionConv", tensor=tensor, weight=weight, padding_mode="reflect"
+    )
+    padded = F.pad(tensor, (1, 1, 1, 1), mode="reflect")
+    assert torch.allclose(reflected, F.conv2d(padded, weight, None, stride=1, padding=0), atol=1e-5), (
+        "padding_mode=reflect is not F.pad(mode='reflect') followed by a zero-padded conv"
+    )
+
+    bias = torch.randn(4)
+    (biased,) = _rerun_v3("ConvolutionConv", tensor=tensor, weight=weight, bias=bias)
+    assert torch.allclose(biased, F.conv2d(tensor, weight, bias, stride=1, padding=1), atol=1e-5), (
+        "the optional bias slot was ignored"
+    )
+
+    # dims=1 must reach F.conv1d with the 1-D kernel shape (out, in/groups, k).
+    shaped = torch.randn(2, 3, 8)
+    weight_1d = torch.randn(4, 3, 3)
+    (rank1,) = _rerun_v3("ConvolutionConv", tensor=shaped, weight=weight_1d, dims=1)
+    assert torch.allclose(rank1, F.conv1d(shaped, weight_1d, None, stride=1, padding=1), atol=1e-5), (
+        "dims=1 did not reach F.conv1d"
+    )
+    assert tuple(rank1.shape[:2]) == (2, 4), tuple(rank1.shape)
+
+
+def _check_convolution_conv_transpose(result: Any, args: dict[str, Any]) -> None:
+    """``ConvTranspose`` must reach ``F.conv_transpose{1,2,3}d`` and grow the spatial size."""
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    weight = args["weight"]
+    (output,) = _as_tuple(result)
+    expected = F.conv_transpose2d(
+        tensor, weight, None, stride=2, padding=0, output_padding=0, groups=1, dilation=1
+    )
+    assert tuple(output.shape) == tuple(expected.shape), (
+        f"{tuple(output.shape)} != {tuple(expected.shape)}; stride=2 should enlarge the spatial size"
+    )
+    assert torch.allclose(output, expected, atol=1e-5), (
+        "the default widgets are not F.conv_transpose2d(stride=2)"
+    )
+
+    # The reverse channel order is the trap this node's docstring warns about.
+    shaped = torch.randn(2, 3, 8)
+    weight_1d = torch.randn(3, 4, 3)
+    (rank1,) = _rerun_v3(
+        "ConvolutionConvTranspose", tensor=shaped, weight=weight_1d, dims=1
+    )
+    assert torch.allclose(
+        rank1,
+        F.conv_transpose1d(
+            shaped, weight_1d, None, stride=2, padding=0, output_padding=0, groups=1, dilation=1
+        ),
+        atol=1e-5,
+    ), "dims=1 did not reach F.conv_transpose1d"
+    assert tuple(rank1.shape[:2]) == (2, 4), tuple(rank1.shape)
 
 
 #: node id -> class, filled in by :func:`main`.  Output checks need it to re-run a
@@ -768,12 +1104,247 @@ def _check_preview3d(result: Any, args: dict[str, Any]) -> None:
     )
 
 
+# --------------------------------------------------------------------------- #
+# MODEL protocol checks
+# --------------------------------------------------------------------------- #
+def _written_files(pattern: str) -> list[Path]:
+    """Files written under the (sandboxed) output directory, newest last.
+
+    ``filename_prefix`` is a *path plus file stem*, not a directory: a save node
+    called with ``comfydl/diffusion_models`` writes
+    ``output/comfydl/diffusion_models_00001_.safetensors``.
+    """
+    import folder_paths
+
+    return sorted(Path(folder_paths.get_output_directory()).glob(pattern))
+
+
+def _check_checkpoint_loader(result: Any, args: dict[str, Any]) -> None:
+    """The three buckets must come from the three key prefixes and nowhere else.
+
+    ``prefix_strip=auto`` has to remove the ``model.`` container wrapper (a merge
+    filter could not see ``diffusion_model.`` through it), every key must land in
+    exactly one bucket, and no key may be lost.
+    """
+    model, clip, vae = _as_tuple(result)
+    model_sd, clip_sd, vae_sd = (
+        _protocol_weights(model),
+        _protocol_weights(clip),
+        _protocol_weights(vae),
+    )
+    total = len(model_sd) + len(clip_sd) + len(vae_sd)
+    assert total == len(_FIXTURE_SHAPES), (
+        f"{len(model_sd)}(model) + {len(clip_sd)}(clip) + {len(vae_sd)}(vae) "
+        f"!= {len(_FIXTURE_SHAPES)} source keys: a weight was dropped or duplicated"
+    )
+    assert all(key.startswith(("diffusion_model.", "other.")) for key in model_sd), sorted(model_sd)
+    assert all(key.startswith("first_stage_model.") for key in vae_sd), sorted(vae_sd)
+    assert all(key.startswith("cond_stage_model.") for key in clip_sd), sorted(clip_sd)
+    assert not (set(model_sd) & set(clip_sd)), "a key landed in both the MODEL and CLIP buckets"
+    assert not (set(model_sd) & set(vae_sd)), "a key landed in both the MODEL and VAE buckets"
+    assert not any(key.startswith("model.") for key in (*model_sd, *clip_sd, *vae_sd)), (
+        "prefix_strip=auto did not strip the 'model.' container wrapper"
+    )
+
+
+def _check_checkpoint_save(result: Any, args: dict[str, Any]) -> None:
+    """The checkpoint must really be on disk with the source file's key set.
+
+    This is the round-trip proof for the whole protocol layer: keys normalised on
+    load have to come back out exactly as they went in, otherwise "load, merge,
+    save" would silently rewrite a checkpoint's key layout.
+    """
+    import comfy.utils
+
+    written = _written_files("comfydl/checkpoints*.safetensors")
+    assert written, "no checkpoint .safetensors was written under output/comfydl/"
+    loaded = comfy.utils.load_torch_file(str(written[-1]), safe_load=True)
+    assert set(loaded) == set(_FIXTURE_SHAPES), (
+        f"saved keys differ from the source file: {sorted(set(loaded) ^ set(_FIXTURE_SHAPES))}"
+    )
+
+
+def _check_model_save(result: Any, args: dict[str, Any]) -> None:
+    """``ModelSave`` must write the MODEL bucket with its prefixes replayed."""
+    import comfy.utils
+
+    written = _written_files("comfydl/diffusion_models*.safetensors")
+    assert written, "no model .safetensors was written under output/comfydl/"
+    loaded = comfy.utils.load_torch_file(str(written[-1]), safe_load=True)
+    expected = {
+        key for key in _FIXTURE_SHAPES if key.startswith(("model.diffusion_model.", "other."))
+    }
+    assert set(loaded) == expected, f"{sorted(set(loaded) ^ expected)}"
+
+
+def _check_clip_save(result: Any, args: dict[str, Any]) -> None:
+    """``CLIPSave`` must write the CLIP bucket."""
+    assert _written_files("comfydl/clip*.safetensors"), (
+        "no CLIP .safetensors was written under output/comfydl/"
+    )
+
+
+def _check_vae_save(result: Any, args: dict[str, Any]) -> None:
+    """``VAESave`` must write the VAE bucket."""
+    assert _written_files("comfydl/vae*.safetensors"), (
+        "no VAE .safetensors was written under output/comfydl/"
+    )
+
+
+def _check_model_merge_simple(result: Any, args: dict[str, Any]) -> None:
+    """``ratio`` must scale ``model1`` and ``1 - ratio`` must scale ``model2``.
+
+    The official documentation defines ``ratio=1`` as "100% model1" and ``ratio=0``
+    as "100% model2".  All three cases are checked here, and with two *different*
+    dummies, so returning either input untouched cannot pass by accident.  The
+    filter is checked too: ``other.weight`` carries no ``diffusion_model.`` marker,
+    so it must be copied from model1 exactly as the native node does.
+    """
+    import torch
+
+    model1, model2 = args["model1"], args["model2"]
+    a, b = _protocol_weights(model1), _protocol_weights(model2)
+    assert set(a) == set(b), "the two MODEL dummies must share a key set"
+
+    (kept1,) = _as_tuple(result)
+    for key, value in _protocol_weights(kept1).items():
+        assert torch.equal(value, a[key]), f"ratio=1.0 (default) did not keep model1's {key!r}"
+
+    (blended_value,) = _rerun_v3("ModelMergeSimple", model1=model1, model2=model2, ratio=0.5)
+    blended = _protocol_weights(blended_value)
+    for key in a:
+        if key.startswith("diffusion_model."):
+            expected = 0.5 * a[key] + 0.5 * b[key]
+            assert torch.allclose(blended[key], expected, atol=1e-6), (
+                f"ratio=0.5 did not blend {key!r}: {blended[key]} != {expected}"
+            )
+        else:
+            assert torch.equal(blended[key], a[key]), f"non-diffusion key {key!r} was blended"
+
+    (kept2,) = _rerun_v3("ModelMergeSimple", model1=model1, model2=model2, ratio=0.0)
+    for key, value in _protocol_weights(kept2).items():
+        expected = b[key] if key.startswith("diffusion_model.") else a[key]
+        assert torch.allclose(value, expected, atol=1e-6), f"ratio=0.0 did not keep model2's {key!r}"
+
+
+def _check_model_merge_blocks(result: Any, args: dict[str, Any]) -> None:
+    """Each UNet block group must use its own ratio, ``input`` acting as the fallback."""
+    import torch
+
+    model1, model2 = args["model1"], args["model2"]
+    a, b = _protocol_weights(model1), _protocol_weights(model2)
+    (value,) = _rerun_v3(
+        "ModelMergeBlocks", model1=model1, model2=model2, input=0.25, middle=0.5, out=0.75
+    )
+    out = _protocol_weights(value)
+    cases = {
+        "diffusion_model.input_blocks.0.weight": 0.25,
+        "diffusion_model.middle_block.weight": 0.5,
+        "diffusion_model.output_blocks.0.weight": 0.75,
+        # Inside the diffusion model but in no block group, so the 'input' ratio
+        # applies - native behaviour, where it is the default of the kwargs order.
+        "diffusion_model.time_embed.weight": 0.25,
+    }
+    for key, ratio in cases.items():
+        expected = ratio * a[key] + (1 - ratio) * b[key]
+        assert torch.allclose(out[key], expected, atol=1e-6), (
+            f"{key!r} should use ratio {ratio}: {out[key]} != {expected}"
+        )
+    # A key outside the diffusion model is not part of the merge at all (the native
+    # node filters on ``diffusion_model.`` too), so it must come through untouched.
+    assert torch.equal(out["other.weight"], a["other.weight"]), (
+        "'other.weight' is outside the diffusion model and must not be blended"
+    )
+
+
+def _check_model_merge_add(result: Any, args: dict[str, Any]) -> None:
+    """``ModelMergeAdd`` must be ``model1 + model2``."""
+    import torch
+
+    a = _protocol_weights(args["model1"])
+    b = _protocol_weights(args["model2"])
+    (value,) = _as_tuple(result)
+    out = _protocol_weights(value)
+    for key in a:
+        if key.startswith("diffusion_model."):
+            assert torch.allclose(out[key], a[key] + b[key], atol=1e-6), key
+        else:
+            assert torch.equal(out[key], a[key]), key
+
+
+def _check_model_merge_subtract(result: Any, args: dict[str, Any]) -> None:
+    """``ModelMergeSubtract`` must be ``model1 - model2`` at multiplier 1.0."""
+    import torch
+
+    a = _protocol_weights(args["model1"])
+    b = _protocol_weights(args["model2"])
+    (value,) = _as_tuple(result)
+    out = _protocol_weights(value)
+    for key in a:
+        if key.startswith("diffusion_model."):
+            assert torch.allclose(out[key], a[key] - b[key], atol=1e-6), key
+        else:
+            assert torch.equal(out[key], a[key]), key
+
+
+def _check_clip_merge_simple(result: Any, args: dict[str, Any]) -> None:
+    """CLIP blends must skip ``.position_ids`` / ``.logit_scale``, as the natives do."""
+    import torch
+
+    clip1, clip2 = args["clip1"], args["clip2"]
+    a, b = _protocol_weights(clip1), _protocol_weights(clip2)
+    assert set(a) == set(b), "the two CLIP dummies must share a key set"
+    ids_key = next(key for key in a if key.endswith(".position_ids"))
+    assert not a[ids_key].is_floating_point(), "position_ids must be an index tensor"
+
+    (value,) = _rerun_v3("CLIPMergeSimple", clip1=clip1, clip2=clip2, ratio=0.5)
+    out = _protocol_weights(value)
+    for key in a:
+        if key.endswith((".position_ids", ".logit_scale")) or not a[key].is_floating_point():
+            assert torch.equal(out[key], a[key]), f"{key!r} must be kept from clip1 untouched"
+        else:
+            expected = 0.5 * a[key] + 0.5 * b[key]
+            assert torch.allclose(out[key], expected, atol=1e-6), (
+                f"ratio=0.5 did not blend {key!r}: {out[key]} != {expected}"
+            )
+
+
+def _check_clip_merge_add(result: Any, args: dict[str, Any]) -> None:
+    """``CLIPMergeAdd`` must be ``clip1 + clip2`` for the weight keys."""
+    import torch
+
+    a = _protocol_weights(args["clip1"])
+    b = _protocol_weights(args["clip2"])
+    (value,) = _as_tuple(result)
+    out = _protocol_weights(value)
+    for key in a:
+        if key.endswith((".position_ids", ".logit_scale")) or not a[key].is_floating_point():
+            assert torch.equal(out[key], a[key]), key
+        else:
+            assert torch.allclose(out[key], a[key] + b[key], atol=1e-6), key
+
+
 #: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
 #: arity matches", for the nodes whose returned *values* carry the contract.
 _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "NormalizationBatchNorm": [_check_batchnorm_stats],
     "NormalizationInstanceNorm": [_check_instancenorm_stats],
     "TrainingRunStats": [_check_training_run_stats],
+    "PoolingSliding": [_check_pooling_sliding],
+    "PoolingAdaptive": [_check_pooling_adaptive],
+    "ConvolutionConv": [_check_convolution_conv],
+    "ConvolutionConvTranspose": [_check_convolution_conv_transpose],
+    "CheckpointLoaderSimple": [_check_checkpoint_loader],
+    "CheckpointSave": [_check_checkpoint_save],
+    "ModelSave": [_check_model_save],
+    "CLIPSave": [_check_clip_save],
+    "VAESave": [_check_vae_save],
+    "ModelMergeSimple": [_check_model_merge_simple],
+    "ModelMergeBlocks": [_check_model_merge_blocks],
+    "ModelMergeAdd": [_check_model_merge_add],
+    "ModelMergeSubtract": [_check_model_merge_subtract],
+    "CLIPMergeSimple": [_check_clip_merge_simple],
+    "CLIPMergeAdd": [_check_clip_merge_add],
     "CdlShowHeatmaps": [partial(_check_heatmap_ranks, "CdlShowHeatmaps")],
     "CdlShowHeatmapsOutput": [partial(_check_heatmap_ranks, "CdlShowHeatmapsOutput")],
     "CdlHeatmapsTo3D": [_check_heatmaps_to_3d],
@@ -999,6 +1570,30 @@ def _execute(
     return result, arity, bool(getattr(node_cls, "OUTPUT_NODE", False))
 
 
+def _check_expected_error(node_id: str, node_cls: type, timeout: float) -> tuple[str, str, str]:
+    """Run a node that must refuse to work, and verify *why* it refuses.
+
+    The MODEL protocol layer registers a few nodes whose implementation was removed
+    by the dehydration pass.  They are supposed to raise a ``RuntimeError`` naming
+    the missing module, so a bare ``ModuleNotFoundError`` (or, worse, a silent
+    success) is a failure of the design, not of the test.
+
+    Returns:
+        ``(status, detail, traceback)``, ready to append to the result list.
+    """
+    expected = _EXPECTED_ERRORS[node_id]
+    try:
+        args, _, _, _ = _v3_inputs(node_id, node_cls)
+        _execute(node_id, node_cls, args, timeout)
+    except RuntimeError as exc:
+        if expected.lower() in str(exc).lower():
+            return "PASS", "", ""
+        return "FAIL", f"the error does not mention {expected!r}: {exc}", ""
+    except BaseException as exc:  # noqa: BLE001 - reported verbatim
+        return "FAIL", f"{type(exc).__name__}: {exc}", traceback.format_exc()
+    return "FAIL", "ran successfully although its implementation is missing", ""
+
+
 def _count_outputs(result: Any) -> int:
     """Number of values a node returned, tolerating UI-only dict returns."""
     if result is None:
@@ -1084,6 +1679,7 @@ def main(argv: list[str] | None = None) -> int:
         mappings = _load_registry(opts.verbose)
         _REGISTRY.clear()
         _REGISTRY.update(mappings)
+        _install_sandbox_paths(sandbox)
 
         if opts.categories:
             _print_categories(mappings)
@@ -1099,6 +1695,12 @@ def main(argv: list[str] | None = None) -> int:
                 results.append((node_id, "SKIP", _SKIPPED_NODES[node_id], ""))
                 if opts.verbose:
                     print(f"SKIP  {node_id}")
+                continue
+            if node_id in _EXPECTED_ERRORS:
+                status, detail, tb = _check_expected_error(node_id, node_cls, opts.timeout)
+                results.append((node_id, status, detail, tb))
+                if opts.verbose:
+                    print(f"{status}  {node_id}: {detail}")
                 continue
             try:
                 if hasattr(node_cls, "GET_SCHEMA") and hasattr(node_cls, "define_schema"):
