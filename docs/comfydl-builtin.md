@@ -168,6 +168,39 @@ reform 第二步后实测：`IMPORT_FAILED []`、`CDL 102`、`ACTIVATION 14`、`
 `python_module` 均为 `comfy_extras.nodes_*`；冒烟测试器在 230 个已注册节点上给出
 `208 PASS / 22 SKIP / 0 FAIL`。
 
+## Reform Step 3: Normalization + train/eval state (reform 第三步)
+
+The host runtime gained 7 core normalization nodes (`comfy_extras/nodes_normalization.py`,
+category `Network & Layers/Normalization`) and 2 state nodes (`Network & Layers/Training`):
+`TrainingMode` publishes the train/eval choice as a STRING that is wired into the `mode` slot of
+BatchNorm / InstanceNorm, and `TrainingRunStats` carries `running_mean` / `running_var` as
+editable widgets that emit 1-D tensors. The switch deliberately travels through a link instead of
+a hidden-prompt handshake: the cache signature (`CacheKeySetInputSignature`) covers only wired
+inputs and their ancestors, and the `IS_CHANGED` / validation call sites read the prompt with
+`dynprompt=None`, so a prompt-based global switch would silently replay stale cached outputs. See
+[reform-step3-normalization.md](./reform-step3-normalization.md) for the node tables, the
+statistics priority, the robustness rules and the rollback recipe.
+
+宿主新增 7 个核心归一化节点（`comfy_extras/nodes_normalization.py`，分类
+`Network & Layers/Normalization`）与 2 个状态节点（`Network & Layers/Training`）：`TrainingMode`
+把训练/推理选择以 STRING 形式发布，连到 BatchNorm / InstanceNorm 的 `mode` 插槽；
+`TrainingRunStats` 用可编辑控件承载 `running_mean` / `running_var` 并输出 1 维张量。开关刻意走
+连线而不是隐藏 prompt 握手：缓存签名（`CacheKeySetInputSignature`）只覆盖已连线的输入及其祖先，
+而 `IS_CHANGED` 与校验流程读取 prompt 时 `dynprompt=None`，基于 prompt 的全局开关会静默复用过期
+缓存。节点清单、统计量优先级、健壮性规则与回退方式见
+[reform-step3-normalization.md](./reform-step3-normalization.md)。
+
+Measured after reform step 3: `IMPORT_FAILED []`, `CDL 102`; the tree shows
+`Network & Layers/Activation` (14) + `Basic` (8) + `Normalization` (7) + `Training` (2), all with
+`python_module = comfy_extras.nodes_*`; the smoke tester reports `217 PASS / 22 SKIP / 0 FAIL`
+across 239 registered nodes; flipping the `Training Mode` dropdown changes the cache key of every
+linked consumer.
+
+reform 第三步后实测：`IMPORT_FAILED []`、`CDL 102`；分类树为 `Network & Layers/Activation`(14) +
+`Basic`(8) + `Normalization`(7) + `Training`(2)，`python_module` 均为 `comfy_extras.nodes_*`；
+冒烟测试器在 239 个已注册节点上给出 `217 PASS / 22 SKIP / 0 FAIL`；翻转 `Training Mode` 下拉框会
+改变每个已连线消费者的缓存键。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with
