@@ -14,7 +14,10 @@ What it checks per node
 1. the node's schema / ``INPUT_TYPES`` can be resolved;
 2. a value can be synthesised for every *required* input (and for hidden inputs);
 3. the node's entry point runs without raising;
-4. the number of returned values matches the declared output arity.
+4. the number of returned values matches the declared output arity;
+5. for the handful of nodes listed in ``_OUTPUT_CHECKS``, the returned *values* are
+   the ones the documentation promises (this is how the statistics a normalization
+   node exports are pinned against ``tensor.mean`` / ``tensor.var``).
 
 Result vocabulary
 -----------------
@@ -399,6 +402,29 @@ def _f_loss_map(cfg: dict, name: str) -> Any:
     return {"loss": [torch.randn(2, 3), torch.randn(4)]}
 
 
+def _f_tensor_4d(cfg: dict, name: str) -> Any:
+    """A ``(N, C, H, W)`` tensor, so channel-wise reductions really run.
+
+    The generic ``(2, 3)`` dummy is rank 2: BatchNorm still works there, but
+    InstanceNorm bails out early because it needs a spatial dimension. ``C=3``
+    keeps the exported statistics small enough to compare element by element.
+    """
+    import torch
+
+    return torch.randn(2, 3, 4, 4)
+
+
+def _f_stats_linked(cfg: dict, name: str) -> Any:
+    """Per-channel statistics for the *linked* Training Run Stats slots.
+
+    Deliberately unlike the widget defaults (``0.0`` / ``1.0``) so a check can tell
+    whether the link or the typed text won.
+    """
+    import torch
+
+    return torch.tensor([0.5, -1.5, 2.0])
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -487,6 +513,97 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     # the two pack nodes would otherwise be skipped instead of executed.
     "CdlLoraModelToTensor": {"lora_model": _f_lora_model},
     "CdlLossMapToTensor": {"loss_map": _f_loss_map},
+    # Normalization: a 4-D dummy, otherwise the exported statistics would be taken
+    # from a rank-2 tensor and InstanceNorm would early-out instead of normalizing.
+    "NormalizationBatchNorm": {"tensor": _f_tensor_4d},
+    "NormalizationInstanceNorm": {"tensor": _f_tensor_4d},
+    # Training Run Stats: only ``mean`` is linked, so a single run covers both the
+    # "a link wins over the widget" path and the "widget text is parsed" path.
+    "TrainingRunStats": {"mean": _f_stats_linked},
+}
+
+
+def _as_tuple(result: Any) -> tuple[Any, ...]:
+    """The node's outputs as a plain tuple, whatever wrapper it used."""
+    if isinstance(result, (tuple, list)):
+        return tuple(result)
+    return (result,)
+
+
+def _channel_dims(tensor: Any) -> tuple[int, ...]:
+    """The reduction dims BatchNorm uses: everything but the channel axis."""
+    return (0,) + tuple(range(2, tensor.dim()))
+
+
+def _check_batchnorm_stats(result: Any, args: dict[str, Any]) -> None:
+    """``mean`` / ``var`` must be exactly the statistics the output was built from.
+
+    The point of the node is that the two exported values are not a *second*,
+    independently computed estimate: they are the numbers ``F.batch_norm`` was
+    handed, which is what makes feeding them into Training Run Stats lossless.
+    """
+    import torch
+
+    tensor = args["tensor"]
+    output, mean, var = _as_tuple(result)
+    dims = _channel_dims(tensor)
+    expected_mean = tensor.mean(dim=dims)
+    expected_var = tensor.var(dim=dims, unbiased=False)
+    assert tuple(mean.shape) == tuple(expected_mean.shape), (
+        f"mean shape {tuple(mean.shape)} != {tuple(expected_mean.shape)}"
+    )
+    assert tuple(var.shape) == tuple(expected_var.shape), (
+        f"var shape {tuple(var.shape)} != {tuple(expected_var.shape)}"
+    )
+    assert torch.allclose(mean, expected_mean, atol=1e-6), f"mean {mean} != {expected_mean}"
+    assert torch.allclose(var, expected_var, atol=1e-6), f"var {var} != {expected_var}"
+    view = (1, -1) + (1,) * (tensor.dim() - 2)
+    manual = (tensor - expected_mean.view(view)) / torch.sqrt(
+        expected_var.view(view) + float(args.get("eps", 1e-5))
+    )
+    assert torch.allclose(output, manual, atol=1e-5), "output was not built from the exported statistics"
+
+
+def _check_instancenorm_stats(result: Any, args: dict[str, Any]) -> None:
+    """``mean`` / ``var`` must be the whole-batch statistics BatchNorm would report.
+
+    InstanceNorm computes one mean per sample; collapsing those to one value per
+    channel only reproduces the batch variance because of the two-way variance
+    decomposition (mean of the within-sample variances + variance of the means).
+    Comparing against ``tensor.var((0, 2, 3))`` pins that identity down.
+    """
+    import torch
+
+    tensor = args["tensor"]
+    _, mean, var = _as_tuple(result)
+    spatial = tuple(range(2, tensor.dim()))
+    dims = (0,) + spatial
+    assert torch.allclose(mean, tensor.mean(dim=dims), atol=1e-6), f"mean {mean} != {tensor.mean(dim=dims)}"
+    assert torch.allclose(var, tensor.var(dim=dims, unbiased=False), atol=1e-6), (
+        f"var {var} != {tensor.var(dim=dims, unbiased=False)}"
+    )
+
+
+def _check_training_run_stats(result: Any, args: dict[str, Any]) -> None:
+    """A linked statistics tensor must win over the widget text it shadows."""
+    import torch
+
+    mean_out, var_out = _as_tuple(result)
+    linked = args["mean"]
+    assert torch.allclose(mean_out, linked.reshape(-1).to(torch.float32)), (
+        f"the linked 'mean' did not override the widget: {mean_out}"
+    )
+    assert torch.allclose(var_out, torch.tensor([1.0])), (
+        f"the unlinked 'var' widget was not parsed as before: {var_out}"
+    )
+
+
+#: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
+#: arity matches", for the nodes whose returned *values* carry the contract.
+_OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
+    "NormalizationBatchNorm": [_check_batchnorm_stats],
+    "NormalizationInstanceNorm": [_check_instancenorm_stats],
+    "TrainingRunStats": [_check_training_run_stats],
 }
 
 
@@ -816,6 +933,8 @@ def main(argv: list[str] | None = None) -> int:
                 got = _count_outputs(result)
                 if got > arity or (got != arity and not allows_fewer):
                     raise AssertionError(f"returned {got} value(s), schema declares {arity}")
+                for check in _OUTPUT_CHECKS.get(node_id, ()):
+                    check(result, args)
             except Unsupported as exc:
                 results.append((node_id, "SKIP", str(exc), ""))
                 if opts.verbose:

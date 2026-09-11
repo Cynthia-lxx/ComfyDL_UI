@@ -37,7 +37,11 @@ Design notes
 * **Running statistics are numbers, not tensors.** ``TrainingRunStats`` keeps them in
   editable widgets, because widgets are what survives in a saved workflow, and emits
   them as 1-D tensors so they can be wired into the normalization nodes, where a
-  single value is broadcast to every channel.
+  single value is broadcast to every channel. ``BatchNorm`` and ``InstanceNorm`` also
+  *export* the per-channel ``mean`` / ``var`` they normalized with, and
+  ``TrainingRunStats`` accepts those through its own optional TENSOR slots: a link
+  wins over the typed text, so the train-to-eval hand-off is a matter of two wires
+  and the numbers never have to be copied by hand.
 
 The nodes preserve the input dtype/device, never round-trip through host memory, and
 unparsable widget text falls back to a documented default with a printed warning, so
@@ -195,6 +199,25 @@ def _stats_tensor(text: str, name: str, fallback: float) -> torch.Tensor:
     return torch.tensor(values, dtype=torch.float32)
 
 
+def _linked_stats(
+    linked: torch.Tensor | None,
+    text: str,
+    name: str,
+    fallback: float,
+) -> torch.Tensor:
+    """Prefer a linked statistics tensor, else parse the widget text.
+
+    A link wins because it is the *measured* value of the run that produced it, while
+    the widget only holds whatever was typed when the graph was saved. The linked
+    tensor is flattened to 1-D and cast to ``float32``; the consumer broadcasts a
+    single value to every channel and casts to its own dtype/device anyway, so the
+    round-trip through the default dtype costs nothing.
+    """
+    if linked is not None:
+        return linked.reshape(-1).to(dtype=torch.float32)
+    return _stats_tensor(text, name, fallback)
+
+
 def _unit_vector(values: torch.Tensor, eps: float) -> torch.Tensor:
     """Scale ``values`` to unit length, replacing an all-zero vector by ``1/sqrt(n)``.
 
@@ -250,10 +273,11 @@ def _normalization_schema(
     description: str,
     inputs: list,
     search_aliases: list[str] | None = None,
+    outputs: list | None = None,
 ) -> io.Schema:
     """Build the schema shared by the activation normalizers.
 
-    They all return exactly one ``output`` TENSOR; only the inputs differ, so callers
+    They all emit ``output`` as their first TENSOR; only the inputs differ, so callers
     pass the already-built input list.
 
     Args:
@@ -262,6 +286,9 @@ def _normalization_schema(
         description: Tooltip shown when hovering over the node.
         inputs: The node's inputs, in declaration order (slots and widgets).
         search_aliases: Extra search keywords for the node library.
+        outputs: The node's outputs, in declaration order. ``None`` means the single
+            ``output`` TENSOR every normalizer has; BatchNorm and InstanceNorm pass
+            their two extra statistics outputs explicitly.
 
     Returns:
         The ``io.Schema`` describing the node.
@@ -273,8 +300,16 @@ def _normalization_schema(
         description=description,
         search_aliases=search_aliases,
         inputs=list(inputs),
-        outputs=[io.Tensor.Output(display_name="output")],
+        outputs=list(outputs) if outputs is not None else [io.Tensor.Output(display_name="output")],
     )
+
+
+# The statistics both BatchNorm and InstanceNorm add after ``output``: the per-channel
+# mean/variance this call normalized with. Shared so the two nodes cannot drift apart.
+_STATS_OUTPUTS = [
+    io.Tensor.Output(display_name="mean"),
+    io.Tensor.Output(display_name="var"),
+]
 
 
 class TrainingMode(io.ComfyNode):
@@ -318,18 +353,24 @@ class TrainingMode(io.ComfyNode):
 
 
 class TrainingRunStats(io.ComfyNode):
-    """Carries ``running_mean`` / ``running_var`` across runs as editable numbers.
+    """Carries ``running_mean`` / ``running_var`` across runs, as numbers or as links.
 
     What: the persistent half of the train/eval switch. A widget is what survives in a
-          saved workflow, so both statistics are typed in as comma separated numbers
-          and emitted as 1-D tensors. Feed in the batch mean/variance of a run (today
-          you read them off the tensors yourself; the normalization nodes do not export
-          them yet) and wire the outputs into the ``running_mean`` / ``running_var``
-          slots of a BatchNorm / InstanceNorm node.
+          saved workflow, so both statistics can be typed in as comma separated numbers
+          and are emitted as 1-D tensors; wire the outputs into the ``running_mean`` /
+          ``running_var`` slots of a BatchNorm / InstanceNorm node.
+          Both statistics can also be *linked* instead of typed: BatchNorm and
+          InstanceNorm export the per-channel statistics they normalized with, and a
+          link wins over the widget, so the numbers of a run can be handed forward
+          without ever being copied by hand.
     In:   running_mean (STRING) - per-channel means, e.g. ``"0.0"`` or ``"0.1,0.2,0.3"``.
           running_var (STRING) - per-channel variances, e.g. ``"1.0"``.
-    Out:  running_mean (TENSOR) - 1-D tensor with the parsed means.
-          running_var (TENSOR) - 1-D tensor with the parsed variances.
+          mean (TENSOR, optional) - link the ``mean`` output of a BatchNorm /
+          InstanceNorm here; overrides the ``running_mean`` text above.
+          var (TENSOR, optional) - link the ``var`` output here; overrides
+          ``running_var``.
+    Out:  running_mean (TENSOR) - 1-D tensor with the means (linked value, else parsed).
+          running_var (TENSOR) - 1-D tensor with the variances.
           One value is broadcast to every channel by the consumer, a value per channel
           is used as is. Text that cannot be parsed falls back to ``0.0`` / ``1.0``
           with a warning, so a typo cannot break a workflow.
@@ -356,6 +397,16 @@ class TrainingRunStats(io.ComfyNode):
                     placeholder="e.g. 1.0,1.0,1.0",
                     tooltip="Per-channel variances as comma separated numbers; a single value is broadcast to every channel.",
                 ),
+                io.Tensor.Input(
+                    "mean",
+                    optional=True,
+                    tooltip="Optional per-channel mean linked from a BatchNorm / InstanceNorm 'mean' output; overrides the running_mean text above.",
+                ),
+                io.Tensor.Input(
+                    "var",
+                    optional=True,
+                    tooltip="Optional per-channel variance linked from a BatchNorm / InstanceNorm 'var' output; overrides the running_var text above.",
+                ),
             ],
             outputs=[
                 io.Tensor.Output(display_name="running_mean"),
@@ -364,10 +415,16 @@ class TrainingRunStats(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, running_mean: str = "0.0", running_var: str = "1.0") -> io.NodeOutput:
+    def execute(
+        cls,
+        running_mean: str = "0.0",
+        running_var: str = "1.0",
+        mean: torch.Tensor | None = None,
+        var: torch.Tensor | None = None,
+    ) -> io.NodeOutput:
         return io.NodeOutput(
-            _stats_tensor(running_mean, "running_mean", 0.0),
-            _stats_tensor(running_var, "running_var", 1.0),
+            _linked_stats(mean, running_mean, "running_mean", 0.0),
+            _linked_stats(var, running_var, "running_var", 1.0),
         )
 
 
@@ -385,7 +442,7 @@ class NormalizationBatchNorm(io.ComfyNode):
           Nothing is stored inside the node: the batch statistics are not written back
           into ``running_mean`` / ``running_var``, because a tensor may be shared with
           other nodes in the same graph. To carry statistics from one run into the next
-          one, feed their values into a Training Run Stats node and wire that in.
+          one, wire the ``mean`` / ``var`` outputs into a Training Run Stats node.
     In:   tensor (TENSOR) - input of shape ``(N, C, ...)``; dtype/device preserved.
           weight (TENSOR, optional) - per-channel scale gamma of shape ``(C,)``.
           bias (TENSOR, optional) - per-channel shift beta of shape ``(C,)``.
@@ -396,6 +453,10 @@ class NormalizationBatchNorm(io.ComfyNode):
           mode (STRING, optional) - link the ``mode`` output of a Training Mode node;
           unconnected means ``train``.
     Out:  output (TENSOR) - same shape/dtype/device as ``tensor``.
+          mean (TENSOR) - the per-channel mean this call normalized with: the batch mean
+          of the current call in ``train``, the wired ``running_mean`` in ``eval``. Shape
+          ``(C,)``, so it can be linked into Training Run Stats.
+          var (TENSOR) - likewise the per-channel variance.
 
     In ``eval`` mode without usable statistics the batch statistics are used instead
     and a warning is printed, so an incomplete graph never breaks.
@@ -432,6 +493,7 @@ class NormalizationBatchNorm(io.ComfyNode):
                 _mode_input(),
             ],
             search_aliases=["bn", "batchnorm", "batch norm", "normalize batch", "running stats"],
+            outputs=[io.Tensor.Output(display_name="output"), *_STATS_OUTPUTS],
         )
 
     @classmethod
@@ -447,15 +509,25 @@ class NormalizationBatchNorm(io.ComfyNode):
     ) -> io.NodeOutput:
         if tensor.dim() < 2:
             _warn("BatchNorm needs a channel dimension, i.e. rank >= 2 (N, C, ...); returning the input unchanged.")
-            return io.NodeOutput(tensor)
+            return io.NodeOutput(tensor, tensor.mean().reshape(1), tensor.var(unbiased=False).reshape(1))
+        # Every dimension but the channel one, which is what lets one node cover the
+        # 1d/2d/3d flavours. ``unbiased=False`` matches the biased variance that
+        # ``F.batch_norm`` normalizes with, so the exported value is the one used.
+        reduce_dims = (0,) + tuple(range(2, tensor.dim()))
+        batch_mean = tensor.mean(dim=reduce_dims)
+        batch_var = tensor.var(dim=reduce_dims, unbiased=False)
         if _normalize_mode(mode) == MODE_EVAL:
             channels = tensor.shape[1]
             mean = _broadcast_stat(running_mean, channels, tensor, "running_mean")
             var = _broadcast_stat(running_var, channels, tensor, "running_var")
             if mean is not None and var is not None:
-                return io.NodeOutput(F.batch_norm(tensor, mean, var, weight, bias, training=False, eps=eps))
+                output = F.batch_norm(tensor, mean, var, weight, bias, training=False, eps=eps)
+                return io.NodeOutput(output, mean.reshape(-1), var.reshape(-1))
             _warn("BatchNorm is in eval mode but no usable running statistics are wired in; using the batch statistics instead.")
-        return io.NodeOutput(F.batch_norm(tensor, None, None, weight, bias, training=True, eps=eps))
+        # ``training=False`` fed with the statistics computed above: the same result as
+        # ``training=True``, but the reduction happens once instead of twice.
+        output = F.batch_norm(tensor, batch_mean, batch_var, weight, bias, training=False, eps=eps)
+        return io.NodeOutput(output, batch_mean, batch_var)
 
 
 class NormalizationInstanceNorm(io.ComfyNode):
@@ -479,6 +551,11 @@ class NormalizationInstanceNorm(io.ComfyNode):
           mode (STRING, optional) - link the ``mode`` output of a Training Mode node;
           unconnected means ``train`` (normalize with the statistics of this call).
     Out:  output (TENSOR) - same shape/dtype/device as ``tensor``.
+          mean (TENSOR) - the per-channel mean this call normalized with: the statistics
+          of the current call in ``train``, the wired ``running_mean`` in ``eval``. The
+          per-sample means are reduced to one value per channel, so the pair means the
+          same thing as BatchNorm's and can be stored in the same slots.
+          var (TENSOR) - likewise the per-channel variance.
 
     In ``eval`` mode without usable statistics the statistics of the current call are
     used instead and a warning is printed. A tensor without a spatial dimension (rank
@@ -516,6 +593,7 @@ class NormalizationInstanceNorm(io.ComfyNode):
                 _mode_input(),
             ],
             search_aliases=["in", "instancenorm", "instance norm", "per sample", "style transfer"],
+            outputs=[io.Tensor.Output(display_name="output"), *_STATS_OUTPUTS],
         )
 
     @classmethod
@@ -531,15 +609,30 @@ class NormalizationInstanceNorm(io.ComfyNode):
     ) -> io.NodeOutput:
         if tensor.dim() < 3:
             _warn("InstanceNorm needs a spatial dimension, i.e. rank >= 3 (N, C, ...); returning the input unchanged.")
-            return io.NodeOutput(tensor)
+            return io.NodeOutput(tensor, tensor.mean().reshape(1), tensor.var(unbiased=False).reshape(1))
         if _normalize_mode(mode) == MODE_EVAL:
             channels = tensor.shape[1]
             mean = _broadcast_stat(running_mean, channels, tensor, "running_mean")
             var = _broadcast_stat(running_var, channels, tensor, "running_var")
             if mean is not None and var is not None:
-                return io.NodeOutput(F.instance_norm(tensor, mean, var, weight, bias, use_input_stats=False, eps=eps))
+                output = F.instance_norm(tensor, mean, var, weight, bias, use_input_stats=False, eps=eps)
+                return io.NodeOutput(output, mean.reshape(-1), var.reshape(-1))
             _warn("InstanceNorm is in eval mode but no usable running statistics are wired in; using the statistics of this call instead.")
-        return io.NodeOutput(F.instance_norm(tensor, None, None, weight, bias, use_input_stats=True, eps=eps))
+        output = F.instance_norm(tensor, None, None, weight, bias, use_input_stats=True, eps=eps)
+        # Instance statistics are per sample, so they are reduced to one mean/variance
+        # per channel: the exported pair then means the same thing as BatchNorm's and
+        # fits the same ``running_mean`` / ``running_var`` slots. The variance is the
+        # two-way decomposition - the mean of the within-sample variances plus the
+        # variance of the per-sample means - which is exactly the variance of the whole
+        # batch, i.e. the quantity BatchNorm would have reported for this tensor.
+        spatial = tuple(range(2, tensor.dim()))
+        sample_mean = tensor.mean(dim=spatial)
+        sample_var = tensor.var(dim=spatial, unbiased=False)
+        return io.NodeOutput(
+            output,
+            sample_mean.mean(dim=0),
+            sample_var.mean(dim=0) + sample_mean.var(dim=0, unbiased=False),
+        )
 
 
 class NormalizationLayerNorm(io.ComfyNode):
@@ -820,8 +913,9 @@ class NormalizationSpectralNorm(io.ComfyNode):
           unconnected for the deterministic default.
           v (TENSOR, optional) - right singular vector of length ``n``; leave it
           unconnected for the deterministic default.
-          n_power_iterations (INT) - how many refinement steps to run; 1 already gives
-          a usable estimate, more converge closer to the true largest singular value.
+          n_power_iterations (INT) - how many refinement steps to run; the default 10
+          sits close to the true largest singular value, while 1 already gives a usable
+          estimate and skips 9 matrix-vector products.
           dim (INT) - dimension that counts as "rows", clamped to the weight rank.
           eps (FLOAT) - lower bound applied to the estimated value, so a weight that is
           numerically zero cannot divide by zero.
@@ -845,7 +939,7 @@ class NormalizationSpectralNorm(io.ComfyNode):
                 io.Tensor.Input("v", optional=True, tooltip="Optional right singular vector of length n; unconnected uses the deterministic default."),
                 io.Int.Input(
                     "n_power_iterations",
-                    default=1,
+                    default=10,
                     min=0,
                     max=20,
                     step=1,
@@ -880,7 +974,7 @@ class NormalizationSpectralNorm(io.ComfyNode):
         weight: torch.Tensor,
         u: torch.Tensor | None = None,
         v: torch.Tensor | None = None,
-        n_power_iterations: int = 1,
+        n_power_iterations: int = 10,
         dim: int = 0,
         eps: float = 1e-12,
     ) -> io.NodeOutput:
