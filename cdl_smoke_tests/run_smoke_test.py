@@ -49,6 +49,7 @@ import threading
 import traceback
 import warnings
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable
 
@@ -425,6 +426,34 @@ def _f_stats_linked(cfg: dict, name: str) -> Any:
     return torch.tensor([0.5, -1.5, 2.0])
 
 
+def _f_tensor_large(cfg: dict, name: str) -> Any:
+    """A 1080p-shaped tensor, so the heatmap element budget really kicks in.
+
+    ``1 x 3 x 400 x 400`` is 480 000 elements, above the ``max_samples`` default of
+    262 144.  Without a tensor that big Show Heatmaps and ``CdlHeatmapsTo3D`` would
+    take the "nothing to sample" shortcut and the stride arithmetic would never be
+    exercised.
+    """
+    import torch
+
+    return torch.randn(1, 3, 400, 400)
+
+
+def _f_file_3d(cfg: dict, name: str) -> Any:
+    """A minimal in-memory OBJ, so ``Preview3D`` goes through ``File3D.save_to``.
+
+    A path string would satisfy the slot just as well, but it would never touch the
+    write path - and that is where a 3D export either lands in the output folder or
+    silently disappears.
+    """
+    import io
+
+    from comfy_api.latest import Types
+
+    payload = b"# cdl smoke test\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+    return Types.File3D(io.BytesIO(payload), file_format="obj")
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -443,6 +472,8 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "DICT": _f_dict,
     "COLOR": _f_color,
     "BOUNDING_BOX": _f_bounding_box,
+    "FILE_3D": _f_file_3d,
+    "FILE_3D_OBJ": _f_file_3d,
     "*": _f_any,
 }
 
@@ -520,6 +551,13 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     # Training Run Stats: only ``mean`` is linked, so a single run covers both the
     # "a link wins over the widget" path and the "widget text is parsed" path.
     "TrainingRunStats": {"mean": _f_stats_linked},
+    # Show Heatmaps / Heatmaps to 3D: a 1080p-shaped tensor forces the element
+    # budget - and with it the stride and axis-selection - to actually run.
+    "CdlShowHeatmaps": {"matrices": _f_tensor_large},
+    "CdlShowHeatmapsOutput": {"matrices": _f_tensor_large},
+    "CdlHeatmapsTo3D": {"matrices": _f_tensor_large},
+    # Preview3D: a real ``Types.File3D``, so a file is really written to disk.
+    "Preview3D": {"model_file": _f_file_3d},
 }
 
 
@@ -598,12 +636,148 @@ def _check_training_run_stats(result: Any, args: dict[str, Any]) -> None:
     )
 
 
+#: node id -> class, filled in by :func:`main`.  Output checks need it to re-run a
+#: node with a different input, because the harness only ever synthesises one set of
+#: dummies per node.
+_REGISTRY: dict[str, type] = {}
+
+#: Shapes used by the heatmap checks: every render branch, plus the ranks that only
+#: become renderable after a reduction.
+_HEATMAP_SHAPES = {
+    "1-D strip": (64,),
+    "2-D plane": (12, 9),
+    "3-D cube": (6, 7, 8),
+    "4-D batch": (1, 3, 8, 9),
+    "5-D batch": (2, 3, 4, 5, 6),
+}
+
+
+def _rerun_legacy(node_id: str, **overrides: Any) -> tuple[Any, ...]:
+    """Run a legacy node again with a few inputs replaced."""
+    node_cls = _REGISTRY[node_id]
+    args, _ = _legacy_inputs(node_id, node_cls)
+    args.update(overrides)
+    return _as_tuple(node_cls().execute(**args))
+
+
+def _check_heatmap_ranks(node_id: str, result: Any, args: dict[str, Any]) -> None:
+    """Every rank must render as one finite RGB image, and the budget must pay off.
+
+    1-D becomes a bar-code strip, 2-D a plane, 3-D a translucent cube; the 4-D and
+    5-D cases only work because the extra axes are reduced away first.  This is the
+    check that pins the behaviour the old implementation got wrong.
+    """
+    import time
+
+    import torch
+
+    from comfydl.nodes.visualization import HeatmapSpecError
+
+    is_output_node = bool(getattr(_REGISTRY[node_id], "OUTPUT_NODE", False))
+    for label, shaped in _HEATMAP_SHAPES.items():
+        out = _rerun_legacy(node_id, matrices=torch.randn(*shaped), max_samples=0)
+        if is_output_node:
+            assert out == (), f"{label}: output node returned {out}"
+            continue
+        image = out[0]
+        assert tuple(image.shape)[0] == 1 and tuple(image.shape)[-1] == 3, (
+            f"{label}: {tuple(image.shape)} is not a single RGB image"
+        )
+        assert torch.isfinite(image).all(), f"{label}: image contains NaN/Inf"
+
+    # An axis that does not exist must either be reported or quietly recovered from.
+    for on_error in ("error", "fallback_first_n"):
+        try:
+            _rerun_legacy(node_id, matrices=torch.randn(4, 5), dims="9",
+                          on_error=on_error, max_samples=0)
+        except HeatmapSpecError:
+            assert on_error == "error", "on_error='fallback_first_n' must not raise"
+        else:
+            assert on_error == "fallback_first_n", "on_error='error' must raise"
+
+    # The element budget has to pay for itself on a real 1080p tensor.
+    big = torch.randn(1, 3, 1080, 1920)
+    start = time.perf_counter()
+    _rerun_legacy(node_id, matrices=big)
+    sampled_cost = time.perf_counter() - start
+    start = time.perf_counter()
+    _rerun_legacy(node_id, matrices=big, max_samples=0)
+    full_cost = time.perf_counter() - start
+    print(f"    sampling self-check: {sampled_cost:.3f}s sampled vs {full_cost:.3f}s unsampled")
+    assert sampled_cost < full_cost, (
+        f"sampling did not pay for itself ({sampled_cost:.3f}s vs {full_cost:.3f}s)"
+    )
+
+
+def _check_heatmaps_to_3d(result: Any, args: dict[str, Any]) -> None:
+    """Every rank must export an OBJ whose MTL really lands next to it on save.
+
+    Writing the ``.mtl`` is the part that cannot be taken for granted: the viewer
+    renames the OBJ to ``preview3d_<uuid>.obj``, so a helper that wrote the MTL
+    under the *original* name would leave the model uncoloured and opaque.
+    """
+    import folder_paths
+
+    import torch
+
+    node_cls = _REGISTRY["CdlHeatmapsTo3D"]
+    output_dir = Path(folder_paths.get_output_directory())
+    for label, shaped in _HEATMAP_SHAPES.items():
+        payload = node_cls().execute(torch.randn(*shaped), "Reds", 0.5, 0.15, max_samples=0)[0]
+        assert payload.format == "obj", f"{label}: file format {payload.format!r}"
+        target = output_dir / f"smoke_{label.replace(' ', '_').replace('-', '_')}.obj"
+        payload.save_to(str(target))
+        material = target.with_suffix(".mtl")
+        assert target.is_file() and material.is_file(), (
+            f"{label}: {target.name} / {material.name} missing"
+        )
+        text = target.read_text(encoding="utf-8")
+        assert text.splitlines()[0] == f"mtllib {material.name}", (
+            f"{label}: first line was {text.splitlines()[0]!r}"
+        )
+        assert "\nusemtl " in text and "\nf " in text, f"{label}: mesh has no faces"
+
+    payload = node_cls().execute(torch.randn(4, 4), "Reds", 0.25, 0.15, max_samples=0)[0]
+    target = output_dir / "smoke_opacity.obj"
+    payload.save_to(str(target))
+    assert "d 0.2500" in target.with_suffix(".mtl").read_text(encoding="utf-8"), (
+        "the opacity widget never reached the MTL"
+    )
+
+
+def _check_preview3d(result: Any, args: dict[str, Any]) -> None:
+    """``Preview3D`` must persist what it is given - and keep a mesh's MTL with it."""
+    import folder_paths
+
+    import torch
+
+    preview = _REGISTRY["Preview3D"]
+    output_dir = Path(folder_paths.get_output_directory())
+
+    name = preview.execute(args["model_file"]).ui.as_dict()["result"][0]
+    assert name.startswith("preview3d_") and name.endswith(".obj"), name
+    assert (output_dir / name).is_file(), f"{name} was never written to the output folder"
+
+    mesh = _REGISTRY["CdlHeatmapsTo3D"]().execute(
+        torch.randn(6, 7, 8), "Reds", 0.5, 0.15, max_samples=0
+    )[0]
+    name = preview.execute(mesh).ui.as_dict()["result"][0]
+    assert (output_dir / name).is_file(), "the renaming preview did not write the OBJ"
+    assert (output_dir / Path(name).with_suffix(".mtl").name).is_file(), (
+        "the sibling .mtl did not follow the renamed OBJ: the model would be uncoloured"
+    )
+
+
 #: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
 #: arity matches", for the nodes whose returned *values* carry the contract.
 _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "NormalizationBatchNorm": [_check_batchnorm_stats],
     "NormalizationInstanceNorm": [_check_instancenorm_stats],
     "TrainingRunStats": [_check_training_run_stats],
+    "CdlShowHeatmaps": [partial(_check_heatmap_ranks, "CdlShowHeatmaps")],
+    "CdlShowHeatmapsOutput": [partial(_check_heatmap_ranks, "CdlShowHeatmapsOutput")],
+    "CdlHeatmapsTo3D": [_check_heatmaps_to_3d],
+    "Preview3D": [_check_preview3d],
 }
 
 
@@ -908,6 +1082,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[smoke] repo      : {REPO_ROOT}")
         print(f"[smoke] python    : {sys.executable}")
         mappings = _load_registry(opts.verbose)
+        _REGISTRY.clear()
+        _REGISTRY.update(mappings)
 
         if opts.categories:
             _print_categories(mappings)
