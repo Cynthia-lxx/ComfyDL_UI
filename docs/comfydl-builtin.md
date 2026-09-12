@@ -281,6 +281,56 @@ reform 第五步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 
 在这 274 个已注册节点上给出 `251 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 168 个节点、
 32 个分类（109 个 ComfyDL + 59 个核心节点）。
 
+## Reform Step 6: Learnable parameters, optimizers and a training loop (reform 第六步)
+
+The host runtime gained 9 core nodes (`comfy_extras/nodes_training.py`, category
+`Network & Layers/Training`) plus two graph value types declared in `comfy_api/latest/_io.py`:
+`PARAMS` (an ordered `{name: nn.Parameter}` mapping) and `OPTIMIZER` (an `OptimizerConfig` dataclass,
+i.e. hyper-parameters rather than a live optimizer). ComfyUI wraps an entire prompt in
+`torch.inference_mode()` (`execution.py:751`), so an autograd graph cannot cross a node boundary and
+an inference tensor cannot be saved for backward: `Training Loop` therefore runs forward, backward and
+`optimizer.step()` itself, for `steps` iterations, inside a `with torch.inference_mode(False):`
+block — the same technique upstream's `TrainLoraNode` uses — and detaches every output so no graph is
+left in ComfyUI's cache. `comfy/training_protocol.py` (a pure addition, no existing `comfy/*.py` file
+is touched — the same pattern as step 5's `comfy/model_protocol.py`) holds the shared pieces:
+`OptimizerConfig` / `build_optimizer`, the `MLP` with its documented `layer{i}.weight` naming, the
+`missing` / `skipped` warm-start bookkeeping and the safetensors-in-base64 text codec.
+
+宿主新增 9 个核心节点（`comfy_extras/nodes_training.py`，分类 `Network & Layers/Training`）以及
+`comfy_api/latest/_io.py` 中的两个图数据类型：`PARAMS`（有序的 `{name: nn.Parameter}` 映射）与
+`OPTIMIZER`（`OptimizerConfig` 数据类，即超参而不是活的优化器）。ComfyUI 会把整轮 prompt 包在
+`torch.inference_mode()` 里（`execution.py:751`），autograd 图无法跨越节点边界、inference tensor
+也无法保存用于反向，因此 `Training Loop` 自己在 `with torch.inference_mode(False):` 块内完成
+`steps` 次前向、反向与 `optimizer.step()`（与上游 `TrainLoraNode` 同一手法），并把所有输出
+detach，绝不把计算图留在 ComfyUI 缓存里。`comfy/training_protocol.py` 是纯新增模块（不改任何既有
+`comfy/*.py`，与第五步的 `comfy/model_protocol.py` 同构），承载共用部分：`OptimizerConfig` /
+`build_optimizer`、带 `layer{i}.weight` 命名约定的 `MLP`、热启动的 `missing` / `skipped` 记账，
+以及 safetensors→base64 的文本编解码。
+
+Persistence has two channels: `Save Parameters` / `Load Parameters` write and read a normal
+`.safetensors` file in the output folder (and pass the set through, so saving does not end the graph),
+while `Parameters to Text` / `Text to Parameters` carry the same payload in a widget
+(`CDLPARAMS1:<base64>`) so a trained set survives inside a saved `.json` workflow. `Parameters to
+Tensor` pulls a single entry back out as a plain tensor and is the bridge to the stateless `Basic` /
+`Conv` layer nodes, which is what closes the "train, then infer" loop. See
+[reform-step6-learnable-params-and-optimizer.md](./reform-step6-learnable-params-and-optimizer.md) for
+the node table, the value type declarations and the rollback recipe.
+
+持久化有两条通道：`Save Parameters` / `Load Parameters` 在输出目录读写普通 `.safetensors` 文件
+（并原样透传参数集，因此保存不会中断图）；`Parameters to Text` / `Text to Parameters` 把同样的载荷
+装进控件（`CDLPARAMS1:<base64>`），让训练产物随 `.json` 工作流一起保存。`Parameters to Tensor` 把
+单个条目取回成普通张量，是通往无状态 `Basic` / `Conv` 层节点的桥——「先训练、后推理」的闭环正是由
+它合上。节点清单、类型声明与回退方式见
+[reform-step6-learnable-params-and-optimizer.md](./reform-step6-learnable-params-and-optimizer.md)。
+
+Measured after reform step 6: `IMPORT_FAILED []`, `CDL 109`; the host registry holds 283 nodes across
+44 categories; the smoke tester reports `260 PASS / 23 SKIP / 0 FAIL` across those 283 registered
+nodes; the documented library totals 177 nodes across 32 categories (109 ComfyDL + 68 core).
+
+reform 第六步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 283 个节点、44 个分类；冒烟测试器
+在这 283 个已注册节点上给出 `260 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 177 个节点、
+32 个分类（109 个 ComfyDL + 68 个核心节点）。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from comfy.samplers import CFGGuider, Sampler
     from comfy.sd import CLIP, VAE
     from comfy.sd import StyleModel as StyleModel_
+    from comfy.training_protocol import OptimizerConfig
     from comfy_api.input import VideoInput, CurveInput as CurveInput_
 from comfy_api.internal import (_ComfyNodeInternal, _NodeOutputInternal, classproperty, copy_class, first_real_override, is_class,
     prune_dict, shallow_clone_class)
@@ -687,6 +688,32 @@ class LossMap(ComfyTypeIO):
     class LossMapDict(TypedDict):
         loss: list[torch.Tensor]
     Type = LossMapDict
+
+@comfytype(io_type="PARAMS")
+class Params(ComfyTypeIO):
+    """A trainable parameter set: an ordered ``{name: nn.Parameter}`` mapping.
+
+    The names are the ones a module and a ``safetensors`` file use, e.g.
+    ``layer0.weight`` / ``layer0.bias``, so an individual entry can be pulled
+    out with the ``Parameters to Tensor`` node and fed to the ordinary layer
+    nodes, saved to disk, or encoded into a string widget.
+
+    Tutorial: https://docs.pytorch.org/docs/stable/generated/torch.nn.Parameter.html
+    """
+    Type = dict[str, torch.nn.Parameter]
+
+@comfytype(io_type="OPTIMIZER")
+class Optimizer(ComfyTypeIO):
+    """The hyper-parameter set of a ``torch.optim`` optimizer.
+
+    A configuration object rather than a live optimizer: a trainer builds the
+    real optimizer from it inside its own call, which keeps the payload free of
+    device state and safe for ComfyUI to cache.
+
+    Tutorial: https://docs.pytorch.org/docs/stable/optim.html
+    """
+    if TYPE_CHECKING:
+        Type = OptimizerConfig
 
 @comfytype(io_type="VOXEL")
 class Voxel(ComfyTypeIO):
@@ -2445,6 +2472,8 @@ __all__ = [
     "SVG",
     "LoraModel",
     "LossMap",
+    "Params",
+    "Optimizer",
     "Voxel",
     "Mesh",
     "Splat",

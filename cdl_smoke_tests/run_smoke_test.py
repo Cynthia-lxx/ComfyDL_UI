@@ -99,10 +99,25 @@ def _seed_fixtures(sandbox: Path) -> None:
     state_dict is taken from the same dummy model :func:`_f_model` hands to those
     nodes, so the load node really exercises ``torch.load`` +
     ``load_state_dict`` instead of being skipped.
+
+    The parameter file does the same job for the training family: ``Load
+    Parameters`` defaults to the first file ``Save Parameters`` writes, and the
+    harness reaches the nodes in alphabetical order
+    (``TrainingLoadParameters`` before ``TrainingSaveParameters``), so one has to
+    exist before the run.  Its content is :func:`_train_fixture_parameters`,
+    which ``_check_training_load_parameters`` pins the loaded values against.
     """
     import torch
+    from safetensors.torch import save_file
 
     torch.save(_f_model({}, "model").state_dict(), sandbox / "model.pt")
+
+    bucket = sandbox / "output" / "comfydl"
+    bucket.mkdir(parents=True, exist_ok=True)
+    save_file(
+        {"weight": _train_fixture_parameters()},
+        str(bucket / "parameters_00001_.safetensors"),
+    )
 
 
 def _install_sandbox_paths(sandbox: Path) -> None:
@@ -601,6 +616,61 @@ def _protocol_weights(value: Any) -> dict[str, Any]:
     return protocol.container_state_dict(value)[0]
 
 
+def _train_fixture_parameters():
+    """The 2x3 matrix :func:`_seed_fixtures` writes into the parameter file."""
+    import torch
+
+    return torch.arange(6, dtype=torch.float32).reshape(2, 3) / 6.0
+
+
+def _training_pair():
+    """A deterministic tiny regression problem: ``y = 2 * x0 - 3 * x1 + 1``.
+
+    A pair the trainer *has* to be able to fit, so the checks can demand that the
+    loss really goes down instead of only that the node returned something.
+    """
+    import torch
+
+    generator = torch.Generator().manual_seed(7)
+    features = torch.randn(48, 2, generator=generator)
+    targets = 2.0 * features[:, :1] - 3.0 * features[:, 1:] + 1.0
+    return features, targets
+
+
+def _f_params(cfg: dict, name: str) -> dict[str, Any]:
+    """``PARAMS`` dummy: a trainable set carrying the names the family addresses.
+
+    ``weight`` is the key a freshly dropped ``Learnable Parameters`` node creates
+    and the key ``Parameters to Tensor`` looks up by default, while
+    ``layer0.weight`` follows the naming convention of the trainer's own output.
+    """
+    import torch
+
+    with torch.inference_mode(False):
+        return {
+            "weight": torch.nn.Parameter(_train_fixture_parameters()),
+            "layer0.weight": torch.nn.Parameter(torch.full((2, 3), 0.25)),
+        }
+
+
+def _f_params_alt(cfg: dict, name: str) -> dict[str, Any]:
+    """A second, distinguishable ``PARAMS`` dummy: other values, plus a new key."""
+    import torch
+
+    with torch.inference_mode(False):
+        return {
+            "weight": torch.nn.Parameter(torch.full((2, 3), -1.0)),
+            "bias": torch.nn.Parameter(torch.full((3,), 0.5)),
+        }
+
+
+def _f_optimizer(cfg: dict, name: str) -> Any:
+    """``OPTIMIZER`` dummy: what the ``Optimizer`` node publishes by default."""
+    from comfy import training_protocol as protocol
+
+    return protocol.optimizer_config()
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -624,6 +694,8 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "MODEL": _f_protocol_model,
     "CLIP": _f_protocol_clip,
     "VAE": _f_protocol_vae,
+    "PARAMS": _f_params,
+    "OPTIMIZER": _f_optimizer,
     "*": _f_any,
 }
 
@@ -741,6 +813,14 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     "VAELoader": {"vae_name": _f_fixture_file},
     "CLIPLoader": {"clip_name": _f_fixture_file},
     "DualCLIPLoader": {"clip_name1": _f_fixture_file, "clip_name2": _f_fixture_file},
+    # Training: 'x' and 'y' are a *matched pair* (a generic dummy tensor has no
+    # reason to be), and 'params_b' has to differ from 'params_a' so that the
+    # merge check can tell the two inputs apart.
+    "TrainingLoop": {
+        "x": lambda cfg, name: _training_pair()[0],
+        "y": lambda cfg, name: _training_pair()[1],
+    },
+    "TrainingParametersMerge": {"params_b": _f_params_alt},
 }
 
 
@@ -1324,12 +1404,284 @@ def _check_clip_merge_add(result: Any, args: dict[str, Any]) -> None:
             assert torch.allclose(out[key], a[key] + b[key], atol=1e-6), key
 
 
+# --------------------------------------------------------------------------- #
+# Training family checks
+# --------------------------------------------------------------------------- #
+def _check_training_parameters(result: Any, args: dict[str, Any]) -> None:
+    """The created parameter must be a trainable float32 tensor of the declared shape.
+
+    Both routes are checked.  The widget route has to be reproducible for a given
+    seed, and a wired tensor has to win over ``shape`` / ``init`` - the documented
+    link-beats-widget rule of this family.
+    """
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (payload,) = _as_tuple(result)
+    params = protocol.as_parameter_dict(payload)
+    assert list(params) == ["weight"], f"the default key must be 'weight': {list(params)}"
+    value = params["weight"]
+    assert isinstance(value, torch.nn.Parameter), "the created value is not an nn.Parameter"
+    assert value.requires_grad, "the created value cannot be trained"
+    assert value.dtype == torch.float32, value.dtype
+    assert tuple(value.shape) == (2, 3), value.shape
+
+    (again,) = _rerun_v3("TrainingParameters")
+    assert torch.equal(protocol.as_parameter_dict(again)["weight"], value), (
+        "the same seed produced different parameters: the node is not reproducible"
+    )
+
+    (wired,) = _rerun_v3(
+        "TrainingParameters",
+        tensor=torch.full((4, 2), 3.5),
+        name="bias",
+        shape="9,9",
+        init="zeros",
+    )
+    linked = protocol.as_parameter_dict(wired)
+    assert list(linked) == ["bias"], list(linked)
+    assert tuple(linked["bias"].shape) == (4, 2), (
+        f"the wired tensor must override the shape widget, got {tuple(linked['bias'].shape)}"
+    )
+    assert torch.all(linked["bias"] == 3.5), "the wired tensor did not become the parameter"
+
+
+def _check_training_parameters_merge(result: Any, args: dict[str, Any]) -> None:
+    """Both sets must survive: a colliding name is renamed, never overwritten."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (payload,) = _as_tuple(result)
+    merged = protocol.as_parameter_dict(payload)
+    first = protocol.as_parameter_dict(args["params_a"])
+    second = protocol.as_parameter_dict(args["params_b"])
+    assert set(merged) == set(first) | {"bias", "weight_2"}, sorted(merged)
+    for key, value in first.items():
+        assert torch.equal(merged[key], value), f"'{key}' of the first set was overwritten"
+    assert torch.equal(merged["bias"], second["bias"]), "a non-colliding key was lost"
+    assert torch.equal(merged["weight_2"], second["weight"]), (
+        "the colliding key must be kept under a renamed key, not dropped"
+    )
+
+
+def _check_training_parameters_extract(result: Any, args: dict[str, Any]) -> None:
+    """The default lookup must return the named entry, detached; a bad name must raise."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (value,) = _as_tuple(result)
+    expected = protocol.as_parameter_dict(args["params"])["weight"].detach()
+    assert torch.equal(value, expected), "the wrong entry was returned"
+    assert not value.requires_grad, "the extracted tensor must be detached"
+
+    try:
+        _rerun_v3("TrainingParametersExtract", name="nope")
+    except ValueError as exc:
+        assert "weight" in str(exc), f"the error must list the available names, got: {exc}"
+    else:
+        raise AssertionError("an unknown parameter name must raise instead of returning")
+
+
+def _check_training_optimizer(result: Any, args: dict[str, Any]) -> None:
+    """Every published config must build the real ``torch.optim`` optimizer."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (config,) = _as_tuple(result)
+    assert isinstance(config, protocol.OptimizerConfig), type(config).__name__
+    module = protocol.build_mlp((2, 3, 1), seed=0)
+    default = protocol.build_optimizer(config, module.parameters())
+    assert isinstance(default, torch.optim.AdamW), type(default).__name__
+    assert default.param_groups[0]["lr"] == config.lr, default.param_groups[0]["lr"]
+
+    for name in protocol.OPTIMIZER_OPTIONS:
+        (other,) = _rerun_v3("TrainingOptimizer", optimizer=name)
+        built = protocol.build_optimizer(other, module.parameters())
+        assert isinstance(built, getattr(torch.optim, name)), (
+            f"{name} did not build a torch.optim.{name}"
+        )
+
+    (clamped,) = _rerun_v3("TrainingOptimizer", lr=-1.0, beta1=5.0)
+    assert clamped.lr == protocol.DEFAULT_LR, (
+        f"a negative learning rate must fall back to the default, got {clamped.lr}"
+    )
+    assert clamped.beta1 < 1.0, "a beta of 1 or more would explode inside torch.optim"
+
+
+def _check_training_loop(result: Any, args: dict[str, Any]) -> None:
+    """The trainer must really train: documented names, detached outputs, falling loss."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    payload, loss, curve, prediction = _as_tuple(result)
+    params = protocol.as_parameter_dict(payload)
+    assert list(params) == [
+        "layer0.weight",
+        "layer0.bias",
+        "layer1.weight",
+        "layer1.bias",
+    ], f"the documented naming convention is not honoured: {list(params)}"
+    assert isinstance(params["layer0.weight"], torch.nn.Parameter), (
+        "the trained parameters are not nn.Parameter objects"
+    )
+    assert all(parameter.grad is None for parameter in params.values()), (
+        "the trainer left gradients on the parameters it returned"
+    )
+    assert tuple(curve.shape) == (200,), curve.shape
+    assert tuple(prediction.shape) == (48, 1), prediction.shape
+    assert not (curve.requires_grad or prediction.requires_grad or loss.requires_grad), (
+        "the outputs still carry autograd state: the graph must not reach ComfyUI's cache"
+    )
+    assert float(loss) == float(curve[-1]), (float(loss), float(curve[-1]))
+    assert float(curve[-1]) < float(curve[0]) / 2.0, (
+        f"the loss did not fall: {float(curve[0])} -> {float(curve[-1])}"
+    )
+    assert float(curve[-1]) < 0.5, (
+        "200 steps of AdamW on y = 2*x0 - 3*x1 + 1 must get close to 0, got "
+        f"{float(curve[-1])}"
+    )
+
+    # A warm start has to continue from the trained set, not restart from scratch.
+    warm, _, warm_curve, _ = _rerun_v3("TrainingLoop", params=payload, steps=1)
+    assert list(protocol.as_parameter_dict(warm)) == list(params), (
+        "a warm started run must return the same parameter names"
+    )
+    assert float(warm_curve[-1]) < float(curve[0]) / 5.0, (
+        f"a warm start did not reuse the wired parameters: {float(warm_curve[-1])}"
+    )
+
+    try:
+        _rerun_v3("TrainingLoop", x=torch.zeros(3, 2), y=torch.zeros(5, 1), steps=1)
+    except ValueError as exc:
+        assert "sample" in str(exc), f"the mismatch must be explained, got: {exc}"
+    else:
+        raise AssertionError("mismatched x/y sample counts must be refused")
+
+
+def _check_training_save_parameters(result: Any, args: dict[str, Any]) -> None:
+    """The written file must round trip exactly and be readable by Load Parameters."""
+    import comfy.utils
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    payload, path = _as_tuple(result)
+    written = _written_files("comfydl/parameters_*.safetensors")
+    assert written, "Save Parameters wrote no .safetensors under output/comfydl/"
+    assert Path(path).is_file(), f"{path} was reported but does not exist"
+    assert Path(path).resolve() == written[-1].resolve(), (path, written)
+
+    expected = protocol.parameters_to_tensors(payload)
+    state = comfy.utils.load_torch_file(path, safe_load=True)
+    assert set(state) == set(expected), (sorted(state), sorted(expected))
+    for key, value in expected.items():
+        assert torch.equal(state[key], value), f"{key} changed on its way to disk"
+
+    # the very same file, read back through the loader node
+    (loaded,) = _rerun_v3("TrainingLoadParameters", path=path)
+    recovered = protocol.as_parameter_dict(loaded)
+    assert set(recovered) == set(expected), (sorted(recovered), sorted(expected))
+    for key, value in expected.items():
+        assert torch.equal(recovered[key], value), key
+        assert recovered[key].requires_grad, f"{key} did not come back trainable"
+
+
+def _check_training_load_parameters(result: Any, args: dict[str, Any]) -> None:
+    """The default path must really read the seeded file, and a missing one must raise."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (payload,) = _as_tuple(result)
+    params = protocol.as_parameter_dict(payload)
+    assert list(params) == ["weight"], list(params)
+    value = params["weight"]
+    assert isinstance(value, torch.nn.Parameter) and value.requires_grad, (
+        "the loaded value is not trainable"
+    )
+    assert value.dtype == torch.float32, value.dtype
+    assert torch.equal(value, _train_fixture_parameters()), (
+        "the loaded values differ from the file the sandbox seeded"
+    )
+
+    try:
+        _rerun_v3("TrainingLoadParameters", path="no/such/file.safetensors")
+    except ValueError as exc:
+        assert "file.safetensors" in str(exc), f"the error must carry the path, got: {exc}"
+    else:
+        raise AssertionError("a missing file must raise instead of returning nothing")
+
+
+def _check_training_parameters_to_text(result: Any, args: dict[str, Any]) -> None:
+    """The encoded text must decode back to the same values - that is what a workflow keeps."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (text,) = _as_tuple(result)
+    assert text.startswith(protocol.PARAMS_TEXT_PREFIX), text[:32]
+    expected = protocol.parameters_to_tensors(args["params"])
+    decoded = protocol.decode_parameters(text)
+    assert set(decoded) == set(expected), (sorted(decoded), sorted(expected))
+    for key, value in expected.items():
+        assert torch.equal(decoded[key], value), f"{key} did not survive the encoding"
+
+    (back,) = _rerun_v3("TrainingTextToParameters", text=text)
+    recovered = protocol.as_parameter_dict(back)
+    assert set(recovered) == set(expected), (sorted(recovered), sorted(expected))
+    for key, value in expected.items():
+        assert torch.equal(recovered[key], value), key  # the pair must round trip
+
+    try:
+        _rerun_v3(
+            "TrainingTextToParameters",
+            text=protocol.PARAMS_TEXT_PREFIX + "!!!not base64!!!",
+        )
+    except ValueError as exc:
+        assert "base64" in str(exc), f"a corrupt blob must be refused, got: {exc}"
+    else:
+        raise AssertionError("corrupt text must raise instead of decoding to garbage")
+
+
+def _check_training_text_to_parameters(result: Any, args: dict[str, Any]) -> None:
+    """The default widget text must be a valid blob: the node works untouched."""
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (payload,) = _as_tuple(result)
+    params = protocol.as_parameter_dict(payload)
+    assert list(params) == ["weight"], list(params)
+    assert tuple(params["weight"].shape) == (2, 3), params["weight"].shape
+    assert params["weight"].requires_grad, "the decoded value is not trainable"
+    assert params["weight"].dtype == torch.float32, params["weight"].dtype
+
+    decoded = protocol.decode_parameters(args["text"])
+    assert set(decoded) == set(params), (sorted(decoded), sorted(params))
+    for key in params:
+        assert torch.equal(decoded[key], params[key].detach()), key
+
+
 #: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
 #: arity matches", for the nodes whose returned *values* carry the contract.
 _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "NormalizationBatchNorm": [_check_batchnorm_stats],
     "NormalizationInstanceNorm": [_check_instancenorm_stats],
     "TrainingRunStats": [_check_training_run_stats],
+    "TrainingParameters": [_check_training_parameters],
+    "TrainingParametersMerge": [_check_training_parameters_merge],
+    "TrainingParametersExtract": [_check_training_parameters_extract],
+    "TrainingOptimizer": [_check_training_optimizer],
+    "TrainingLoop": [_check_training_loop],
+    "TrainingSaveParameters": [_check_training_save_parameters],
+    "TrainingLoadParameters": [_check_training_load_parameters],
+    "TrainingParametersToText": [_check_training_parameters_to_text],
+    "TrainingTextToParameters": [_check_training_text_to_parameters],
     "PoolingSliding": [_check_pooling_sliding],
     "PoolingAdaptive": [_check_pooling_adaptive],
     "ConvolutionConv": [_check_convolution_conv],

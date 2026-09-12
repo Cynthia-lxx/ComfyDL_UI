@@ -702,6 +702,7 @@ async def init_builtin_extra_nodes():
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",
+        "nodes_training.py",
         # Thin Preview3D: the frontend only binds its 3D canvas to this node id,
         # so ComfyDL's 3D exporters hand their files over to it.
         "nodes_preview_3d.py",
