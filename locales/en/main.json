@@ -1,0 +1,9 @@
+{
+  "comfydlAbout": {
+    "summary": "ComfyDL_UI is the GUI runtime of ComfyDL: a deep-learning-tuned fork of ComfyUI that ships the tensor, layer and training nodes this project adds.",
+    "notOriginal": "This is not the complete original ComfyUI: it is a dehydrated fork that keeps only what the ComfyDL node pack needs. To use the original ComfyUI instead, download it from the official repository.",
+    "projectRepo": "ComfyDL_UI repository",
+    "upstreamRepo": "ComfyUI official repository",
+    "upstreamHeading": "Upstream ComfyUI (original project)"
+  }
+}

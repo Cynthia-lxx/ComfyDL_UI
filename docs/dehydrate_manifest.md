@@ -1,6 +1,6 @@
 # ComfyUI Dehydrate 脱水清单（适配 ComfyDL）
 
-> 版本：ComfyUI v0.34.0
+> 版本：ComfyDL_UI v0.3.1（脱水基线：ComfyUI v0.34.0）
 > 目标目录：`ComfyDL_UI/`（改装操作目录）
 > 参照副本：`ComfyUI-original/`（只读权威回捞源）
 > 生成依据：`.codebuddy/scripts/import_scan.py` 全库 AST 静态分析 + code-explorer 人工依赖核查

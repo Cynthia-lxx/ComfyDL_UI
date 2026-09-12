@@ -1,0 +1,360 @@
+{
+  "CdlAccuracy": {
+    "description": "计算分类任务的正确预测数量。若预测为多类别 logits，先取 argmax，再与标签比较。"
+  },
+  "CdlActivation": {
+    "description": "对张量逐元素应用激活函数。通过下拉菜单选择：relu、sigmoid、tanh、leaky_relu、elu、gelu、silu、softmax、softplus。"
+  },
+  "CdlAddNorm": {
+    "display_name": "残差 + 层归一化（Add & Norm）",
+    "description": "构建残差连接后接层归一化：LayerNorm(dropout(Y) + X)。"
+  },
+  "CdlAdditiveAttention": {
+    "display_name": "加性注意力",
+    "description": "构建加性（Bahdanau）注意力层。前向 (queries, keys, values, valid_lens)，批次优先张量。"
+  },
+  "CdlAreaChart": {
+    "description": "绘制填充面积图 —— 单序列使用 fill_between，多序列堆叠使用 stackplot。"
+  },
+  "CdlAssignAnchorToBbox": {
+    "description": "基于 IoU 将真实边界框分配给锚框。每个锚框被分配给一个 IoU ≥ 阈值的真实框，且每个真实框至少保证有一个锚框与之匹配（取 IoU 最大者）。"
+  },
+  "CdlBananasDetection": {
+    "description": "加载用于目标检测的香蕉检测数据集。包含带边界框标注的香蕉图像。首次使用时自动下载。"
+  },
+  "CdlBarChart": {
+    "description": "绘制垂直或水平柱状图，可选数值标注。封装 matplotlib.pyplot.bar / barh。"
+  },
+  "CdlBleu": {
+    "description": "计算预测序列与参考序列之间的 BLEU 分数。支持 BLEU-1 到 BLEU-4（由 max_n 控制）。按空白符分词后计算 n-gram 精度和简洁惩罚。"
+  },
+  "CdlBoxCenterToCorner": {
+    "description": "将边界框从中心格式 (cx, cy, w, h) 转回角点格式 (x1, y1, x2, y2)。"
+  },
+  "CdlBoxCornerToCenter": {
+    "description": "将边界框从角点格式 (x1, y1, x2, y2) 转换为中心格式 (cx, cy, w, h)。"
+  },
+  "CdlBoxIou": {
+    "description": "计算两组边界框之间的逐对 IoU（交并比）。返回矩阵 [N1, N2]，其中元素 (i,j) 为 boxes1[i] 与 boxes2[j] 的 IoU。"
+  },
+  "CdlBroadcast": {
+    "description": "将张量广播到目标形状。封装 torch.broadcast_to。目标形状以逗号分隔字符串输入（如 \"3,1,4\"）。解析错误时返回原张量。"
+  },
+  "CdlConfusionMatrix": {
+    "description": "将混淆矩阵渲染为热力图，并在每个格子中标注数值。支持行归一化和自定义数字格式。"
+  },
+  "CdlConv2d": {
+    "description": "对输入张量执行二维卷积，使用指定的卷积核。封装 torch.nn.functional.conv2d，支持 stride 和 padding 参数。自动将 2-D/3-D 输入扩展为 4-D (N, C, H, W)，结果去掉 batch 维度返回。"
+  },
+  "CdlCorr2d": {
+    "description": "对输入张量执行二维互相关运算——这是卷积操作的基础。"
+  },
+  "CdlDataLoaderInfo": {
+    "description": "查看 cdlDataloader 的属性：批次数、批大小和数据集总大小。"
+  },
+  "CdlDataLoaderPreview": {
+    "description": "从 cdlDataloader 中取一批样本，渲染为图像网格（IMAGE 输出）。自动适配不同数据格式：图像分类显示带标签的图像；目标检测显示带边界框的图像。"
+  },
+  "CdlDataLoaderPreviewOutput": {
+    "description": "与 CdlDataLoaderPreview 相同，但注册为 OUTPUT_NODE，渲染后的图像网格直接在 UI 中显示。"
+  },
+  "CdlDataLoaderStats": {
+    "description": "遍历 cdlDataloader，统计标签分布。自动识别标签类型：整数且落在 [0, num_classes) 内的离散类别标签渲染为分类柱状图；连续数值标签（如回归目标，含 (n,1) 二维标签）自动按 num_classes 个区间分桶为直方图。"
+  },
+  "CdlDeviceInfo": {
+    "description": "查询当前环境的 GPU 数量和 CUDA 可用性。"
+  },
+  "CdlDotProductAttention": {
+    "display_name": "点积注意力",
+    "description": "构建缩放点积注意力层。前向 (queries, keys, values, valid_lens)，批次优先张量 (batch, seq, num_hiddens)。"
+  },
+  "CdlDownload": {
+    "description": "从 URL 下载文件，支持基于 SHA1 的缓存检查。若本地文件存在且 SHA1 匹配，则跳过下载。"
+  },
+  "CdlDownloadExtract": {
+    "description": "下载并解压 d2l DATA_HUB 中注册的数据集。从下拉菜单中选择预注册的数据集（banana-detection、voc2012、cifar10_tiny 等）。"
+  },
+  "CdlFashionMNIST": {
+    "description": "加载 Fashion-MNIST 图像分类数据集（训练集 6 万张 / 测试集 1 万张，10 个类别）。首次使用时自动下载（约 30 MB）。"
+  },
+  "CdlGRU": {
+    "description": "使用 PyTorch 高层 nn.GRU 构建多层 GRU。前向输入 (num_steps, batch_size, num_inputs)，返回 (output, h_n)。"
+  },
+  "CdlGetTokensAndSegments": {
+    "description": "为 BERT 模型准备输入。将 A 段和 B 段的 token 与 [CLS] 和 [SEP] 标记拼接，并生成段 ID（A 段为 0，B 段为 1）。"
+  },
+  "CdlGradClipping": {
+    "description": "对模型参数执行梯度裁剪。前提条件：必须先通过 loss.backward() 计算梯度。计算所有参数梯度的 L2 范数；若超过阈值 theta，则按比例缩放。"
+  },
+  "CdlHeatmapsTo3D": {
+    "description": "把抽样/降维后的热力数据导出为真正的 3D 模型。1D → 有厚度的平放条码色带；2D → 同样厚度的彩色平板；3D → 半透明立方体（六个外表面 + 三个正交中截面，内部仍然可读）。颜色量化为 64 个 OBJ 材质，透明度写在 MTL 里，因此立方体保持半透明。把 model_3d 连到内置 Preview3D 节点即可查看。"
+  },
+  "CdlHistogram": {
+    "description": "绘制张量值分布的直方图，支持可调的 bins 数量、密度归一化和颜色。封装 matplotlib.pyplot.hist。"
+  },
+  "CdlImageAdjust": {
+    "display_name": "Image Adjust（图像调整）",
+    "description": "用给定因子应用 torchvision 亮度、对比度与饱和度调整（1.0 = 不变，>1 增强，<1 减弱，0 = 无）。等于 1.0 的因子会跳过以加速。"
+  },
+  "CdlImageGrayscale": {
+    "display_name": "Image Grayscale（图像灰度化）",
+    "description": "以 num_output_channels=3 转为灰度，保持 [B, H, W, C]（C=3）布局，各通道携带相同的亮度值。"
+  },
+  "CdlImageNormalize": {
+    "display_name": "Image Normalize（图像归一化）",
+    "description": "denorm 为 False 时执行 (x - mean) / std，为 True 时执行逆变换 x * std + mean。mean/std 为逗号分隔字符串；单个值会广播到所有通道（如 \"0.5\" 或 \"0.5,0.5,0.5\"）。"
+  },
+  "CdlImageRotate": {
+    "display_name": "Image Rotate（图像旋转）",
+    "description": "以双线性插值和零填充边界将每张图像旋转 angle 度（逆时针）。expand 为 True 时画布会放大以容纳旋转内容；否则输出保持输入尺寸。"
+  },
+  "CdlImageStats": {
+    "display_name": "Image Stats（图像统计）",
+    "description": "聚合批次内所有图像，按通道报告 mean/std/min/max 以及批次布局。"
+  },
+  "CdlInitSeq2Seq": {
+    "display_name": "初始化 Seq2Seq 权重",
+    "description": "原地应用 Xavier 均匀分布权重初始化。nn.Linear 与 nn.GRU 层会被初始化，其余层保持不变。"
+  },
+  "CdlLeNet": {
+    "description": "构建经典的 LeNet-5 卷积神经网络。使用 LazyConv2d 和 LazyLinear——输入形状在首次前向传播时自动推断。"
+  },
+  "CdlLinReg": {
+    "description": "线性回归前向计算：\\( \\hat{y} = X w + b \\)"
+  },
+  "CdlLoadArray": {
+    "description": "将一个或多个张量封装为 PyTorch DataLoader。将 TENSOR 特征和/或标签连接到可选输入槽；节点输出 cdlDataloader。"
+  },
+  "CdlLoraModelToTensor": {
+    "description": "把 LORA_MODEL（dict[str, torch.Tensor]）打包成一个 1 维 TENSOR 加 key/shape/dtype 元数据。"
+  },
+  "CdlLossMapToTensor": {
+    "description": "把 LOSS_MAP（{\"loss\": [Tensor, ...]}）打包成一个 1 维 TENSOR 加 shape/dtype 元数据。"
+  },
+  "CdlMaskedSoftmax": {
+    "description": "在最后一个维度上执行带掩码的 softmax。使用 valid_lens 指定每条序列的有效长度；超出有效长度的位置在 softmax 前被设为一个极大的负值（使概率趋近于 0）。"
+  },
+  "CdlMessageBox": {
+    "description": "通过 ctypes 调用 user32.dll 中的 MessageBoxW 弹出原生 Windows 消息对话框。支持阻塞和非阻塞两种模式。"
+  },
+  "CdlModelClone": {
+    "display_name": "Model Clone（模型克隆）",
+    "description": "返回 copy.deepcopy(model)——架构与权重相同但参数完全独立的实例。"
+  },
+  "CdlModelForward": {
+    "display_name": "Model Forward（模型前向）",
+    "description": "在 torch.no_grad() 下对输入张量执行模型前向。若输入与模型设备不同则自动迁移；前向前置为 eval 模式。"
+  },
+  "CdlModelInfo": {
+    "display_name": "Model Info（模型信息）",
+    "description": "检查模型并报告 (1) 人类可读的摘要字符串、(2) 总参数量、(3) 可训练参数量。"
+  },
+  "CdlModelLayers": {
+    "display_name": "Model Layers（模型层结构）",
+    "description": "遍历 model.named_modules() 并以缩进树形式输出每个模块（名称 + 类名），便于检查架构。"
+  },
+  "CdlModelLoad": {
+    "display_name": "Model Load（模型加载）",
+    "description": "用 torch.load 读取 .pt state_dict 并通过 model.load_state_dict() 应用到输入模型。模型架构必须与保存的 state_dict 匹配。"
+  },
+  "CdlModelMode": {
+    "display_name": "Model Mode（模型模式）",
+    "description": "通过 model.train() / model.eval() 在训练与评估模式间切换，返回同一实例，使下游节点感知新模式。"
+  },
+  "CdlModelParams": {
+    "display_name": "Model Params（模型参数）",
+    "description": "遍历 model.named_parameters() 并输出每个参数的名称、形状与 requires_grad，附总数。"
+  },
+  "CdlModelSave": {
+    "display_name": "Model Save（模型保存）",
+    "description": "将 torch.save(model.state_dict(), path) 写入磁盘。仅保存权重（state_dict），重新加载需要结构匹配的模型。"
+  },
+  "CdlMultiHeadAttention": {
+    "display_name": "多头注意力",
+    "description": "构建多头注意力层。num_hiddens 必须能被 num_heads 整除。前向 (queries, keys, values, valid_lens)，批次优先张量。"
+  },
+  "CdlMultiboxDetection": {
+    "description": "使用 NMS 从模型输出中预测边界框。结合类别预测和偏移量，通过逆偏移变换重建框，并通过 NMS 和置信度阈值过滤。"
+  },
+  "CdlMultiboxPrior": {
+    "description": "在每个像素点生成不同形状的锚框。每个像素的锚框数 = len(sizes) + len(ratios) - 1。"
+  },
+  "CdlMultiboxTarget": {
+    "description": "为锚框生成多框目标训练标签。对批次中每张图像，将真实框分配给锚框并计算偏移目标、掩码和类别标签。"
+  },
+  "CdlNms": {
+    "description": "对边界框执行非极大值抑制（Non-Maximum Suppression）。按分数降序排列，保留与任何更高分框的 IoU 不超过阈值的框。"
+  },
+  "CdlNoOp": {
+    "description": "空操作节点——接受任意输入但不执行任何计算。等同于 Python 的 pass 或汇编的 NOP。可作为任意数据类型的空接收器、工作流构建时的占位节点，或调试时的旁路工具。"
+  },
+  "CdlOffsetBoxes": {
+    "description": "计算从锚框到分配的真实框的偏移量。中心坐标差缩放 10 倍；宽高比取对数后缩放 5 倍。"
+  },
+  "CdlOffsetInverse": {
+    "description": "通过逆变换根据锚框和预测偏移量重建角点格式的边界框坐标。"
+  },
+  "CdlPieChart": {
+    "description": "绘制饼图（普通或甜甜圈样式）并标注百分比。封装 matplotlib.pyplot.pie。"
+  },
+  "CdlPlot": {
+    "description": "通用 MATLAB 风格折线图。支持多条曲线、自定义轴标签、对数/线性刻度、图例和轴范围。"
+  },
+  "CdlPositionWiseFFN": {
+    "display_name": "位置逐元素 FFN",
+    "description": "构建位置逐元素前馈网络（两个全连接层 + ReLU），对每个位置独立应用。"
+  },
+  "CdlPositionalEncoding": {
+    "display_name": "位置编码",
+    "description": "构建正弦位置编码层。前向 X 形状 (batch, seq, num_hiddens)，为输入添加位置信息。"
+  },
+  "CdlRNN": {
+    "display_name": "RNN（高层封装）",
+    "description": "使用 PyTorch 高层 nn.RNN 构建 RNN。前向输入 (num_steps, batch_size, num_inputs)，返回 (output, h_n)。"
+  },
+  "CdlRNNLM": {
+    "display_name": "RNN 语言模型（高层封装）",
+    "description": "将 RNN/GRU cdlModel 包装为使用高层 LazyLinear 头的语言模型，接口与从头版本一致。"
+  },
+  "CdlRNNLMScratch": {
+    "display_name": "RNN 语言模型（从头实现）",
+    "description": "将 RNN/GRU cdlModel（要求 num_inputs == vocab_size）包装为从头实现的语言模型，输出投影到 vocab_size 个类别。前向输入索引张量 (batch_size, num_steps)，返回 logits (num_steps, batch_size, vocab_size)。"
+  },
+  "CdlRNNLMScratchPredict": {
+    "display_name": "RNN LM 预测",
+    "description": "给定起始前缀，用 RNN 语言模型生成文本。接受 cdlVocab 字典（来自 CdlVocabBuild），返回前缀加上 num_preds 个预测 token。"
+  },
+  "CdlRNNScratch": {
+    "display_name": "RNN（从头实现）",
+    "description": "从头构建 RNN（tanh 单元、手动创建参数）。前向输入形状 (num_steps, batch_size, num_inputs)。"
+  },
+  "CdlRandomTensor": {
+    "display_name": "Random Tensor（随机张量）",
+    "description": "按所选分布（normal、uniform、randint）生成随机张量。seed >= 0 固定随机种子以保证结果可复现；-1 表示不固定。"
+  },
+  "CdlResNeXtBlock": {
+    "description": "创建单个 ResNeXt 块，使用分组卷积实现多分支结构。包含瓶颈结构（1×1 降维 → 3×3 分组卷积 → 1×1 升维）+ 可选快捷连接。"
+  },
+  "CdlResNet18": {
+    "description": "构建修改版 ResNet-18 模型（使用更小的卷积核/步幅/填充，不含最大池化）。包含 4 个残差块组（每组 2 个残差块），通道数分别为 64、128、256、512，后接全局平均池化和全连接层。"
+  },
+  "CdlReshape": {
+    "description": "将张量变形为新的形状。封装 torch.reshape。目标形状以逗号分隔字符串输入（如 \"2,8\"、\"4,-1\"）。解析错误时返回原张量。"
+  },
+  "CdlResidual": {
+    "description": "创建单个 ResNet 残差块。包含两个卷积层（Conv2d + BatchNorm + ReLU）和一个可选的 1×1 快捷卷积。"
+  },
+  "CdlScatter": {
+    "description": "绘制二维散点图，可选点颜色和尺寸编码第三维。封装 matplotlib.pyplot.scatter。"
+  },
+  "CdlSeq2SeqEncoder": {
+    "display_name": "Seq2Seq 编码器",
+    "description": "构建序列到序列学习的 RNN 编码器（嵌入 + 多层 GRU）。前向 X 为 token 索引 (batch, num_steps)，返回 (outputs, state)。"
+  },
+  "CdlSequenceMask": {
+    "description": "将序列中超出有效长度的位置替换为指定值。常用于将填充位置置零。"
+  },
+  "CdlSgdStep": {
+    "description": "执行一步小批量随机梯度下降：\\( \\theta \\leftarrow \\theta - \\eta \\cdot g / \\text{batch\\_size} \\)。前提条件：必须先通过 loss.backward() 计算梯度。梯度在更新后被清零。"
+  },
+  "CdlShowBboxes": {
+    "description": "在图像上绘制边界框。支持自定义标签和颜色；最多渲染 200 个框。坐标必须归一化到 [0,1] 范围。"
+  },
+  "CdlShowHeatmaps": {
+    "description": "与 Show Heatmaps (Output) 相同，但将图表渲染为 IMAGE 张量。"
+  },
+  "CdlShowHeatmapsOutput": {
+    "description": "显示单张热力图并附颜色条。先把张量抽样到元素预算以内，再保留 dims 指定的轴（或由 auto_select 自动挑选）、其余轴按 axis_reduce 归约；最终保留的 1/2/3 个轴决定画什么：条码状色带（1D）、常规平面（2D）或半透明立方体（3D）。输出节点变体。"
+  },
+  "CdlShowImages": {
+    "description": "与 Show Images (Output) 相同，但将图表渲染为 IMAGE 张量，可传递给下游节点。"
+  },
+  "CdlShowTrace2D": {
+    "description": "可视化二维优化轨迹。绘制一系列点，展示参数 (x1, x2) 在优化过程中的变化。"
+  },
+  "CdlSquaredLoss": {
+    "description": "计算平方损失：\\( \\frac{1}{2}(\\hat{y} - y)^2 \\)（注意：不做平均）。"
+  },
+  "CdlStrToTensor": {
+    "description": "将字符串解析为 PyTorch 张量。支持标准的 Python 列表字面量格式，如 \"[[1,2],[3,4]]\"、\"[1,2,3,4,5]\"。自动处理空白符和尾随逗号。"
+  },
+  "CdlSyntheticData": {
+    "description": "生成合成的线性回归数据集。随机生成权重和特征，通过 \\( y = Xw + b + \\text{噪声} \\) 生成标签。"
+  },
+  "CdlTensorToLoraModel": {
+    "description": "LoRA Model → Tensor 的精确逆操作；按 shapes 切分扁平张量，把每段转回记录的 dtype 并重建字典。"
+  },
+  "CdlTensorToLossMap": {
+    "description": "Loss Map → Tensor 的精确逆操作；重建 {\"loss\": [Tensor, ...]}。"
+  },
+  "CdlTensorToStr": {
+    "description": "将张量格式化为人类可读的字符串。显示张量的形状、数据类型、设备信息和数值内容。超过 max_elems 的大张量会被截断（显示前半部分 + 后半部分）。"
+  },
+  "CdlTensorToValue": {
+    "description": "把通用 TENSOR 暴露到每种类型一个的具体输出槽上。连你需要的那根线即可；未使用的槽返回 None 且不产生开销。从 Value → Tensor 接回的元数据会被折回重建的 LATENT / AUDIO 字典。"
+  },
+  "CdlTimer": {
+    "display_name": "Timer（计时基准）",
+    "description": "对张量操作进行基准测试——在预热 3 次后运行 num_iters 次并报告总耗时与平均耗时。支持 sum、mean、abs、sqrt、neg。当张量位于 GPU 时，计时前后会执行 CUDA 同步。"
+  },
+  "CdlTokenize": {
+    "description": "将输入文本按行分词。支持词级别（按空白符分割）和字符级别两种分词模式。每行视为一个句子；行内 token 以逗号分隔输出，行间以换行符分隔。"
+  },
+  "CdlTransformerEncoder": {
+    "display_name": "Transformer 编码器",
+    "description": "构建完整 Transformer 编码器（嵌入 + 位置编码 + num_blks 个堆叠块）。前向 (X, valid_lens)，X 为 token 索引 (batch, seq)。"
+  },
+  "CdlTransformerEncoderBlock": {
+    "display_name": "Transformer 编码器块",
+    "description": "构建单个 Transformer 编码器块（多头注意力 + FFN，含残差与层归一化）。前向 (X, valid_lens)。"
+  },
+  "CdlTranspose": {
+    "description": "交换张量的两个维度。封装 torch.transpose。"
+  },
+  "CdlTruncatePad": {
+    "description": "将序列截断或填充到固定长度。超长的序列被截断；不足的序列用 padding_token 填充。"
+  },
+  "CdlTryAllGpus": {
+    "description": "返回所有可用 GPU 设备名的逗号分隔字符串。若无 GPU 可用则返回 \"cpu\"。"
+  },
+  "CdlTryGpu": {
+    "description": "尝试获取索引为 gpu_index 的 GPU 设备名。若该 GPU 不可用则回退到 CPU。"
+  },
+  "CdlUpdateD": {
+    "description": "执行一次 GAN 判别器的训练更新。使用真实数据 X 和生成器 net_G 从噪声 Z 生成的假数据，计算 BCE 损失并反向传播以更新判别器参数。使用 SGD 优化器（lr=0.01）。"
+  },
+  "CdlUpdateG": {
+    "description": "执行一次 GAN 生成器的训练更新。从噪声 Z 生成假数据，尝试欺骗判别器，计算 BCE 损失并反向传播以更新生成器参数。使用 SGD 优化器（lr=0.01）。"
+  },
+  "CdlVOCSegmentation": {
+    "description": "加载 PASCAL VOC2012 语义分割数据集（21 个类别）。首次使用时自动下载和解压（约 2 GB）。"
+  },
+  "CdlValueToTensor": {
+    "display_name": "17.1 Activation（14 个节点） 核心激活函数节点（comfy_extras/nodes_activation.py）。每个节点恰好 1 个名为 tensor 的 TENSOR 输入与 1 个名为 output 的 TENSOR 输出，且无可学习参数。 | 节点 | 类名 | 额外控件 | 作用 | |------|-------|--------------|---------| | Sigmoid | ActivationSigmoid | — | 1 / (1 + exp(-x))；输出范围 (0, 1) | | Tanh | ActivationTanh | — | tanh(x)；输出范围 (-1, 1) | | ReLU | ActivationReLU | — | max(0, x) | | Leaky ReLU | ActivationLeakyReLU | negative_slope FLOAT 0.01 (0~1) | 负半轴保留小斜率的 ReLU | | ELU | ActivationELU | alpha FLOAT 1.0 (0~100) | x > 0 时为 x，否则 alpha * (exp(x) - 1) | | SELU | ActivationSELU | — | 自归一化 ELU（标准 scale/alpha 常数） | | GELU | ActivationGELU | approximate COMBO none/tanh | 高斯误差线性单元 | | SiLU | ActivationSiLU | — | x * sigmoid(x)（swish） | | Mish | ActivationMish | — | x * tanh(softplus(x)) | | Softplus | ActivationSoftplus | — | log(1 + exp(x))（beta=1, threshold=20） | | ReLU6 | ActivationReLU6 | — | min(max(0, x), 6) | | Hard Swish | ActivationHardSwish | — | x * relu6(x + 3) / 6 | | Identity | ActivationIdentity | — | 原样透传输入张量（零拷贝） | | Softmax | ActivationSoftmax | dim INT -1 (-4~4) | 沿 dim 归一化（越界时按张量秩钳制） | ### 17.2 Basic（8 个节点） 核心基础层 / 张量运算节点（comfy_extras/nodes_layers.py）。每个节点接收 1~2 个 TENSOR 输入， 返回恰好 1 个名为 output 的 TENSOR 输出。weight / bias 都是普通张量输入，不存在隐藏的 参数状态。控件默认值开箱可用；Reshape / Broadcast 在 target_shape 无法解析时回退为原样返回 输入张量，因此不会中断工作流。 | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|--------------|---------| | Linear | BasicLinear | tensor、weight（[out, in]）、bias（可选） | — | 仿射变换 x @ weight.T + bias（F.linear） | | Embedding | BasicEmbedding | tensor（整数索引）、weight（[num, dim]） | — | 按索引查表（F.embedding） | | Flatten | BasicFlatten | tensor | start_dim INT 1 (0~4)、end_dim INT -1 (-4~4) | 展平连续的维度区间（torch.flatten） | | Reshape | BasicReshape | tensor | target_shape STRING \"1,-1\" | 重塑为目标形状（torch.reshape） | | Broadcast | BasicBroadcast | tensor | target_shape STRING \"2,3\" | 广播为目标形状（torch.broadcast_to） | | Concat | BasicConcat | a、b | dim INT -1 (-4~4) | 沿 dim 拼接两个张量（torch.cat） | | Add | BasicAdd | a、b | — | 逐元素相加（带广播，a + b） | | Multiply | BasicMultiply | a、b | — | 逐元素相乘（带广播，a * b） | > Linear 已覆盖 Dense 层（同为仿射变换），Add 也已覆盖残差 / 跳连（残差即逐元素广播相加）， > 因此不再单独提供 Dense、Residual、Skip Connection 节点。 ### 17.3 Normalization（7 个节点） 核心归一化节点（comfy_extras/nodes_normalization.py）。每个节点都以名为 output 的 TENSOR 作为第 1 个输出，保持输入的 dtype/device，且不保存任何状态。BatchNorm 与 InstanceNorm 还会在其后追加 mean / var 两个 (C,) 输出——本次归一化实际使用的 逐通道统计量，可直接接入 Training Run Stats（见 17.4）；其余节点恰好 1 个输出。 weight / bias（γ / β）都是普通张量 输入，从插槽接入的 running_mean / running_var 也绝不会被就地改写（同一张量可能被图中其它节点 共享）。BatchNorm 与 InstanceNorm 都是按秩自适应的——一个节点即覆盖 1d/2d/3d 三种形态， 因为“沿哪些维度统计”完全由张量形状决定——它们自身不带训练/推理开关，而是跟随 mode 插槽。 | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|--------------|---------| | BatchNorm | NormalizationBatchNorm | tensor、weight（可选）、bias（可选）、running_mean / running_var（可选）、mode（可选 STRING 插槽） | eps FLOAT 1e-5 (0~1e-2) | 对 (N, C, ...) 的第 1 维做 F.batch_norm；秩 2/3/4/5 分别等价于 BatchNorm1d/1d/2d/3d。另输出本次使用的逐通道 mean / var（(C,)）：train 下为本批统计量，eval 下为所接入的 running 统计量 | | InstanceNorm | NormalizationInstanceNorm | tensor、weight、bias、running_mean / running_var、mode（除 tensor 外均可选） | eps FLOAT 1e-5 (0~1e-2) | F.instance_norm，按样本且按通道统计；需要秩 ≥ 3。另输出 mean / var，把逐样本统计量归约为逐通道口径（组内方差均值 + 组间均值方差），因此与 BatchNorm 的输出含义一致、可存进同一组插槽 | | LayerNorm | NormalizationLayerNorm | tensor、weight（可选）、bias（可选） | normalized_shape STRING \"last\"、eps FLOAT 1e-5 | 对尾部维度做 F.layer_norm（\"8,16\" 表示最后两维） | | GroupNorm | NormalizationGroupNorm | tensor、weight（可选）、bias（可选） | num_groups INT 1 (1~64)、eps FLOAT 1e-5 | F.group_norm；num_groups=1 即在全部通道上归一化 | | RMSNorm | NormalizationRMSNorm | tensor、weight（可选） | normalized_shape STRING \"last\"、eps FLOAT 1e-6 | F.rms_norm；LLaMA 风格（不减均值、无偏置） | | WeightNorm | NormalizationWeightNorm | weight、g（可选） | dim INT 0 (-8~7)、eps FLOAT 1e-12 | 权重重参数化 g * v / ‖v‖₂，范数沿 dim 求取 | | SpectralNorm | NormalizationSpectralNorm | weight、u / v（可选） | n_power_iterations INT 10 (0~20)、dim INT 0、eps FLOAT 1e-12 | 用确定性幂迭代估计最大奇异值并据此除权重；同时输出 sigma | > 训练/推理开关是一条显式连线：Training Mode（17.4）把 train / eval 以 STRING 形式发布， > 接入 BatchNorm / InstanceNorm 的 mode 插槽。这里用连线不只是图个方便，而是正确性所需： > 节点的缓存签名包含它自己的输入以及所有祖先节点的输入，所以切换下拉框会让全部消费者失效重算； > 而“后台读取整个 prompt”的隐藏握手机制既不在签名里（算签名时甚至读不到 prompt），会让下游一直 > 复用旧输出。LayerNorm、GroupNorm、RMSNorm、WeightNorm、SpectralNorm 刻意不带 mode > 插槽：它们的数学在训练与推理下完全一致。eval 模式若没有可用统计量，则回退使用本次调用的统计量； > 控件文本无法解析时（过期的 normalized_shape、不能整除的 num_groups、重复的维度等）会回退到 > 既定默认值并打印提示，因此一个控件取值永远不会弄坏工作流。 ### 17.4 Training（11 个节点） Network & Layers/Training 分类下有两族节点。第一族是两个小巧的“状态”节点 （comfy_extras/nodes_normalization.py），把训练/推理决策与可持久化的运行统计量送入归一化节点。 第二族是训练闭环（comfy_extras/nodes_training.py），新增 PARAMS 与 OPTIMIZER 两个图数据 类型，并提供一个在节点内部完成真实优化循环的训练节点。 训练/推理状态（2 个节点） | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|--------------|---------| | Training Mode | TrainingMode | — | mode COMBO train/eval（默认 train） | 把 train / eval 以 STRING 发布给 BatchNorm / InstanceNorm 的 mode 插槽 | | Training Run Stats | TrainingRunStats | mean / var（可选 TENSOR 插槽） | running_mean STRING \"0.0\"、running_var STRING \"1.0\" | 把 running_mean / running_var 以两个 1 维 TENSOR 输出给统计量插槽；插槽一旦连线即以连线值为准，此时上方的控件文本被忽略 | > 运行统计量必须能在保存的工作流里留存，而控件是唯一能做到这一点的地方，因此它们以逗号分隔的数字 > 形式输入——每通道一个值（\"0.1,0.2,0.3\"），或只给一个值由消费者广播到全部通道。两个节点都是 > 数据源：只拖到画布上不接线是无害的，因为源节点只有在被消费者需要时才会被求值。 > 接入 mean / var 插槽时以连线为准：连线是被测量出来的当次运行值，而控件只保存了当初 > 画图时敲进去的数字，因此把 train 的统计量转交 eval 只需两根线，不必手工抄数。 可学习参数、优化器设定与训练循环（9 个节点） PARAMS 是有序的 {name: nn.Parameter} 映射；OPTIMIZER 是优化器配置 （OptimizerConfig）而不是活的优化器——超参留在控件上，只有设定随连线传递。ComfyUI 会把整轮 prompt 包在 torch.inference_mode() 里执行，因此 autograd 图无法跨越节点边界，任何节点都不能对 另一个节点产出的张量求导：训练节点只能自己完成前向、反向与 optimizer.step()，且必须在 torch.inference_mode(False) 块内进行。参数名沿用模块 / safetensors 约定 （layer0.weight、layer0.bias、layer1.weight …），因此训练产物可以用 Parameters to Tensor 拆出来，直接接进无状态的 Basic / Conv 层节点。 | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|---------------|---------| | Learnable Parameters | TrainingParameters | tensor（可选） | name STRING \"weight\"、shape STRING \"2,3\"、init COMBO normal/zeros/ones/xavier_uniform/kaiming_uniform（默认 normal）、seed INT 0 | 创建一个具名可训练参数；连入的张量优先于 shape / init。输出 PARAMS | | Merge Parameters | TrainingParametersMerge | params a、params b | — | 把两份参数集合并成一份；两侧同名的键会被改名（weight → weight_2）并告警，而不是覆盖，因此不会静默丢权重 | | Parameters to Tensor | TrainingParametersExtract | params | name STRING \"weight\" | 把其中一个条目以普通 TENSOR 输出（已 detach）——这是训练产物回流 Basic / Conv 层节点的桥（layer0.weight → Linear.weight）；名字不存在时抛可读错误并列出全部可用名字 | | Optimizer | TrainingOptimizer | — | optimizer COMBO AdamW/Adam/SGD/RMSprop（默认 AdamW）、lr FLOAT 0.01 (0~1)、momentum 0.9 (0~0.999)、beta1 0.9 (0~0.999)、beta2 0.999 (0~0.9999)、eps 1e-8 (0~1e-3)、weight_decay 0.01 (0~1)、amsgrad false | 把设定以 OPTIMIZER 发布；SGD 读 momentum，Adam/AdamW 读两个 beta，RMSprop 把 beta2 当作 alpha | | Training Loop | TrainingLoop | x、y（TENSOR）、optimizer（OPTIMIZER）、params（可选 PARAMS，热启动） | hidden STRING \"8\"、activation COMBO relu/gelu/tanh/sigmoid/none（默认 relu）、loss COMBO mse/l1/cross_entropy（默认 mse）、steps INT 200 (1~100000)、batch_size INT 0 (0~65536；0 = 每步全批)、seed INT 0 | 训练器：按 hidden 搭一个小 MLP（in_features 取自 x、out_features 取自 y，激活只加在隐层之间，hidden 留空即纯线性回归），执行 steps 次「前向 + 反向 + optimizer.step()」。输出 params、loss（标量）、loss_history（1 维，每步一项）与 prediction（已 detach） | | Save Parameters | TrainingSaveParameters | params | filename_prefix STRING \"comfydl/parameters\" | 把参数集写成输出目录下的 .safetensors 文件并原样透传该集合，因此保存不会中断图；另输出绝对 path | | Load Parameters | TrainingLoadParameters | — | path STRING \"comfydl/parameters_00001_.safetensors\" | 读回参数集（相对输出目录或绝对路径）；非浮点条目被丢弃、非 float32 被升位，两者都会报告；文件缺失时抛可读错误 | | Parameters to Text | TrainingParametersToText | params | — | 把参数集编码为 CDLPARAMS1:<base64 safetensors> 并推进节点自身的 UI 文本框，可直接复制粘贴进控件——这条通道能让参数随 .json 工作流一起保存，不碰磁盘 | | Text to Parameters | TrainingTextToParameters | — | text STRING，多行（默认值是一个合法的 2×3 weight） | 把文本形式解码回 PARAMS；忽略首尾空白与换行，内容不可解时抛出说明「该粘贴什么」的错误 | > 确定性与缓存：Training Loop 用 seed 控件同时给初始化和批采样播种，用完还原进程 RNG， > 因此同样的输入永远得到同样的结果，节点的缓存输出也始终有意义。所有输出都已 detach，不会把 > autograd 图带进 ComfyUI 的输出缓存；热启动（接入 params）只复制名字与形状都匹配的条目， > 缺失与跳过的键会逐条报告，绝不静默丢弃。 > > PARAMS 与 OPTIMIZER 在 comfy_api/latest/_io.py 里以 @comfytype 声明，与 TENSOR、 > LORA_MODEL 完全同构，因此无需前端注册：未登记的插槽类型使用前端默认配色，可以像其他类型一样 > 连线。 > > loss_history 就是一条普通 1 维张量，收敛曲线可直接交给上述任意可视化节点查看；loss 是它的 > 最后一个元素（标量）。 ### 17.5 Regularization（1 个节点） 核心正则化节点（comfy_extras/nodes_normalization.py）。该节点恰好 1 个名为 output 的 TENSOR 输出，保持输入的 dtype/device，且不保存任何状态。 | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|--------------|---------| | Dropout | RegularizationDropout | tensor、mode（可选 STRING 插槽） | p FLOAT 0.5 (0~1)、seed INT 0（带固定 / 递增 / 递减 / 随机化下拉） | F.dropout，逐元素：以概率 p 把元素置零，并把保留的元素按 1/(1-p) 放大；eval 模式原样透传输入 | > 与归一化节点一样，Dropout 按秩自适应：掩码是逐元素抽取的，一个节点即覆盖 (N, C)、 > (N, C, H, W) 乃至 0 维标量。它的掩码来自一个按张量所在设备创建、由 seed 控件播种的 > torch.Generator，而不是进程级全局 RNG：同一种子可逐比特复现掩码（因此 ComfyUI 的缓存依然有意义）， > 宿主交给其它节点的随机流也不会被打乱。种子旁的下拉决定该值在两次运行之间如何变化——设为 > randomize 则每次运行都得到新掩码，设为 fixed 则冻结掩码。 > 与训练/推理数学完全一致的 LayerNorm / GroupNorm / RMSNorm 不同，Dropout 需要训练/推理开关， > 因此它跟随与 BatchNorm / InstanceNorm 相同的 mode 插槽，并在 eval 中原样透传输入， > 使得推理图里遗留一个 Dropout 节点无害。p 取 0 或 1 时会短路为原输入或全零，完全不做随机数抽取。 ### 17.6 Pooling（2 个节点） 核心池化节点（comfy_extras/nodes_pooling.py）。一个节点覆盖滑动窗口家族 （MaxPool{1,2,3}d / AvgPool{1,2,3}d），另一个覆盖自适应家族 （AdaptiveAvgPool{1,2,3}d / AdaptiveMaxPool{1,2,3}d）：mode 选最大或平均，dims 选秩， 十二种 torch 层类型因此收敛为两个节点。下面的每个窗口控件都同时作用于 dims 个空间维。缺少 batch 维的张量同样接受——内部补上缺少的前导维，结果再还原回去。 | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|--------------|---------| | Pool | PoolingSliding | tensor | dims COMBO 1/2/3（默认 2）、mode COMBO max/avg（默认 max）、kernel_size INT 2 (1~64)、stride INT 0 (0~64)、padding INT 0 (0~32)、dilation INT 1 (1~16)、ceil_mode BOOLEAN false、count_include_pad BOOLEAN true | F.max_pool{1,2,3}d / F.avg_pool{1,2,3}d；dims=2, kernel_size=2 与 nn.MaxPool2d(2) 完全等价 | | Adaptive Pool | PoolingAdaptive | tensor | dims COMBO 1/2/3（默认 2）、mode COMBO avg/max（默认 avg）、output_size INT 1 (1~512) | F.adaptive_max_pool{1,2,3}d / F.adaptive_avg_pool{1,2,3}d；每个空间维都被压到恰好 output_size | > 不单独提供 GlobalAvgPool / GlobalMaxPool 节点：output_size=1 就是全局池化 > （dims=2, output_size=1 ≡ nn.AdaptiveAvgPool2d(1) ≡ 教科书里的 Global Average Pooling、GAP）， > 自适应节点已经覆盖它，mode 下拉再覆盖两种归约。stride=0 表示「与 kernel_size 相同」， > 即 torch 自己的默认行为。有两个控件是模式专属的，另一种模式下会被忽略：dilation 只在 > mode=max 下有效，count_include_pad 只在 mode=avg 下有效（F.avg_pool*d 没有 dilation 参数， > F.max_pool*d 没有 count_include_pad）；若被忽略的控件被设成非默认值，节点会打印提示，而不是 > 静默失效。 ### 17.7 Convolution（2 个节点） 核心卷积节点（comfy_extras/nodes_convolution.py），是上文 Basic 层在网络结构上的可学习对应物。 它们与 Linear 遵循同一约定：节点内部不做任何初始化，weight 与 bias 都是普通 TENSOR 输入， 因此节点是纯函数，同一组权重可以喂给多个节点。相应地也没有 in_channels / out_channels / bias 开关：通道数直接从 weight.shape 读出，「不要偏置」用不连 bias 可选插槽来表达。 | 节点 | 类名 | 输入 | 额外控件 | 作用 | |------|-------|--------|--------------|---------| | Conv | ConvolutionConv | tensor、weight（(out, in/groups, k...)）、bias（可选） | dims COMBO 1/2/3（默认 2）、groups INT 1 (1~4096)、stride INT 1 (1~64)、padding INT 1 (0~64)、padding_mode COMBO zeros/reflect/replicate/circular（默认 zeros）、dilation INT 1 (1~32) | F.conv{1,2,3}d，支持分组卷积、膨胀卷积与四种填充模式 | | ConvTranspose | ConvolutionConvTranspose | tensor、weight（(in, out/groups, k...)）、bias（可选） | dims COMBO 1/2/3（默认 2）、groups INT 1 (1~4096)、stride INT 2 (1~64)、padding INT 0 (0~64)、output_padding INT 0 (0~64)、dilation INT 1 (1~32) | F.conv_transpose{1,2,3}d，解码器与生成器所用的上采样对应物 | > Conv 的关键在于参数共享：*同一个*卷积核在所有空间位置上被复用，因此权重数量只与通道数和 > 卷积核尺寸有关，而与图像尺寸无关——3×3 的核无论图像是 32×32 还是 1024×1024，每个输入/输出通道 > 都只需要 9 个权重。dims=1/2/3 之间变的只是秩与核形状，这正是用一个节点覆盖三种秩的原因。 > > 两个节点的权重形状是镜像的：Conv 收 (out_channels, in_channels/groups, k...)，而 > ConvTranspose 收 (in_channels, out_channels/groups, k...)。groups = C_in 即深度卷积， > dilation > 1 在不增加任何权重的前提下扩大感受野。 > > padding_mode 必须手工实现：F.conv{1,2,3}d 没有 padding_mode 参数，只有 nn.Conv*d > 模块才有。当 padding_mode != \"zeros\" 时，先用 F.pad(mode=reflect|replicate|circular) 填充输入， > 再以 padding=0 调用卷积，两者不会重复填充。F.pad 的 circular 需要输入秩 ≥ 3 且填充量小于 > 对应维度尺寸；条件不满足时节点会打印可读提示并回退为补零，而不是抛出异常。ConvTranspose > 刻意不提供 padding_mode 控件，因为 nn.ConvTranspose*d 与 F.conv_transpose*d 都不支持它。 > > 两个节点都像 Linear 一样做 dtype 提升：当输入与权重同为浮点但类型不同（fp16 激活 + fp32 权重）时， > 以更宽的类型为准，而不是抛 dtype 不匹配错误。 --- ## 18. ComfyUI / utilities/conversion（6 个节点） 并入 ComfyUI 核心分类 utilities/conversion。这些是 ComfyDL 中唯一基于 ComfyUI V3 节点 API （io.ComfyNode + io.Schema）而非旧式 INPUT_TYPES / RETURN_TYPES 编写的节点，因为联合输入 插槽只能用 io.MultiType.Input 表达。 Value → Tensor / Tensor → Value 这对节点让携带 ComfyUI 语义的值（IMAGE / MASK / LATENT / AUDIO / SIGMAS）能够进入通用张量链路，并原样返回。Tensor → Value 刻意提供五个具体类型输出槽 而不是一个动态槽：具体槽是静态类型的，前端会从物理上阻止接错类型，同时后端校验器会做真正的类型 检查——而 MatchType 槽在后端完全拿不到校验。无法塞进裸张量的元数据（noise_mask、batch_index、 type、sampler_rate）走平行插槽传递。 ### Value → Tensor",
+    "description": "把任意受支持的 Comfy 值拆包成通用 TENSOR。IMAGE / MASK / SIGMAS 原样透传；LATENT 取 samples；AUDIO 取 waveform。无法放进裸张量的元数据从平行插槽输出。"
+  },
+  "CdlVocClasses": {
+    "description": "获取 PASCAL VOC 21 个类别名称。单个索引查询返回该类名；索引 -1 返回所有 21 个类别的逗号分隔列表。"
+  },
+  "CdlVocColormap2Label": {
+    "description": "构建 VOC RGB 颜色 → 类别索引查找表。输出为 \\( 256^3 \\) 大小的张量；通过颜色编码（R×65536 + G×256 + B）查找类别索引。"
+  },
+  "CdlVocLabelIndices": {
+    "description": "将 VOC 标签彩色图像映射为类别索引图。将 RGB 像素编码为单一颜色值，再通过查找表转换为类别索引。"
+  },
+  "CdlVocRandCrop": {
+    "description": "对特征图像和标签图像执行同步随机裁剪。使用相同的随机裁剪参数以保持特征与标签对齐。若请求尺寸超过图像尺寸则回退为中心裁剪。"
+  },
+  "CdlVocabBuild": {
+    "description": "从 token 文本构建词表。统计 token 频率，保留出现次数 ≥ min_freq 的 token，并添加保留 token（如 <pad>、<bos>、<eos>）。<unk> token 自动包含在内。"
+  },
+  "CdlVocabDecode": {
+    "description": "使用词表将索引张量转换回 token 字符串。超出范围的索引映射为 <unk>。"
+  },
+  "CdlVocabEncode": {
+    "description": "使用词表将 token 字符串转换为索引张量。词表中不存在的 token 映射为 <unk> 索引。"
+  },
+  "CdlWhat": {
+    "description": "试一试就知道了~"
+  }
+}

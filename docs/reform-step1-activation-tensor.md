@@ -99,55 +99,30 @@ penv/Lib/site-packages/comfyui_frontend_package/static/assets/settingStore-<hash
 ```
 
 Six theme tables (`arc`, `dark`, `github`, `light`, `solarized`, `nord`) each contain a
-`colors.node_slot` map; `TENSOR:\`#C6FF00\`` was appended to each of them, right after the
+`colors.node_slot` map; `TENSOR:\`#C6FF00\`` is appended to each of them, right after the
 last entry and before the closing brace.
 
-> ⚠ **The frontend package is not under version control.** Upgrading
-> `comfyui-frontend-package` changes the file name (the hash) and drops this edit — the slot
-> colour must then be re-applied to the new file.
->
-> ⚠ **前端包不在版本控制内。** 升级 `comfyui-frontend-package` 后文件名（hash）会变化，该改动
-> 会丢失，需要重新应用到新文件。
+Since 2026-09-12 the edit is applied **automatically at every startup** by
+`app/frontend_patch.py` (`_patch_tensor_slot_colour`), which is called from
+`PromptServer.__init__` right after the web root is resolved. The patch locates the asset by
+the content marker `node_slot:{` instead of the hashed file name, does nothing when
+`TENSOR:\`#C6FF00\`` is already present, and only logs a warning if a future frontend rewrite
+changes the layout — so upgrading `comfyui-frontend-package` needs no manual step any more.
 
-To re-apply, from the repo root with the venv interpreter:
-
-```python
-# Re-apply the TENSOR slot colour after a frontend package upgrade.
-import re, glob
-from pathlib import Path
-
-path = glob.glob('penv/Lib/site-packages/comfyui_frontend_package/static/assets/settingStore-*.js')[0]
-p = Path(path)
-src = p.read_bytes().decode('utf-8')
-MARK, INSERT = 'node_slot:{', ',TENSOR:`#C6FF00`'
-assert 'TENSOR:' not in src, 'already applied'
-
-out, pos, search, n = [], 0, 0, 0
-while True:
-    i = src.find(MARK, search)
-    if i < 0:
-        break
-    j = i + len(MARK)
-    search = j                                   # search cursor only
-    if src[j:j + 3] == '...':                    # palette-merge code, not a theme table
-        continue
-    end = src.find('}', j)
-    out.append(src[pos:end]); out.append(INSERT); pos = end; n += 1
-out.append(src[pos:])
-new = ''.join(out)
-assert n == 6 and len(new) == len(src) + n * len(INSERT), f'unsafe: n={n}'
-p.write_bytes(new.encode('utf-8'))
-print('patched', n, 'theme tables')
-```
+自 2026-09-12 起，该改动由 `app/frontend_patch.py`（`_patch_tensor_slot_colour`）在**每次启动
+时自动应用**，调用点位于 `PromptServer.__init__` 解析出 web root 之后。补丁以内容标记
+`node_slot:{` 定位资源、不依赖带 hash 的文件名；若 `TENSOR:\`#C6FF00\`` 已存在则直接跳过；若
+将来前端改写导致标记消失，只打印告警。升级 `comfyui-frontend-package` 不再需要任何手工步骤。
 
 Important: only the six tables whose value starts with a real key (`node_slot:{BOOLEAN:…`)
 are theme palettes. The palette-merge expression `node_slot:{...t.colors.node_slot,…}`
 starts with `...` and must be left untouched — a naive "insert before the closing brace"
-walk corrupts it.
+walk corrupts it. The patch keeps that rule and refuses to write unless it found exactly six
+tables.
 
 注意：只有值以真实键开头（`node_slot:{BOOLEAN:…`）的 6 张表才是主题调色板；调色板合并表达式
 `node_slot:{...t.colors.node_slot,…}` 以 `...` 开头，必须跳过——盲目地"在右花括号前插入"
-会破坏它。
+会破坏它。补丁保留了这一规则，并且只有在恰好找到 6 张表时才写入。
 
 ---
 
@@ -231,9 +206,10 @@ ComfyDL 原有的 `CdlActivation`（位于 `d2l/Tensor Basic`）用 COMBO 控件
   CdlShowHeatmapsOutput` submitted to `/prompt` comes back with `node_errors {}` and finishes
   with `execution_success`, i.e. a ComfyDL tensor flows through the new core activation
   nodes into an output node without any adapter.
-- Frontend bundle: after the package reinstall the `node_slot` patch was re-applied at byte
-  level; the bundle grew from 1645581 to 1645683 chars (`6 × 17`), `node_slot:{` still occurs
-  7 times (6 theme tables + 1 palette-merge expression) and the page loads normally.
+- Frontend bundle: the `node_slot` colour is re-applied automatically at every startup by
+  `app/frontend_patch.py` (see [`branding-and-frontend-patch.md`](branding-and-frontend-patch.md));
+  each of the six theme tables gains 17 chars, `node_slot:{` still occurs 7 times (6 theme tables
+  + 1 palette-merge expression) and the page loads normally.
 
 ---
 
@@ -246,8 +222,8 @@ ComfyDL 原有的 `CdlActivation`（位于 `d2l/Tensor Basic`）用 COMBO 控件
 3. Revert the type merge by running `comfydl/_update_nodes.py` with the mapping reversed
    (`"TENSOR" → "cdlTensor"`, `"BBOX" → "cdlBbox"`), and restore the `cdlTensor` / `cdlBbox`
    definitions in `comfydl/nodes/__init__.py`.
-4. Optionally restore the previous `settingStore-*.js` (or re-install
-   `comfyui-frontend-package==1.51.9`) to drop the slot colour.
+4. Drop `_patch_tensor_slot_colour` from `app/frontend_patch.py`, or re-install
+   `comfyui-frontend-package==1.51.9` to get an unpatched bundle.
 5. `git revert` the reform commit(s) in `ComfyDL_UI`, and the corresponding `comfydl`
    submodule commit.
 

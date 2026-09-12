@@ -43,6 +43,7 @@ from comfy.comfy_api_env import get_environment_overrides
 import node_helpers
 from comfyui_version import __version__
 from app.frontend_management import FrontendManager, parse_version
+from app.frontend_patch import apply_frontend_patches
 from comfy_api.internal import _ComfyNodeInternal
 from app.assets.seeder import asset_seeder
 from app.assets.api.routes import register_assets_routes
@@ -254,6 +255,8 @@ class PromptServer():
             else args.front_end_root
         )
         logging.info(f"[Prompt Server] web root: {self.web_root}")
+        # Re-apply the ComfyDL_UI UI changes before the static files are served.
+        apply_frontend_patches(self.web_root)
         if args.enable_assets:
             register_assets_routes(self.app, self.user_manager)
         else:

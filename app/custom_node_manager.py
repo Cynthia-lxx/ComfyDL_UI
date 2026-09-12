@@ -16,6 +16,12 @@ EXTRA_LOCALE_FILES = [
     "settings.json",
 ]
 
+# ComfyDL_UI ships its translations with the host runtime instead of a
+# custom_nodes package, so the repository level locale folder is scanned as well.
+REPO_LOCALES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "locales"
+)
+
 
 def safe_load_json_file(file_path: str) -> dict:
     if not os.path.exists(file_path):
@@ -27,6 +33,31 @@ def safe_load_json_file(file_path: str) -> dict:
     except json.JSONDecodeError:
         logging.error(f"Error loading {file_path}")
         return {}
+
+
+def load_locales_dir(locales_dir: str, translations: dict) -> None:
+    """Merge the ``<lang>/*.json`` files of a locales folder into ``translations``."""
+    if not os.path.exists(locales_dir):
+        return
+
+    for lang_dir in sorted(glob.glob(os.path.join(locales_dir, "*/"))):
+        lang_code = os.path.basename(os.path.dirname(lang_dir))
+        if lang_code not in translations:
+            translations[lang_code] = {}
+
+        # Load main.json
+        node_translations = safe_load_json_file(os.path.join(lang_dir, "main.json"))
+
+        # Load extra locale files
+        for extra_file in EXTRA_LOCALE_FILES:
+            json_data = safe_load_json_file(os.path.join(lang_dir, extra_file))
+            if json_data:
+                node_translations[extra_file.split(".")[0]] = json_data
+
+        if node_translations:
+            translations[lang_code] = merge_json_recursive(
+                translations[lang_code], node_translations
+            )
 
 
 class CustomNodeManager:
@@ -44,6 +75,9 @@ class CustomNodeManager:
                         - commands.json
                         - settings.json
 
+        ComfyDL_UI's own translations live in the repository level `locales/` folder
+        (same layout) and are merged on top of the custom node ones.
+
         returned translations are expected to be in the following format:
         {
             "en": {
@@ -60,32 +94,9 @@ class CustomNodeManager:
         for folder in folder_paths.get_folder_paths("custom_nodes"):
             # Sort glob results for deterministic ordering
             for custom_node_dir in sorted(glob.glob(os.path.join(folder, "*/"))):
-                locales_dir = os.path.join(custom_node_dir, "locales")
-                if not os.path.exists(locales_dir):
-                    continue
+                load_locales_dir(os.path.join(custom_node_dir, "locales"), translations)
 
-                for lang_dir in glob.glob(os.path.join(locales_dir, "*/")):
-                    lang_code = os.path.basename(os.path.dirname(lang_dir))
-
-                    if lang_code not in translations:
-                        translations[lang_code] = {}
-
-                    # Load main.json
-                    main_file = os.path.join(lang_dir, "main.json")
-                    node_translations = safe_load_json_file(main_file)
-
-                    # Load extra locale files
-                    for extra_file in EXTRA_LOCALE_FILES:
-                        extra_file_path = os.path.join(lang_dir, extra_file)
-                        key = extra_file.split(".")[0]
-                        json_data = safe_load_json_file(extra_file_path)
-                        if json_data:
-                            node_translations[key] = json_data
-
-                    if node_translations:
-                        translations[lang_code] = merge_json_recursive(
-                            translations[lang_code], node_translations
-                        )
+        load_locales_dir(REPO_LOCALES_DIR, translations)
 
         return translations
 

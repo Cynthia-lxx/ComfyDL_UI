@@ -1,0 +1,9 @@
+{
+  "comfydlAbout": {
+    "summary": "ComfyDL_UI 是 ComfyDL 的图形界面（GUI）运行时：一个为深度学习特化改装的 ComfyUI 分支，内置本项目新增的张量、网络层与训练节点。",
+    "notOriginal": "这不是完整的原版 ComfyUI，而是只保留 ComfyDL 所需部分的脱水分支。如果想使用原版 ComfyUI，请从官方仓库下载。",
+    "projectRepo": "ComfyDL_UI 仓库",
+    "upstreamRepo": "ComfyUI 官方仓库",
+    "upstreamHeading": "上游原版 ComfyUI（原项目）"
+  }
+}

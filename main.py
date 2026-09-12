@@ -599,7 +599,7 @@ def start_comfyui(asyncio_loop=None):
 if __name__ == "__main__":
     # Running directly, just start ComfyUI.
     logging.info("Python version: {}".format(sys.version))
-    logging.info("ComfyUI version: {}".format(comfyui_version.__version__))
+    logging.info("ComfyDL_UI version: {}".format(comfyui_version.__version__))
     for package in ("comfy-aimdo", "comfy-kitchen"):
         try:
             logging.info("{} version: {}".format(package, importlib.metadata.version(package)))

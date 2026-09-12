@@ -1,8 +1,39 @@
 <div align="center">
 
-# ComfyUI
-**The most powerful and modular AI engine for content creation.**
+# ComfyDL_UI
 
+**The GUI build of ComfyDL — a deep-learning-focused fork of ComfyUI.**
+
+`ComfyDL_UI` hosts the [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) node pack and runs
+the tensors, layers, training nodes and data utilities that pack adds on top of the ComfyUI
+runtime.
+
+</div>
+
+## About this project
+
+- **What it is** — the GUI / runtime build of [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL),
+  a node pack that turns ComfyUI into a deep-learning playground.
+- **What it is not** — it is *not* the complete original ComfyUI. This repository is a
+  dehydrated fork (see [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)) that keeps
+  only the runtime the ComfyDL nodes need.
+- **Want the original ComfyUI instead?** Download it from the official repository,
+  <https://github.com/comfyanonymous/ComfyUI>. Its installers, package downloads and cloud
+  service are described in the section below and are maintained by the upstream project, not
+  by ComfyDL_UI.
+- **Version** — `v0.3.1`, dehydrated from ComfyUI `v0.34.0`.
+- **Maintainer** — [Cynthia-lxx](https://github.com/Cynthia-lxx). Upstream ComfyUI keeps its own
+  copyright and maintainers; both notices are listed at the end of [`LICENSE`](LICENSE).
+- **Where to look next** — [`docs/`](docs/) for fork-specific notes,
+  [`AGENTS.md`](AGENTS.md) for how this repository is worked on, and the `comfydl/` submodule
+  for the node pack (`README.md`, `FUNCTIONS.md` and their `_zh` counterparts).
+
+## Upstream ComfyUI (original project)
+
+Everything in this section belongs to the upstream ComfyUI project, not to ComfyDL_UI.
+ComfyDL_UI is derived from it and is **not** the complete original package.
+
+<div align="center">
 
 [![Website][website-shield]][website-url]
 [![Dynamic JSON Badge][discord-shield]][discord-url]
@@ -41,6 +72,15 @@ ComfyUI is the AI creation engine for visual professionals who demand control ov
 - It is available on Windows, Linux, and macOS, locally with our [desktop application](https://www.comfy.org/download), our [portable install](#installing) or on our [cloud](https://www.comfy.org/cloud).
 - The most sophisticated workflows can be exposed through a simple UI thanks to App Mode.
 - It integrates seamlessly into production pipelines with our API endpoints.
+
+---
+
+# Upstream documentation
+
+The sections from here on are the **upstream ComfyUI** documentation, kept because this fork
+runs the same runtime. Every installer, download and cloud link below points to the original
+ComfyUI project (baseline `v0.34.0`) and is maintained by it, not by ComfyDL_UI. For
+ComfyDL_UI itself, start from the sections above and from [`docs/`](docs/).
 
 ## Get Started
 

@@ -1,14 +1,17 @@
 [project]
-name = "ComfyUI"
-version = "0.34.0"
+name = "ComfyDL_UI"
+version = "0.3.1"
+description = "GUI runtime of ComfyDL: a deep-learning-tuned fork of ComfyUI (dehydrated, no diffusion model layer)."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [{ name = "Cynthia-lxx" }]
 
 [project.urls]
-homepage = "https://www.comfy.org/"
-repository = "https://github.com/comfyanonymous/ComfyUI"
+homepage = "https://github.com/Cynthia-lxx/ComfyDL_UI"
+repository = "https://github.com/Cynthia-lxx/ComfyDL_UI"
 documentation = "https://docs.comfy.org/"
+Upstream = "https://github.com/comfyanonymous/ComfyUI"
 
 [tool.ruff]
 lint.select = [
