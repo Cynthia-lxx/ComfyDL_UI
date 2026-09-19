@@ -715,6 +715,45 @@ class Optimizer(ComfyTypeIO):
     if TYPE_CHECKING:
         Type = OptimizerConfig
 
+@comfytype(io_type="VOCAB")
+class Vocab(ComfyTypeIO):
+    """A frozen token-to-index mapping, index 0 always ``<unk>``.
+
+    Built from a corpus by the Vocab Build node; the Text Encode / Text Decode
+    nodes convert between text and token indices through it, and a language
+    model spec reads its ``size`` as the vocabulary dimension.
+
+    Tutorial: https://d2l.ai/chapter_recurrent-neural-networks/text-preprocessing.html
+    """
+    if TYPE_CHECKING:
+        from comfy.lm_protocol import Vocab as _Vocab
+        Type = _Vocab
+
+@comfytype(io_type="MODELSPEC")
+class ModelSpec(ComfyTypeIO):
+    """A chain of frozen layer blueprints describing a model's structure.
+
+    An ordered tuple of dataclasses (embedding spec first, block specs after)
+    with no tensors inside, so the value is safe for ComfyUI to cache. A Model
+    Build node materialises the chain into a real ``nn.Module``.
+
+    Tutorial: https://docs.pytorch.org/docs/stable/notes/modules.html
+    """
+    Type = tuple
+
+@comfytype(io_type="NNMODEL")
+class NNModel(ComfyTypeIO):
+    """A materialised, self-contained ``torch.nn.Module``.
+
+    A stateful Python object in the ComfyUI sense (cached like a cdlModel):
+    training nodes return a *new* trained copy rather than mutating the input,
+    so the cached value of every node stays correct.
+
+    Tutorial: https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html
+    """
+    if TYPE_CHECKING:
+        Type = torch.nn.Module
+
 @comfytype(io_type="VOXEL")
 class Voxel(ComfyTypeIO):
     Type = VOXEL
@@ -2474,6 +2513,9 @@ __all__ = [
     "LossMap",
     "Params",
     "Optimizer",
+    "Vocab",
+    "ModelSpec",
+    "NNModel",
     "Voxel",
     "Mesh",
     "Splat",

@@ -521,6 +521,73 @@ def _f_ffn2_weight(cfg: dict, name: str) -> Any:
     return torch.randn(8, 32)
 
 
+#: The step8 text/LM dummies share one tiny world: a 5-token vocabulary over
+#: "abcabcabd" (chars a, b, c, d plus <unk>) and a 10-token index stream made
+#: of values 1..4, so every node sees indices that fit every model head below.
+
+def _f_vocab_dummy(cfg: dict, name: str) -> Any:
+    """``VOCAB`` dummy: the 5-token char vocabulary of "abcabcabd"."""
+    from comfy import lm_protocol as protocol
+
+    return protocol.build_vocab("abcabcabd", level="char")
+
+
+def _f_ids_stream(cfg: dict, name: str) -> Any:
+    """A deterministic 1-D long token stream; values fit the 5-token vocab."""
+    import torch
+
+    return torch.tensor([1, 2, 3, 1, 2, 4, 1, 2, 3, 1], dtype=torch.long)
+
+
+def _f_lengths_dummy(cfg: dict, name: str) -> Any:
+    """Per-sample sequence lengths for the padding mask."""
+    import torch
+
+    return torch.tensor([3, 7, 5])
+
+
+def _lm_pair() -> Any:
+    """The matched (context, next-token) pair of the dummy stream, window 4."""
+    import torch
+
+    stream = _f_ids_stream({}, "ids").tolist()
+    window = 4
+    x = torch.tensor(
+        [stream[i : i + window] for i in range(len(stream) - window)], dtype=torch.long
+    )
+    y = torch.tensor(
+        [stream[i + window] for i in range(len(stream) - window)], dtype=torch.long
+    )
+    return x, y
+
+
+def _f_lm_x(cfg: dict, name: str) -> Any:
+    """The (6, 4) context batch of the language-model trainer."""
+    return _lm_pair()[0]
+
+
+def _f_lm_y(cfg: dict, name: str) -> Any:
+    """The (6,) next-token batch of the language-model trainer."""
+    return _lm_pair()[1]
+
+
+def _f_lm_spec(cfg: dict, name: str) -> Any:
+    """``MODELSPEC`` dummy: a 16-token, width-8 chain with one block."""
+    from comfy import lm_protocol as protocol
+
+    return (
+        protocol.EmbeddingSpec(16, 8, True),
+        protocol.TransformerBlockSpec(8, 4, 16),
+    )
+
+
+def _f_lm_model(cfg: dict, name: str) -> Any:
+    """``NNMODEL`` dummy: the spec chain above, materialised with seed 0."""
+    from comfy import lm_protocol as protocol
+
+    return protocol.build_model(_f_lm_spec(cfg, name), seed=0)
+
+
 def _f_stats_linked(cfg: dict, name: str) -> Any:
     """Per-channel statistics for the *linked* Training Run Stats slots.
 
@@ -734,6 +801,9 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "VAE": _f_protocol_vae,
     "PARAMS": _f_params,
     "OPTIMIZER": _f_optimizer,
+    "VOCAB": _f_vocab_dummy,
+    "MODELSPEC": _f_lm_spec,
+    "NNMODEL": _f_lm_model,
     "*": _f_any,
 }
 
@@ -878,6 +948,25 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
         "ffn1_weight": _f_ffn1_weight,
         "ffn2_weight": _f_ffn2_weight,
     },
+    # Attention mask / position utilities: the padding mask needs a lengths
+    # vector; causal mask and positional encoding run on widgets alone.
+    "AttentionPaddingMask": {"lengths": _f_lengths_dummy},
+    # Text pipeline: every node consumes the shared 5-token dummy vocabulary
+    # and the matched token stream (see _f_vocab_dummy above).
+    "TextEncode": {"vocab": _f_vocab_dummy},
+    "TextDecode": {"vocab": _f_vocab_dummy, "ids": _f_ids_stream},
+    "TextSlidingWindow": {"ids": _f_ids_stream},
+    # Language model: the spec/model dummies and the matched (x, y) pair.
+    "LanguageModelTransformerBlock": {"spec": _f_lm_spec},
+    "LanguageModelBuild": {"spec": _f_lm_spec},
+    "LanguageModelTrain": {
+        "model": _f_lm_model,
+        "x": _f_lm_x,
+        "y": _f_lm_y,
+        "optimizer": _f_optimizer,
+    },
+    "LanguageModelForward": {"model": _f_lm_model, "ids": _f_ids_stream},
+    "LanguageModelGenerate": {"model": _f_lm_model, "vocab": _f_vocab_dummy},
     # MODEL protocol: the loader combos are empty in a fresh checkout, so every
     # loader is pointed at the fake checkpoint the harness writes into the sandbox
     # model folders.  Without this they would be skipped instead of really reading.
@@ -1931,6 +2020,265 @@ def _check_transformer_encoder_block(result: Any, args: dict[str, Any]) -> None:
     assert torch.allclose(gelu, expected_g, atol=1e-5), "ffn_activation=gelu did not reach the FFN"
 
 
+def _check_attention_causal_mask(result: Any, args: dict[str, Any]) -> None:
+    """The causal mask must be the lower-triangular bool table, True = attend."""
+    import torch
+
+    (mask,) = _as_tuple(result)
+    assert mask.dtype == torch.bool, f"the mask must be boolean, got {mask.dtype}"
+    assert tuple(mask.shape) == (args["seq_len"], args["seq_len"]), tuple(mask.shape)
+    assert torch.equal(mask, torch.ones_like(mask).tril()), (
+        "the causal mask is not the lower triangle (True = attend)"
+    )
+    assert bool(mask[0, -1]) is False and bool(mask[-1, 0]) is True, (
+        "position 0 must not see the future; the last position may see the start"
+    )
+    (resized,) = _rerun_v3("AttentionCausalMask", seq_len=5)
+    assert tuple(resized.shape) == (5, 5), "seq_len did not drive both axes"
+
+
+def _check_attention_padding_mask(result: Any, args: dict[str, Any]) -> None:
+    """The padding mask must block exactly the tail beyond each length."""
+    import torch
+
+    lengths = args["lengths"]
+    (mask,) = _as_tuple(result)
+    width = int(lengths.max())
+    assert tuple(mask.shape) == (lengths.numel(), 1, 1, width), tuple(mask.shape)
+    expected = torch.arange(width).unsqueeze(0) < lengths.unsqueeze(1)
+    assert torch.equal(mask.squeeze(1).squeeze(1), expected), (
+        "the mask does not mark positions < length as valid"
+    )
+    (fixed,) = _rerun_v3("AttentionPaddingMask", lengths=lengths, max_len=9)
+    assert tuple(fixed.shape) == (lengths.numel(), 1, 1, 9), "max_len did not win over max(lengths)"
+
+
+def _check_attention_positional_encoding(result: Any, args: dict[str, Any]) -> None:
+    """The table must be the sinusoidal PE; a wired tensor must get it added."""
+    import torch
+
+    from comfy.lm_protocol import positional_encoding
+
+    encoding, output = _as_tuple(result)
+    assert torch.allclose(encoding, positional_encoding(8, 32)), (
+        "the table is not the sinusoidal position encoding"
+    )
+    assert torch.equal(output, encoding), "an unconnected tensor must return the bare table"
+
+    tensor = torch.randn(2, 5, 32)
+    enc2, out2 = _rerun_v3("AttentionPositionalEncoding", tensor=tensor)
+    assert torch.allclose(enc2, positional_encoding(5, 32)), "the table ignored the wired shape"
+    assert torch.allclose(out2, tensor + positional_encoding(5, 32)), (
+        "output is not tensor + encoding"
+    )
+
+
+def _check_text_vocab_build(result: Any, args: dict[str, Any]) -> None:
+    """The vocabulary must be deterministic, frequency-ordered, <unk>-first."""
+    from comfy import lm_protocol as protocol
+
+    vocab, size = _as_tuple(result)
+    assert isinstance(vocab, protocol.Vocab)
+    assert size == vocab.size == len(vocab.tokens)
+    assert vocab.tokens[0] == protocol.UNK_TOKEN, "<unk> must be index 0"
+    counts = {t: args["corpus"].count(t) for t in set(args["corpus"]) if t}
+    ranked = sorted(counts, key=lambda t: (-counts[t], t))
+    assert list(vocab.tokens[1:]) == ranked, "tokens are not frequency-then-alphabetical"
+    (again, _) = _rerun_v3("TextVocabBuild")
+    assert again == vocab, "the same corpus built a different vocabulary"
+    (words, wsize) = _rerun_v3("TextVocabBuild", level="word")
+    assert all(" " not in token for token in words.tokens), "word level still split characters"
+
+
+def _check_text_encode(result: Any, args: dict[str, Any]) -> None:
+    """Encoding must round trip in-vocabulary text and map unknowns to <unk>."""
+    import torch
+
+    (ids,) = _as_tuple(result)
+    vocab = args["vocab"]
+    assert ids.dtype == torch.long and ids.dim() == 1, (ids.dtype, tuple(ids.shape))
+    assert ids.tolist() == vocab.encode(args["text"]), "the encoding is not the vocabulary's"
+    (roundtrip,) = _rerun_v3("TextEncode", vocab=vocab, text="abcabd")
+    assert vocab.decode(roundtrip.tolist()) == "abcabd", "encode/decode lost in-vocab text"
+    (unk,) = _rerun_v3("TextEncode", vocab=vocab, text="zzz")
+    assert unk.tolist() == [0, 0, 0], "unknown tokens must become the <unk> index 0"
+
+
+def _check_text_decode(result: Any, args: dict[str, Any]) -> None:
+    """Decoding must invert encoding and render out-of-range indices as <unk>."""
+    import torch
+
+    (text,) = _as_tuple(result)
+    vocab, ids = args["vocab"], args["ids"]
+    assert text == vocab.decode(ids.reshape(-1).tolist()), "the text is not the vocabulary's decode"
+    (batched,) = _rerun_v3(
+        "TextDecode", vocab=vocab, ids=torch.tensor([[1, 2], [99, 0]])
+    )
+    assert batched == "ab\n<unk><unk>", f"2-D decode / out-of-range handling broken: {batched!r}"
+
+
+def _check_text_sliding_window(result: Any, args: dict[str, Any]) -> None:
+    """Every window must pair its context with the token right after it."""
+    x, y = _as_tuple(result)
+    stream = args["ids"].reshape(-1).tolist()
+    window = args["window"]
+    assert tuple(x.shape) == (len(stream) - window, window), tuple(x.shape)
+    assert tuple(y.shape) == (len(stream) - window,), tuple(y.shape)
+    for i in range(len(stream) - window):
+        assert x[i].tolist() == stream[i : i + window], f"context {i} is wrong"
+        assert int(y[i]) == stream[i + window], f"target {i} is not the next token"
+
+
+def _check_lm_embedding(result: Any, args: dict[str, Any]) -> None:
+    """The link must carry the declared sizes and honour the VOCAB override."""
+    from comfy import lm_protocol as protocol
+
+    spec, width = _as_tuple(result)
+    assert len(spec) == 1 and isinstance(spec[0], protocol.EmbeddingSpec)
+    assert spec[0].d_model == width == args["d_model"]
+    assert spec[0].vocab_size == args["vocab_size"]
+
+    vocab = protocol.build_vocab("abcabcabd", level="char")
+    (linked, _) = _rerun_v3("LanguageModelEmbedding", vocab=vocab, vocab_size=999)
+    assert linked[0].vocab_size == vocab.size, "the VOCAB link did not override the widget"
+
+    # Wiring an existing chain replaces the embedding link and keeps the blocks.
+    chained = (*spec, protocol.TransformerBlockSpec(width, 4, 16))
+    (merged, _) = _rerun_v3("LanguageModelEmbedding", spec=chained, vocab=vocab)
+    assert len(merged) == 2 and isinstance(merged[1], protocol.TransformerBlockSpec), (
+        "the wired chain's blocks were not kept"
+    )
+
+
+def _check_lm_block(result: Any, args: dict[str, Any]) -> None:
+    """The block must append to the chain and inherit the chain's width."""
+    from comfy import lm_protocol as protocol
+
+    spec, width = _as_tuple(result)
+    incoming = args["spec"]
+    assert len(spec) == len(incoming) + 1, "exactly one link must be appended"
+    assert isinstance(spec[-1], protocol.TransformerBlockSpec)
+    assert spec[:-1] == tuple(incoming), "the incoming chain was modified"
+    assert spec[-1].d_model == width == incoming[0].d_model, "the width does not follow the chain"
+    assert spec[-1].num_heads == args["num_heads"] and spec[-1].d_ffn == args["d_ffn"]
+
+    (chained, _) = _rerun_v3("LanguageModelTransformerBlock", spec=spec, num_heads=8)
+    assert chained[-1].num_heads == 8 and len(chained) == len(spec) + 1, "chaining broke"
+
+    try:
+        _rerun_v3("LanguageModelTransformerBlock", spec=(protocol.TransformerBlockSpec(8, 4, 16),))
+    except ValueError as exc:
+        assert "Embedding" in str(exc), f"the block-first error must be explained, got: {exc}"
+    else:
+        raise AssertionError("a chain without an embedding link must be refused")
+
+
+def _check_lm_build(result: Any, args: dict[str, Any]) -> None:
+    """The build must be seeded, param-counted and forward-ready."""
+    import torch
+
+    from comfy import lm_protocol as protocol
+
+    model, params = _as_tuple(result)
+    assert isinstance(model, protocol.LanguageModel)
+    assert params == protocol.parameter_count(model) > 0, "the parameter count is wrong"
+
+    (again, _) = _rerun_v3("LanguageModelBuild", spec=args["spec"], seed=args["seed"])
+    for a, b in zip(model.parameters(), again.parameters()):
+        assert torch.equal(a, b), "the same seed did not rebuild the same weights"
+    (other, _) = _rerun_v3("LanguageModelBuild", spec=args["spec"], seed=args["seed"] + 1)
+    assert not torch.equal(next(model.parameters()), next(other.parameters())), (
+        "a different seed rebuilt the same weights"
+    )
+
+    with torch.no_grad():
+        logits = model(torch.zeros(1, 4, dtype=torch.long))
+    assert tuple(logits.shape) == (1, 4, model.vocab_size), tuple(logits.shape)
+
+
+def _check_lm_train(result: Any, args: dict[str, Any]) -> None:
+    """Training must fall, stay deterministic and not touch the input model."""
+    import torch
+
+    model, loss, history = _as_tuple(result)
+    steps = args["steps"]
+    assert tuple(history.shape) == (steps,), tuple(history.shape)
+    assert loss == float(history[-1])
+    assert float(history[-1]) < float(history[0]), "the loss did not fall over the run"
+    assert model is not args["model"], "the trainer must return a copy, not mutate its input"
+    assert not model.training, "the trained model must come back in eval mode"
+    assert not torch.equal(next(args["model"].parameters()), next(model.parameters())), (
+        "the cached input model was mutated"
+    )
+
+    rerun = dict(model=args["model"], x=args["x"], y=args["y"], optimizer=args["optimizer"], steps=10, seed=3)
+    _, _, curve_a = _rerun_v3("LanguageModelTrain", **rerun)
+    _, _, curve_b = _rerun_v3("LanguageModelTrain", **rerun)
+    assert torch.equal(curve_a, curve_b), "the same seed did not reproduce the run"
+    assert float(curve_a[-1]) < float(curve_a[0]), "a 10-step run must already improve"
+
+    try:
+        _rerun_v3(
+            "LanguageModelTrain",
+            model=args["model"],
+            x=torch.zeros(6, 4, dtype=torch.long),
+            y=torch.zeros(2, dtype=torch.long),
+            optimizer=args["optimizer"],
+            steps=1,
+        )
+    except ValueError as exc:
+        assert "y" in str(exc), f"the shape mismatch must be explained, got: {exc}"
+    else:
+        raise AssertionError("a mismatched y must be refused")
+
+
+def _check_lm_forward(result: Any, args: dict[str, Any]) -> None:
+    """The forward must map a 1-D stream to (1, L, vocab) finite logits."""
+    import torch
+
+    (logits,) = _as_tuple(result)
+    model, ids = args["model"], args["ids"]
+    assert tuple(logits.shape) == (1, ids.numel(), model.vocab_size), tuple(logits.shape)
+    assert torch.isfinite(logits).all(), "the logits hold NaN/Inf"
+
+
+def _check_lm_generate(result: Any, args: dict[str, Any]) -> None:
+    """Generation must be prefix + num_tokens, seeded and text-decoded."""
+    import torch
+
+    ids, text = _as_tuple(result)
+    model, vocab = args["model"], args["vocab"]
+    prefix = vocab.encode(args["prefix"])
+    assert ids.dim() == 1 and ids.numel() == len(prefix) + args["num_tokens"], (
+        "the output is not prefix + generated tokens"
+    )
+    assert text == vocab.decode(ids.tolist()), "the text is not the decoded ids"
+    assert ids.tolist()[: len(prefix)] == prefix, "the prefix was not preserved"
+
+    greedy = dict(model=model, vocab=vocab, prefix=args["prefix"], num_tokens=4, temperature=0.0)
+    (g1, _) = _rerun_v3("LanguageModelGenerate", **greedy)
+    (g2, _) = _rerun_v3("LanguageModelGenerate", **greedy)
+    assert torch.equal(g1, g2), "greedy decoding is not deterministic"
+
+    sampled = dict(model=model, vocab=vocab, prefix=args["prefix"], num_tokens=4, temperature=1.5, seed=5)
+    (s1, _) = _rerun_v3("LanguageModelGenerate", **sampled)
+    (s2, _) = _rerun_v3("LanguageModelGenerate", **sampled)
+    assert torch.equal(s1, s2), "the same sampling seed did not reproduce the continuation"
+
+    (from_ids, plain) = _rerun_v3(
+        "LanguageModelGenerate",
+        model=model,
+        vocab=None,  # deliberately unlink the vocabulary
+        prefix_ids=torch.tensor([1, 2]),
+        num_tokens=3,
+        temperature=0.0,
+    )
+    assert from_ids.numel() == 5 and from_ids.tolist()[:2] == [1, 2], (
+        "prefix_ids did not override the text prefix"
+    )
+    assert plain == "", "without a vocab the text output must be empty"
+
+
 #: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
 #: arity matches", for the nodes whose returned *values* carry the contract.
 _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
@@ -1954,6 +2302,19 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "AttentionSelf": [_check_attention_self],
     "AttentionCross": [_check_attention_cross],
     "TransformerEncoderBlock": [_check_transformer_encoder_block],
+    "AttentionCausalMask": [_check_attention_causal_mask],
+    "AttentionPaddingMask": [_check_attention_padding_mask],
+    "AttentionPositionalEncoding": [_check_attention_positional_encoding],
+    "TextVocabBuild": [_check_text_vocab_build],
+    "TextEncode": [_check_text_encode],
+    "TextDecode": [_check_text_decode],
+    "TextSlidingWindow": [_check_text_sliding_window],
+    "LanguageModelEmbedding": [_check_lm_embedding],
+    "LanguageModelTransformerBlock": [_check_lm_block],
+    "LanguageModelBuild": [_check_lm_build],
+    "LanguageModelTrain": [_check_lm_train],
+    "LanguageModelForward": [_check_lm_forward],
+    "LanguageModelGenerate": [_check_lm_generate],
     "CheckpointLoaderSimple": [_check_checkpoint_loader],
     "CheckpointSave": [_check_checkpoint_save],
     "ModelSave": [_check_model_save],

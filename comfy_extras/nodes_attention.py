@@ -1,10 +1,16 @@
-"""Core attention nodes (reform step 7).
+"""Core attention nodes (reform step 7 + step 8 utilities).
 
 Provides 4 attention nodes that operate on the generic ``TENSOR`` slot type:
 
 * projection attention  - ``Multihead`` (q/k/v wired separately)
 * conveniences         - ``Self`` (q=k=v=x), ``Cross`` (q from x, k/v from context)
 * assembled block      - ``TransformerEncoderBlock`` (LN -> MHA -> Add -> LN -> FFN -> Add)
+
+plus 3 mask / position utilities (reform step 8) that feed them:
+
+* ``AttentionCausalMask``      - the lower-triangular boolean mask of a decoder
+* ``AttentionPaddingMask``     - a per-sample validity mask from sequence lengths
+* ``AttentionPositionalEncoding`` - the fixed sinusoidal position table
 
 Every node is stateless: the learnable parameters (the four projection
 weight/bias sets, the two FFN matrices, the two LayerNorm affines) are wired in
@@ -33,6 +39,7 @@ import torch
 import torch.nn.functional as F
 from typing_extensions import override
 
+from comfy.lm_protocol import positional_encoding
 from comfy_api.latest import ComfyExtension, io
 
 # The mode link, its normalisation and the seeded dropout mask are shared with
@@ -738,12 +745,237 @@ class TransformerEncoderBlock(io.ComfyNode):
         return io.NodeOutput(_block_layer_norm(hidden + ffn, ln2_weight, ln2_bias, "ln2"))
 
 
+#: Widget max for a sequence length: teaching sequences stay short, and the
+#: mask of a mistyped length would be a huge dense tensor.
+_MAX_LEN = 65536
+
+
+def _mask_schema(
+    node_id: str,
+    display_name: str,
+    description: str,
+    inputs: list,
+    outputs: list,
+    search_aliases: list[str],
+) -> io.Schema:
+    """Build the schema of a mask / position utility node.
+
+    Same contract as :func:`_attention_schema` but with caller-defined outputs,
+    because the utilities do not all return a plain ``output`` tensor.
+    """
+    return io.Schema(
+        node_id=node_id,
+        display_name=display_name,
+        category=CATEGORY,
+        description=description,
+        search_aliases=search_aliases,
+        inputs=list(inputs),
+        outputs=list(outputs),
+    )
+
+
+class AttentionCausalMask(io.ComfyNode):
+    """The lower-triangular boolean mask a decoder-style attention needs.
+
+    What: builds the ``(seq_len, seq_len)`` boolean mask where position ``i``
+          may attend to positions ``<= i`` (lower triangle, diagonal included).
+          The convention is ``True`` = attend / ``False`` = blocked - the
+          SDPA-boolean semantics every attention node of this family documents -
+          so the mask plugs straight into any ``mask`` slot without inversion.
+          A causal mask is what makes a language model autoregressive: during
+          training each position predicts its next token without peeking ahead.
+    In:   seq_len (INT) - the sequence length of both axes (default 8).
+    Out:  mask (TENSOR) - boolean ``(seq_len, seq_len)``; broadcasts against
+          ``(batch, heads, query_len, key_len)`` inside the attention nodes.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _mask_schema(
+            "AttentionCausalMask",
+            "Causal Mask",
+            "Lower-triangular boolean attention mask (True = attend): position i may see positions <= i, the decoder / language-model mask.",
+            inputs=[
+                io.Int.Input(
+                    "seq_len",
+                    default=8,
+                    min=1,
+                    max=_MAX_LEN,
+                    step=1,
+                    tooltip="Sequence length of both mask axes.",
+                ),
+            ],
+            outputs=[io.Tensor.Output(display_name="mask")],
+            search_aliases=["causal", "mask", "lookahead", "triangle", "autoregressive", "transformer", "decoder"],
+        )
+
+    @classmethod
+    def execute(cls, seq_len: int = 8) -> io.NodeOutput:
+        length = max(1, int(seq_len))
+        if length > _MAX_LEN:
+            raise ValueError(f"seq_len must be <= {_MAX_LEN}; got {length}.")
+        return io.NodeOutput(
+            torch.ones(length, length, dtype=torch.bool).tril()
+        )
+
+
+class AttentionPaddingMask(io.ComfyNode):
+    """A per-sample validity mask built from sequence lengths.
+
+    What: turns a vector of effective lengths into the boolean mask that blocks
+          the padded tail of every sequence: sample ``i`` may attend to key
+          positions ``< lengths[i]``. The output is shaped
+          ``(batch, 1, 1, max_len)`` so it broadcasts over heads and query
+          positions inside the attention nodes (every query of sample ``i``
+          sees the same valid keys - the standard encoder padding mask).
+    In:   lengths (TENSOR) - integer ``(batch,)``; the effective length of each
+          sample. Floats are truncated, negatives clamped to 0.
+          max_len (INT) - the key length to build against; ``0`` (default)
+          reads it from ``lengths.max()`` so the mask exactly covers the data.
+    Out:  mask (TENSOR) - boolean ``(batch, 1, 1, max_len)``; ``True`` = valid
+          (attend), ``False`` = padding (blocked), the SDPA-boolean convention.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _mask_schema(
+            "AttentionPaddingMask",
+            "Padding Mask",
+            "Boolean attention mask from per-sample sequence lengths: True = valid token, False = padding tail; broadcasts over heads and queries.",
+            inputs=[
+                io.Tensor.Input(
+                    "lengths",
+                    tooltip="Effective length of each sample, integer (batch,) tensor.",
+                ),
+                io.Int.Input(
+                    "max_len",
+                    default=0,
+                    min=0,
+                    max=_MAX_LEN,
+                    step=1,
+                    tooltip="Key length to build against; 0 reads it from the largest length.",
+                ),
+            ],
+            outputs=[io.Tensor.Output(display_name="mask")],
+            search_aliases=["padding", "mask", "valid length", "padded", "batch", "sequence mask", "transformer"],
+        )
+
+    @classmethod
+    def execute(cls, lengths: torch.Tensor, max_len: int = 0) -> io.NodeOutput:
+        if lengths.dim() != 1 or lengths.numel() == 0:
+            raise ValueError(
+                f"lengths must be a 1-D (batch,) tensor; got shape {tuple(lengths.shape)}."
+            )
+        sizes = lengths.detach().to(device="cpu", dtype=torch.long).clamp(min=0)
+        width = int(max_len) if int(max_len) > 0 else int(sizes.max().item())
+        if width <= 0 or width > _MAX_LEN:
+            raise ValueError(
+                f"max_len must be in [1, {_MAX_LEN}] after resolving (0 = use "
+                f"max(lengths)); got {width}."
+            )
+        positions = torch.arange(width).unsqueeze(0)  # (1, max_len)
+        mask = positions < sizes.unsqueeze(1)  # (batch, max_len)
+        return io.NodeOutput(mask.unsqueeze(1).unsqueeze(1))  # (batch, 1, 1, max_len)
+
+
+class AttentionPositionalEncoding(io.ComfyNode):
+    """The fixed sinusoidal position encoding, with optional additive inject.
+
+    What: the classic "Attention Is All You Need" position table -
+          ``PE(pos, 2i) = sin(pos / 10000^(2i/width))`` and
+          ``PE(pos, 2i+1) = cos(...)`` - as a parameter-free ``(length, width)``
+          tensor. Two modes: wire a ``tensor`` in and ``output`` returns the
+          sequence with the encoding added (the additive-inject recipe used by
+          d2l's ``PositionalEncoding``); leave ``tensor`` unconnected and the
+          widgets alone define the table, for graphs that add it themselves.
+          There are no learnable parameters - inject order information, not
+          weights.
+    In:   tensor (TENSOR, optional) - ``(..., length, width)`` sequence to
+          inject the encoding into; its last two dims override the widgets.
+          length (INT) - number of positions when ``tensor`` is unconnected
+          (default 8).
+          width (INT) - feature width when ``tensor`` is unconnected (default
+          32).
+    Out:  encoding (TENSOR) - float32 ``(length, width)``; the table itself.
+          output (TENSOR) - ``tensor + encoding`` when ``tensor`` is connected
+          (same shape/dtype as ``tensor``), otherwise identical to
+          ``encoding``.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _mask_schema(
+            "AttentionPositionalEncoding",
+            "Positional Encoding",
+            "Fixed sinusoidal position table (length, width), optionally added onto a wired sequence: order information without learnable parameters.",
+            inputs=[
+                io.Tensor.Input(
+                    "tensor",
+                    optional=True,
+                    tooltip="Optional (..., length, width) sequence; when wired, output = tensor + encoding and the widgets are read from its shape.",
+                ),
+                io.Int.Input(
+                    "length",
+                    default=8,
+                    min=1,
+                    max=_MAX_LEN,
+                    step=1,
+                    tooltip="Number of positions when tensor is unconnected.",
+                ),
+                io.Int.Input(
+                    "width",
+                    default=32,
+                    min=1,
+                    max=16384,
+                    step=1,
+                    tooltip="Feature width when tensor is unconnected.",
+                ),
+            ],
+            outputs=[
+                io.Tensor.Output(display_name="encoding"),
+                io.Tensor.Output(display_name="output"),
+            ],
+            search_aliases=["positional encoding", "sinusoidal", "position", "transformer", "sin", "cos", "embedding"],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        tensor: torch.Tensor | None = None,
+        length: int = 8,
+        width: int = 32,
+    ) -> io.NodeOutput:
+        if tensor is not None:
+            if tensor.dim() < 2:
+                raise ValueError(
+                    f"tensor must have at least 2 dimensions (..., length, width); "
+                    f"got shape {tuple(tensor.shape)}."
+                )
+            seq_len, features = int(tensor.shape[-2]), int(tensor.shape[-1])
+        else:
+            seq_len, features = max(1, int(length)), max(1, int(width))
+            if seq_len > _MAX_LEN:
+                raise ValueError(f"length must be <= {_MAX_LEN}; got {seq_len}.")
+
+        table = positional_encoding(seq_len, features)
+        if tensor is None:
+            return io.NodeOutput(table, table)
+
+        if not tensor.is_floating_point():
+            tensor = tensor.to(dtype=torch.float32)
+        encoding = table.to(device=tensor.device, dtype=tensor.dtype)
+        return io.NodeOutput(encoding, tensor + encoding)
+
+
 #: Every node this module registers, in node-library order.
 ATTENTION_NODES: list[type[io.ComfyNode]] = [
     AttentionMultihead,
     AttentionSelf,
     AttentionCross,
     TransformerEncoderBlock,
+    AttentionCausalMask,
+    AttentionPaddingMask,
+    AttentionPositionalEncoding,
 ]
 
 

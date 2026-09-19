@@ -349,6 +349,46 @@ reform 第七步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 
 在这 287 个已注册节点上给出 `264 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 181 个节点、
 33 个分类（109 个 ComfyDL + 72 个核心节点）。
 
+## Reform Step 8: Language Model / reform 第八步：语言模型
+
+The end-to-end language-model pipeline: a corpus goes in, a trained transformer comes out and the
+model talks back. 13 new core nodes in three groups — 3 mask / position utilities
+(`AttentionCausalMask` / `AttentionPaddingMask` / `AttentionPositionalEncoding`, category
+`Network & Layers/Attention`), 4 text nodes (`TextVocabBuild` / `TextEncode` / `TextDecode` /
+`TextSlidingWindow`, new category `Network & Layers/Text`) and 6 language-model nodes
+(`LanguageModelEmbedding` / `LanguageModelTransformerBlock` / `LanguageModelBuild` /
+`LanguageModelTrain` / `LanguageModelForward` / `LanguageModelGenerate`, category
+`Network & Layers/Training`) — plus three new graph value types (`VOCAB`, `MODELSPEC`, `NNMODEL`)
+declared in `comfy_api/latest/_io.py`. Because a gradient cannot cross a node boundary
+(`execution.py:751`), the model's *structure* travels as a frozen spec chain on the `MODELSPEC`
+slot and `Language Model Train` runs the whole forward + backward + `optimizer.step()` closure
+itself, on a deep copy, reusing the step-6 `OPTIMIZER` slot; the new `comfy/lm_protocol.py`
+(Vocab, the two specs, the pre-LN `LanguageModel`, seeded init and the autoregressive loop)
+imports only `torch` + `training_protocol`, matching the dehydration rule. See
+[reform-step8-language-model.md](./reform-step8-language-model.md) for the design record.
+
+语言模型端到端流水线：语料进、训练好的 Transformer 出、模型开口续写。新增 13 个核心节点，分三组
+——3 个掩码 / 位置工具（`AttentionCausalMask` / `AttentionPaddingMask` /
+`AttentionPositionalEncoding`，分类 `Network & Layers/Attention`）、4 个文本节点
+（`TextVocabBuild` / `TextEncode` / `TextDecode` / `TextSlidingWindow`，新分类
+`Network & Layers/Text`）与 6 个语言模型节点（`LanguageModelEmbedding` /
+`LanguageModelTransformerBlock` / `LanguageModelBuild` / `LanguageModelTrain` /
+`LanguageModelForward` / `LanguageModelGenerate`，分类 `Network & Layers/Training`）——外加在
+`comfy_api/latest/_io.py` 声明的三个新图数据类型（`VOCAB`、`MODELSPEC`、`NNMODEL`）。由于梯度无法
+跨越节点边界（`execution.py:751`），模型的**结构**以冻结 spec 链的形式走 `MODELSPEC` 槽，
+`Language Model Train` 在深拷贝上自己跑完整的前向 + 反向 + `optimizer.step()` 闭环，并复用第六步的
+`OPTIMIZER` 槽；新增 `comfy/lm_protocol.py`（Vocab、两个 spec、pre-LN `LanguageModel`、带种子的
+初始化与自回归循环）只 import `torch` 与 `training_protocol`，符合脱水构建规则。设计记录见
+[reform-step8-language-model.md](./reform-step8-language-model.md)。
+
+Measured after reform step 8: `IMPORT_FAILED []`, `CDL 109`; the host registry holds 300 nodes across
+46 categories; the smoke tester reports `277 PASS / 23 SKIP / 0 FAIL` across those 300 registered
+nodes; the documented library totals 194 nodes across 34 categories (109 ComfyDL + 85 core).
+
+reform 第八步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 300 个节点、46 个分类；冒烟测试器
+在这 300 个已注册节点上给出 `277 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 194 个节点、
+34 个分类（109 个 ComfyDL + 85 个核心节点）。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with
