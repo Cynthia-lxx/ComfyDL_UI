@@ -483,6 +483,44 @@ def _f_conv_transpose_weight(cfg: dict, name: str) -> Any:
     return torch.randn(3, 4, 3, 3)
 
 
+def _f_attn_queries(cfg: dict, name: str) -> Any:
+    """A ``(N, L, E)`` sequence batch for the attention nodes.
+
+    ``E=8`` divides the default ``num_heads=4``, and ``L=5`` queries.
+    """
+    import torch
+
+    return torch.randn(2, 5, 8)
+
+
+def _f_attn_context(cfg: dict, name: str) -> Any:
+    """A ``(N, S, E)`` context batch: keys/values for cross attention."""
+    import torch
+
+    return torch.randn(2, 7, 8)
+
+
+def _f_attn_proj_weight(cfg: dict, name: str) -> Any:
+    """An ``(E, E)`` projection weight, the shape every attention slot expects."""
+    import torch
+
+    return torch.randn(8, 8)
+
+
+def _f_ffn1_weight(cfg: dict, name: str) -> Any:
+    """The widening FFN matrix ``(ffn_dim, E)`` of the encoder block."""
+    import torch
+
+    return torch.randn(32, 8)
+
+
+def _f_ffn2_weight(cfg: dict, name: str) -> Any:
+    """The narrowing FFN matrix ``(E, ffn_dim)`` of the encoder block."""
+    import torch
+
+    return torch.randn(8, 32)
+
+
 def _f_stats_linked(cfg: dict, name: str) -> Any:
     """Per-channel statistics for the *linked* Training Run Stats slots.
 
@@ -804,6 +842,41 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     "ConvolutionConvTranspose": {
         "tensor": _f_tensor_4d,
         "weight": _f_conv_transpose_weight,
+    },
+    # Attention: q/k/v and the projection weights have to arrive as one matched
+    # set of shapes - the generic (2, 3) dummy cannot matmul against any of them.
+    "AttentionMultihead": {
+        "queries": _f_attn_queries,
+        "keys": _f_attn_context,
+        "values": _f_attn_context,
+        "q_weight": _f_attn_proj_weight,
+        "k_weight": _f_attn_proj_weight,
+        "v_weight": _f_attn_proj_weight,
+        "out_weight": _f_attn_proj_weight,
+    },
+    "AttentionSelf": {
+        "tensor": _f_attn_queries,
+        "q_weight": _f_attn_proj_weight,
+        "k_weight": _f_attn_proj_weight,
+        "v_weight": _f_attn_proj_weight,
+        "out_weight": _f_attn_proj_weight,
+    },
+    "AttentionCross": {
+        "tensor": _f_attn_queries,
+        "context": _f_attn_context,
+        "q_weight": _f_attn_proj_weight,
+        "k_weight": _f_attn_proj_weight,
+        "v_weight": _f_attn_proj_weight,
+        "out_weight": _f_attn_proj_weight,
+    },
+    "TransformerEncoderBlock": {
+        "tensor": _f_attn_queries,
+        "q_weight": _f_attn_proj_weight,
+        "k_weight": _f_attn_proj_weight,
+        "v_weight": _f_attn_proj_weight,
+        "out_weight": _f_attn_proj_weight,
+        "ffn1_weight": _f_ffn1_weight,
+        "ffn2_weight": _f_ffn2_weight,
     },
     # MODEL protocol: the loader combos are empty in a fresh checkout, so every
     # loader is pointed at the fake checkpoint the harness writes into the sandbox
@@ -1667,6 +1740,197 @@ def _check_training_text_to_parameters(result: Any, args: dict[str, Any]) -> Non
         assert torch.equal(decoded[key], params[key].detach()), key
 
 
+def _mha_reference(
+    queries: Any,
+    keys: Any,
+    values: Any,
+    q_weight: Any,
+    k_weight: Any,
+    v_weight: Any,
+    out_weight: Any,
+    num_heads: int,
+    biases: tuple | None = None,
+    mask: Any = None,
+) -> Any:
+    """``nn.MultiheadAttention`` loaded with the wired weights, the torch-native reference.
+
+    ``batch_first=True`` matches the nodes' shape convention and the packed
+    ``in_proj_weight`` is assembled from the same q/k/v matrices the node receives,
+    so the reference differs from the node only in whose code does the math.  The
+    mask is passed through verbatim; each check documents the convention it
+    exercises (torch treats boolean ``True`` as *blocked*, the opposite of the
+    nodes' ``F.scaled_dot_product_attention`` convention).
+    """
+    import torch
+    import torch.nn as nn
+
+    E = q_weight.shape[0]
+    mha = nn.MultiheadAttention(E, num_heads, bias=biases is not None, batch_first=True)
+    with torch.no_grad():
+        mha.in_proj_weight.copy_(torch.cat([q_weight, k_weight, v_weight]))
+        mha.out_proj.weight.copy_(out_weight)
+        if biases is not None:
+            q_bias, k_bias, v_bias, out_bias = biases
+            mha.in_proj_bias.copy_(torch.cat([q_bias, k_bias, v_bias]))
+            mha.out_proj.bias.copy_(out_bias)
+    ref, _ = mha(queries, keys, values, attn_mask=mask, need_weights=False)
+    return ref
+
+
+def _check_attention_multihead(result: Any, args: dict[str, Any]) -> None:
+    """The attention math must be ``nn.MultiheadAttention``; mask/seed/mode honoured.
+
+    The default run (no bias, no mask, dropout 0) has to match
+    ``nn.MultiheadAttention`` fed the very same wired weights, then each optional
+    branch - bias, additive mask, boolean mask - is re-run and compared against the
+    same reference.  A boolean mask follows the ``F.scaled_dot_product_attention``
+    convention (``True`` = attend), the *opposite* of ``nn.MultiheadAttention``, so
+    the reference gets the inverted mask.  Dropout is checked the
+    ``RegularizationDropout`` way: bit-identical for a repeated seed, and inert in
+    eval mode.
+    """
+    import torch
+
+    queries, keys, values = args["queries"], args["keys"], args["values"]
+    q_weight, k_weight, v_weight, out_weight = (
+        args["q_weight"],
+        args["k_weight"],
+        args["v_weight"],
+        args["out_weight"],
+    )
+    num_heads = args["num_heads"]
+    E = q_weight.shape[0]
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == tuple(queries.shape[:-1]) + (E,), tuple(output.shape)
+
+    ref = _mha_reference(queries, keys, values, q_weight, k_weight, v_weight, out_weight, num_heads)
+    assert torch.allclose(output, ref, atol=1e-5), "the default run is not nn.MultiheadAttention"
+
+    rerun = dict(
+        queries=queries,
+        keys=keys,
+        values=values,
+        q_weight=q_weight,
+        k_weight=k_weight,
+        v_weight=v_weight,
+        out_weight=out_weight,
+    )
+
+    # Bias branch: the four optional slots must reach the projections.
+    q_bias, k_bias, v_bias, out_bias = (torch.randn(E) for _ in range(4))
+    (biased,) = _rerun_v3(
+        "AttentionMultihead", **rerun, q_bias=q_bias, k_bias=k_bias, v_bias=v_bias, out_bias=out_bias
+    )
+    ref_b = _mha_reference(
+        queries, keys, values, q_weight, k_weight, v_weight, out_weight, num_heads,
+        biases=(q_bias, k_bias, v_bias, out_bias),
+    )
+    assert torch.allclose(biased, ref_b, atol=1e-5), "the optional bias slots were ignored"
+
+    # Additive float mask branch: unambiguous in torch, both sides just add it.
+    fmask = torch.zeros(queries.shape[-2], keys.shape[-2])
+    fmask[..., :2] = -1e9
+    (masked,) = _rerun_v3("AttentionMultihead", **rerun, mask=fmask)
+    ref_m = _mha_reference(queries, keys, values, q_weight, k_weight, v_weight, out_weight, num_heads, mask=fmask)
+    assert torch.allclose(masked, ref_m, atol=1e-4), "the additive mask was not added to the scores"
+
+    # Boolean mask branch: True = attend, so the torch reference needs ~mask.
+    bmask = torch.ones(queries.shape[-2], keys.shape[-2], dtype=torch.bool)
+    bmask[:, -2:] = False
+    (bmasked,) = _rerun_v3("AttentionMultihead", **rerun, mask=bmask)
+    ref_bm = _mha_reference(queries, keys, values, q_weight, k_weight, v_weight, out_weight, num_heads, mask=~bmask)
+    assert torch.allclose(bmasked, ref_bm, atol=1e-5), "True in a boolean mask did not mean 'attend'"
+
+    # Eval mode makes the dropout inert.
+    (calm,) = _rerun_v3("AttentionMultihead", **rerun, dropout_p=0.9, mode="eval")
+    assert torch.allclose(calm, ref, atol=1e-5), "dropout ran in eval mode"
+
+    # Train-mode dropout is seeded: same seed bit-identical, different seed differs.
+    dargs = {**rerun, "dropout_p": 0.5, "mode": "train"}
+    (d1,) = _rerun_v3("AttentionMultihead", **dargs, seed=7)
+    (d2,) = _rerun_v3("AttentionMultihead", **dargs, seed=7)
+    (d3,) = _rerun_v3("AttentionMultihead", **dargs, seed=8)
+    assert torch.equal(d1, d2), "the same seed did not reproduce the same dropout mask"
+    assert not torch.equal(d1, d3), "a different seed produced the same dropout mask"
+
+
+def _check_attention_self(result: Any, args: dict[str, Any]) -> None:
+    """Self-attention must be Multi-Head Attention with q = k = v = the tensor."""
+    import torch
+
+    tensor = args["tensor"]
+    weights = {k: args[k] for k in ("q_weight", "k_weight", "v_weight", "out_weight")}
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == tuple(tensor.shape), tuple(output.shape)
+    (general,) = _rerun_v3("AttentionMultihead", queries=tensor, keys=tensor, values=tensor, **weights, mode="eval")
+    assert torch.allclose(output, general, atol=1e-6), "self-attention is not multi-head attention with q=k=v"
+
+
+def _check_attention_cross(result: Any, args: dict[str, Any]) -> None:
+    """Cross-attention must be Multi-Head Attention with k = v = the context."""
+    import torch
+
+    tensor, context = args["tensor"], args["context"]
+    weights = {k: args[k] for k in ("q_weight", "k_weight", "v_weight", "out_weight")}
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == tuple(tensor.shape), tuple(output.shape)
+    (general,) = _rerun_v3(
+        "AttentionMultihead", queries=tensor, keys=context, values=context, **weights, mode="eval"
+    )
+    assert torch.allclose(output, general, atol=1e-6), "cross-attention is not multi-head attention over the context"
+
+
+def _check_transformer_encoder_block(result: Any, args: dict[str, Any]) -> None:
+    """The block must be LN -> MHA -> Add -> LN -> FFN -> Add, weights wired in.
+
+    The reference composes the very same pieces by hand: the attention output
+    comes from a re-run of Multi-Head Attention (pinned against torch in its own
+    check), and LayerNorm / residual / FFN are plain ``F.layer_norm`` / ``+`` /
+    ``F.linear``.  The affine-LayerNorm and gelu branches re-run the node with
+    those slots wired / that widget flipped.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    weights = {k: args[k] for k in ("q_weight", "k_weight", "v_weight", "out_weight")}
+    ffn1_weight, ffn2_weight = args["ffn1_weight"], args["ffn2_weight"]
+    E = tensor.shape[-1]
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == tuple(tensor.shape), tuple(output.shape)
+
+    (attn,) = _rerun_v3("AttentionMultihead", queries=tensor, keys=tensor, values=tensor, **weights, mode="eval")
+    hidden = F.layer_norm(tensor + attn, (E,))
+    ffn = F.linear(F.relu(F.linear(hidden, ffn1_weight)), ffn2_weight)
+    expected = F.layer_norm(hidden + ffn, (E,))
+    assert torch.allclose(output, expected, atol=1e-5), "the block is not LN -> MHA -> Add -> LN -> FFN -> Add"
+
+    rerun = {**weights, "ffn1_weight": ffn1_weight, "ffn2_weight": ffn2_weight}
+
+    # Affine LayerNorm branch: unconnected means non-affine, wired means F.layer_norm(weight, bias).
+    ln_w, ln_b = torch.randn(E), torch.randn(E)
+    (affine,) = _rerun_v3(
+        "TransformerEncoderBlock",
+        tensor=tensor,
+        **rerun,
+        ln1_weight=ln_w,
+        ln1_bias=ln_b,
+        ln2_weight=ln_w,
+        ln2_bias=ln_b,
+    )
+    hidden_a = F.layer_norm(tensor + attn, (E,), ln_w, ln_b)
+    ffn_a = F.linear(F.relu(F.linear(hidden_a, ffn1_weight)), ffn2_weight)
+    expected_a = F.layer_norm(hidden_a + ffn_a, (E,), ln_w, ln_b)
+    assert torch.allclose(affine, expected_a, atol=1e-5), "the wired LayerNorm affines were ignored"
+
+    # FFN activation branch: gelu must replace relu inside the FFN only.
+    (gelu,) = _rerun_v3("TransformerEncoderBlock", tensor=tensor, **rerun, ffn_activation="gelu")
+    expected_g = F.layer_norm(
+        hidden + F.linear(F.gelu(F.linear(hidden, ffn1_weight)), ffn2_weight), (E,)
+    )
+    assert torch.allclose(gelu, expected_g, atol=1e-5), "ffn_activation=gelu did not reach the FFN"
+
+
 #: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
 #: arity matches", for the nodes whose returned *values* carry the contract.
 _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
@@ -1686,6 +1950,10 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "PoolingAdaptive": [_check_pooling_adaptive],
     "ConvolutionConv": [_check_convolution_conv],
     "ConvolutionConvTranspose": [_check_convolution_conv_transpose],
+    "AttentionMultihead": [_check_attention_multihead],
+    "AttentionSelf": [_check_attention_self],
+    "AttentionCross": [_check_attention_cross],
+    "TransformerEncoderBlock": [_check_transformer_encoder_block],
     "CheckpointLoaderSimple": [_check_checkpoint_loader],
     "CheckpointSave": [_check_checkpoint_save],
     "ModelSave": [_check_model_save],

@@ -331,6 +331,24 @@ reform 第六步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 
 在这 283 个已注册节点上给出 `260 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 177 个节点、
 32 个分类（109 个 ComfyDL + 68 个核心节点）。
 
+## Reform Step 7: Attention / reform 第七步：注意力
+
+`comfy_extras/nodes_attention.py` 新增 4 个核心节点，分类 `Network & Layers/Attention`：
+`AttentionMultihead`（q/k/v + 四组投影权重 + 可选 mask）、`AttentionSelf`（q=k=v）、
+`AttentionCross`（q 来自 tensor、k/v 来自 context）与 `TransformerEncoderBlock`（单节点
+post-LN 块：LN → MHA → Add → LN → FFN → Add）。与 `BasicLinear` 完全同构的无状态约定（权重走
+插槽、`mode` 连线、本地种子 dropout）；布尔 mask 遵循 `F.scaled_dot_product_attention` 的约定
+（True = 可注意，与 `nn.MultiheadAttention` 相反）。旧 `CdlMultiHeadAttention` 软归档到
+`d2l/_Legacy/NLP Models`。设计与验证细节见 `reform-step7-attention.md`。
+
+Measured after reform step 7: `IMPORT_FAILED []`, `CDL 109`; the host registry holds 287 nodes across
+45 categories; the smoke tester reports `264 PASS / 23 SKIP / 0 FAIL` across those 287 registered
+nodes; the documented library totals 181 nodes across 33 categories (109 ComfyDL + 72 core).
+
+reform 第七步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 287 个节点、45 个分类；冒烟测试器
+在这 287 个已注册节点上给出 `264 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 181 个节点、
+33 个分类（109 个 ComfyDL + 72 个核心节点）。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with

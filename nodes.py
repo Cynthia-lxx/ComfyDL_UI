@@ -693,6 +693,7 @@ async def init_builtin_extra_nodes():
         "nodes_math.py",
         "nodes_activation.py",
         "nodes_layers.py",
+        "nodes_attention.py",
         "nodes_normalization.py",
         "nodes_pooling.py",
         "nodes_convolution.py",
