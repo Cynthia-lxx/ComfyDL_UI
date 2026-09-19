@@ -22,8 +22,10 @@ the same way ``comfy/training_protocol.py`` provides the training closure:
 
 The parameter naming follows the ``nn.Module`` / ``state_dict`` convention
 (``embedding.weight``, ``blocks.0.attn.q_proj.weight``, ``head.weight``, ...),
-so a trained model is addressable, inspectable and ready for a future
-save/load node.
+so a trained model is addressable, inspectable and persisted verbatim by the
+``Save Language Model`` node, which stores the spec chain and the vocabulary
+in the same ``.safetensors`` file (the JSON helpers at the bottom of this
+module do the value-level encoding).
 
 Only ``torch`` and the sibling ``training_protocol`` are imported here: the
 module must stay importable in the dehydrated build, which has neither
@@ -51,6 +53,7 @@ Design decisions
 from __future__ import annotations
 
 import dataclasses
+import json
 import math
 from collections import Counter
 from typing import Iterator, Mapping, Sequence
@@ -518,3 +521,163 @@ def iter_windows(
     stream = [int(index) for index in ids]
     for start in range(0, len(stream) - size):
         yield stream[start : start + size], stream[start + size]
+
+
+# --------------------------------------------------------------------------- #
+# JSON persistence helpers (Save / Load Language Model)
+# --------------------------------------------------------------------------- #
+#: Version tag stored in the ``.safetensors`` metadata of a saved language
+#: model. Bumping it is the only sanctioned way to change the layout below.
+LM_FILE_FORMAT = "comfydl-lm-1"
+
+#: JSON keys of the metadata entries written next to the weights.
+LM_META_FORMAT = "format"
+LM_META_SPEC = "spec"
+LM_META_VOCAB = "vocab"
+
+
+def spec_chain_from_model(model: LanguageModel) -> tuple:
+    """Recover the spec chain of a *built* model from its module structure.
+
+    What: the inverse of :func:`build_model` at the blueprint level - every
+          value a spec carries is still readable off the module (widths off
+          the linear layers, heads off the attention, activation / dropout
+          off the block), so a model can be saved together with the exact
+          blueprint that reproduces it, without the graph re-stating the
+          chain. The result is validated by construction and always accepted
+          by :func:`spec_chain_to_json`.
+    In:   model - a :class:`LanguageModel` (trained or not).
+    Out:  the ``(embedding, *blocks)`` spec chain of the model.
+    """
+    blocks = tuple(
+        TransformerBlockSpec(
+            d_model=block.attn.q_proj.in_features,
+            num_heads=block.attn.num_heads,
+            d_ffn=block.ffn1.out_features,
+            activation=block.activation,
+            dropout=block.dropout,
+        )
+        for block in model.blocks
+    )
+    return (
+        EmbeddingSpec(model.vocab_size, model.d_model, model.include_position),
+        *blocks,
+    )
+
+
+def vocab_to_json(vocab: Vocab) -> str:
+    """Encode a :class:`Vocab` as a compact JSON string.
+
+    What: the value half of ``VOCAB`` persistence - tokens and level only,
+          everything else about a vocab is derived. The encoding is used by
+          ``Save Language Model`` so a loaded model can talk text again
+          without re-running ``Vocab Build``.
+    In:   vocab - the vocabulary to encode.
+    Out:  a JSON string ``{"tokens": [...], "level": "char"|"word"}``.
+    """
+    return json.dumps(
+        {"tokens": list(vocab.tokens), "level": vocab.level},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def vocab_from_json(text: str) -> Vocab:
+    """Rebuild a :class:`Vocab` from the JSON of :func:`vocab_to_json`.
+
+    Raises:
+        ValueError: when the text is not valid JSON, not an object, or fails
+            the ``Vocab`` invariants (the ``Vocab`` constructor re-validates
+            ``<unk>`` at index 0 and uniqueness, so a tampered file is caught).
+    """
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"the vocab entry is not valid JSON: {error}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("tokens"), list):
+        raise ValueError(
+            "the vocab entry must be a JSON object with a 'tokens' list; got: "
+            f"{type(payload).__name__}."
+        )
+    tokens = payload["tokens"]
+    if not all(isinstance(token, str) for token in tokens):
+        raise ValueError("every vocab token must be a string.")
+    level = payload.get("level", "char")
+    return Vocab(tuple(tokens), level=_normalise_level(level))
+
+
+def spec_chain_to_json(chain: Sequence) -> str:
+    """Encode a spec chain as a compact JSON string.
+
+    What: the blueprint half of persistence - the embedding link plus every
+          transformer-block link, all plain values, so a loaded model can be
+          rebuilt to exactly the shape its weights expect (then filled by
+          ``load_state_dict``).
+    In:   chain - the ``MODELSPEC`` payload; validated first
+          (:func:`validate_spec_chain`), so an invalid chain cannot be saved.
+    Out:  a JSON string ``{"embedding": {...}, "blocks": [{...}, ...]}``.
+    """
+    embedding, blocks = validate_spec_chain(chain)
+    return json.dumps(
+        {
+            "embedding": {
+                "vocab_size": embedding.vocab_size,
+                "d_model": embedding.d_model,
+                "include_position": embedding.include_position,
+            },
+            "blocks": [
+                {
+                    "d_model": block.d_model,
+                    "num_heads": block.num_heads,
+                    "d_ffn": block.d_ffn,
+                    "activation": block.activation,
+                    "dropout": block.dropout,
+                }
+                for block in blocks
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def spec_chain_from_json(text: str) -> tuple:
+    """Rebuild a spec chain from the JSON of :func:`spec_chain_to_json`.
+
+    Out: the ``(embedding, *blocks)`` tuple, ready for :func:`build_model`.
+
+    Raises:
+        ValueError: when the text is not valid JSON, not an object, misses the
+            embedding entry, or describes a chain that fails validation (mixed
+            widths, bad activation, heads not dividing the width, ...).
+    """
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"the spec entry is not valid JSON: {error}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("embedding"), dict):
+        raise ValueError(
+            "the spec entry must be a JSON object with an 'embedding' object; "
+            f"got: {type(payload).__name__}."
+        )
+    head = payload["embedding"]
+    blocks_payload = payload.get("blocks", [])
+    if not isinstance(blocks_payload, list):
+        raise ValueError("the spec 'blocks' entry must be a list.")
+
+    embedding = EmbeddingSpec(
+        vocab_size=int(head["vocab_size"]),
+        d_model=int(head["d_model"]),
+        include_position=bool(head.get("include_position", True)),
+    )
+    blocks = [
+        TransformerBlockSpec(
+            d_model=int(block["d_model"]),
+            num_heads=int(block["num_heads"]),
+            d_ffn=int(block["d_ffn"]),
+            activation=str(block["activation"]),
+            dropout=float(block.get("dropout", 0.0)),
+        )
+        for block in blocks_payload
+    ]
+    return (embedding, *blocks)  # validated by build_model via validate_spec_chain

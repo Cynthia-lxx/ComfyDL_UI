@@ -91,3 +91,37 @@ Transformer Block ×N → Build` 产出模型；`TrainingOptimizer + 模型 + (x
 `comfy/lm_protocol.py`、`comfy_extras/nodes_nlp.py`、`comfy_extras/nodes_lm.py`，还原
 `nodes_attention.py` / `nodes_training.py`（若被触碰）/ `_io.py` / `nodes.py` 白名单，并同步还原
 四份说明文件计数。与 step7 同在实验分支续作，合并策略与其一致。
+
+## 7. 续作：持久化与示例工作流 / Persistence & Example Workflows
+
+step8 交付时 `NNMODEL` 槽没有任何持久化节点（`ModelSave` 只吃 `MODEL`、`Save Parameters` 只吃
+`PARAMS`），分体式「训练交付 / 加载推理」两工作流无法闭环。本续作补齐：
+
+- `comfy/lm_protocol.py`：新增 JSON 编解码 helpers——`vocab_to_json` / `vocab_from_json`、
+  `spec_chain_to_json` / `spec_chain_from_json`、`spec_chain_from_model`（从已物化模块反推蓝图：
+  宽度取线性层、头数取注意力、activation / dropout 取块本身），格式标签 `comfydl-lm-1`。
+- `comfy_extras/nodes_lm.py`：+2 节点——
+  - **`LanguageModelSave`**：`model (NNMODEL)` + `vocab (VOCAB)` + `filename_prefix` 控件（默认
+    `comfydl/language_models`）；`state_dict` 落盘 `output/<前缀>_00001_.safetensors`，spec 链与
+    词表以 JSON 封进同一文件的 metadata（`save_torch_file` 原生支持 str→str metadata）；`model`
+    透传，`is_output_node`。
+  - **`LanguageModelLoad`**：`path` 控件（默认 `comfydl/language_models_00001_.safetensors`，即
+    Save 首次写出的文件名，开箱即"存了就能读"）；按 metadata 重建蓝图 → `build_model` →
+    严格 `load_state_dict` → `eval()`，输出 `model` + `vocab` + `params`；缺格式标签 / 缺词条 /
+    蓝图与词表 vocab_size 不一致均抛可读 `ValueError`。
+- 冒烟 +2：`_seed_fixtures` 预写 `language_models_00001_.safetensors`（仿 step6 参数文件先种的
+  方案，因字母序 Load 先于 Save 执行）；`_check_lm_save` 断言 metadata 版本 / 蓝图 / 词表一致、
+  权重逐位 roundtrip、透传不变；`_check_lm_load` 断言 eval 态、种子权重逐位还原、裸
+  safetensors 与缺失文件均报错。新基线：**279 PASS / 23 SKIP / 0 FAIL（302 节点 / 46 分类）**；
+  计数三口径 300/46 → 302/46、194/34 → **196/34**（core 85 → 87）、banner 109/20 不变。
+- 示例工作流（子模块 `comfydl/example_workflows/` 顶层，模板浏览器可见）：
+  - **`Language Model - Train and Chat.json`**：Vocab Build → Text Encode → Sliding Window →
+    Embedding → Block ×2 → Build → Optimizer → Train → Generate → SaveText，Train 的 `model`
+    分叉同时进 Generate（现场对话）与 Save（落盘）——单图即覆盖"数据集-训练-推理-响应"全过程。
+  - **`Language Model - Load and Chat.json`**：Load（默认路径）→ Generate（vocab 来自 Load）→
+    SaveText。
+  - 临时校验脚本（已删）核对：连线两端插槽类型匹配（slot 索引按 schema 全输入序，widget 计入）、
+    `widgets_values` 与 schema 控件序一致（seed + `control_after_generate` 序列化为
+    `[值, "fixed"]` 两个条目）、两图端到端执行且 WF2 的回复与 WF1 逐字一致（roundtrip 无损；
+    实测回复 `the lazzzzyyzyyyyyyy`）。
+- 回退补充：另需从 `LM_NODES` 移除这两个类并删两张工作流 JSON，计数还原 196→194。

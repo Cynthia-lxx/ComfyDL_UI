@@ -19,6 +19,12 @@ technique the step-6 ``Training Loop`` and upstream's ``TrainLoraNode`` use.
 * ``Language Model Forward``        - next-token logits of a batch of sequences.
 * ``Language Model Generate``       - autoregressive continuation, greedy or
   temperature sampled, seeded locally.
+* ``Language Model Save``           - writes the model to ``.safetensors`` with
+  the spec chain and the vocabulary in the file's metadata, and passes the
+  model through so saving does not end the graph.
+* ``Language Model Load``           - reads such a file back: rebuilds the
+  blueprint, restores the weights, returns model + vocabulary - a saved model
+  talks text again in a fresh session without re-running Vocab Build.
 
 The optimizer settings arrive through the existing ``OPTIMIZER`` slot, so any
 ``Optimizer`` node drives the trainer; the loss is token-level cross entropy
@@ -28,11 +34,14 @@ run converge.
 """
 
 import copy
+import os
 
 import torch
 import torch.nn.functional as F
 from typing_extensions import override
 
+import comfy
+import folder_paths
 from comfy import lm_protocol as mp
 from comfy import training_protocol as tp
 from comfy_api.latest import ComfyExtension, io
@@ -43,6 +52,7 @@ from comfy_api.latest import ComfyExtension, io
 # place instead of drifting between files. (nodes_text.py is the pre-existing
 # Save Text node; the language-model text pipeline lives in nodes_nlp.py.)
 from comfy_extras.nodes_nlp import _as_index_tensor, _as_vocab
+from comfy_extras.nodes_training import _resolve_parameter_path
 
 CATEGORY = "Network & Layers/Training"
 
@@ -57,6 +67,14 @@ STEPS_WARN_THRESHOLD = 20000
 
 #: Widget max for a 32-bit seed, matching the training family.
 _FF = 0xFFFFFFFF
+
+#: Default output subfolder + file stem of ``Save Language Model``.
+DEFAULT_LM_PREFIX = "comfydl/language_models"
+
+#: Default of the ``path`` widget of ``Load Language Model``: the first file a
+#: save with :data:`DEFAULT_LM_PREFIX` writes, so a save followed by a load
+#: works without anyone typing a file name.
+DEFAULT_LM_LOAD_PATH = f"{DEFAULT_LM_PREFIX}_00001_.safetensors"
 
 
 def _warn(message: str) -> None:
@@ -753,6 +771,210 @@ class LanguageModelGenerate(io.ComfyNode):
         return io.NodeOutput(ids, text)
 
 
+def _save_lm_file(model: mp.LanguageModel, vocab: mp.Vocab, filename_prefix: str) -> str:
+    """Write a language model to a uniquely named ``.safetensors`` in ``output/``.
+
+    The weights go in as an ordinary ``state_dict``; the spec chain and the
+    vocabulary travel in the file's metadata (JSON, version-tagged), so a
+    later ``Load Language Model`` rebuilds the exact model without the graph
+    re-stating anything.
+
+    Returns:
+        The absolute path that was written.
+    """
+    output_dir = folder_paths.get_output_directory()
+    full_output_folder, filename, counter, _subfolder, _prefix = (
+        folder_paths.get_save_image_path(filename_prefix, output_dir)
+    )
+    os.makedirs(full_output_folder, exist_ok=True)
+    output_path = os.path.join(full_output_folder, f"{filename}_{counter:05}_.safetensors")
+    comfy.utils.save_torch_file(
+        model.state_dict(),
+        output_path,
+        metadata={
+            mp.LM_META_FORMAT: mp.LM_FILE_FORMAT,
+            mp.LM_META_SPEC: mp.spec_chain_to_json(mp.spec_chain_from_model(model)),
+            mp.LM_META_VOCAB: mp.vocab_to_json(vocab),
+        },
+    )
+    return output_path
+
+
+class LanguageModelSave(io.ComfyNode):
+    """Persist a language model to a ``.safetensors`` file, vocabulary and all.
+
+    What: the file half of the language-model persistence story - the trained
+          weights are written as an ordinary checkpoint that survives
+          restarts and can be copied between machines, and the model's
+          blueprint (spec chain) plus its vocabulary travel in the same
+          file's metadata. ``Load Language Model`` can therefore rebuild the
+          exact model and talk text again without re-running Vocab Build or
+          re-wiring the spec chain. The node passes the model through, so
+          saving does not end the graph.
+    In:   model (NNMODEL) - the model to write; link from Language Model Train
+          (an untrained Build output saves too - it is just a checkpoint of
+          the initial weights).
+          vocab (VOCAB) - the vocabulary the model was trained with; it is
+          stored in the file and read back by Load, so generation in a later
+          session works from text prompt to text reply.
+          filename_prefix (STRING) - output subfolder and file stem, e.g.
+          ``"comfydl/language_models"``; a counter is appended
+          (``language_models_00001_.safetensors``) so an earlier save is
+          never overwritten.
+    Out:  model (NNMODEL) - the same model, passed through unchanged so the
+          graph can continue (e.g. straight into Language Model Generate).
+          path (STRING) - absolute path of the file that was written; paste it
+          into the ``path`` widget of ``Load Language Model`` to read the
+          model back later.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="LanguageModelSave",
+            display_name="Save Language Model",
+            category=CATEGORY,
+            description="Saves a language model as a .safetensors file in the output folder (spec chain and vocabulary in the metadata), and passes the model through.",
+            is_output_node=True,
+            search_aliases=[
+                "save", "write", "checkpoint", "safetensors", "export",
+                "language model", "lm",
+            ],
+            inputs=[
+                io.NNModel.Input(
+                    "model",
+                    tooltip="The model to write; link from Language Model Train / Build.",
+                ),
+                io.Vocab.Input(
+                    "vocab",
+                    tooltip="The vocabulary to store alongside the weights; Load reads it back so a saved model talks text again.",
+                ),
+                io.String.Input(
+                    "filename_prefix",
+                    default=DEFAULT_LM_PREFIX,
+                    tooltip="Output subfolder and file stem; a counter is appended to keep earlier saves.",
+                ),
+            ],
+            outputs=[
+                io.NNModel.Output(display_name="model"),
+                io.String.Output(display_name="path"),
+            ],
+        )
+
+    @classmethod
+    def execute(
+        cls, model, vocab, filename_prefix: str = DEFAULT_LM_PREFIX
+    ) -> io.NodeOutput:
+        trainee = _as_language_model(model)
+        table = _as_vocab(vocab)
+        prefix = "" if filename_prefix is None else str(filename_prefix).strip()
+        output_path = _save_lm_file(trainee, table, prefix or DEFAULT_LM_PREFIX)
+        print(
+            f"[Network & Layers] Save Language Model: wrote "
+            f"{mp.parameter_count(trainee)} parameter value(s) / "
+            f"{table.size} vocab token(s) to {output_path}"
+        )
+        return io.NodeOutput(trainee, output_path)
+
+
+class LanguageModelLoad(io.ComfyNode):
+    """Read a language model back from a ``.safetensors`` file.
+
+    What: the other half of the persistence story, and the way a trained model
+          is reused in a later session: the file's metadata states the
+          blueprint (spec chain) and the vocabulary, the node rebuilds the
+          model from them and restores the weights with a strict
+          ``load_state_dict`` - any mismatch between the file and its own
+          blueprint is a hard error, so what comes out is bit-for-bit the
+          model that was saved. The returned model is in eval mode (dropout
+          off), ready for Language Model Forward / Generate or further
+          Language Model Train (warm start).
+    In:   path (STRING) - the file to read. A relative path is resolved
+          against ComfyUI's *output* folder (which is where Save Language
+          Model writes), an absolute path is used as it is. The default
+          points at the first file Save writes, so "save, then load" works
+          without typing.
+    Out:  model (NNMODEL) - the restored model, in eval mode.
+          vocab (VOCAB) - the vocabulary stored with the model; wire it into
+          Language Model Generate to prompt and decode with text.
+          params (INT) - the total trainable parameter count.
+    Raises:
+        ValueError: when the file does not exist, was not written by Save
+            Language Model (missing or unknown format tag), or its metadata
+            does not describe a valid spec chain / vocabulary.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="LanguageModelLoad",
+            display_name="Load Language Model",
+            category=CATEGORY,
+            description="Reads a language model from a .safetensors file written by Save Language Model (relative to the output folder, or absolute), returning model + vocabulary.",
+            search_aliases=[
+                "load", "read", "checkpoint", "safetensors", "import",
+                "language model", "lm",
+            ],
+            inputs=[
+                io.String.Input(
+                    "path",
+                    default=DEFAULT_LM_LOAD_PATH,
+                    placeholder=f"e.g. {DEFAULT_LM_LOAD_PATH}",
+                    tooltip="File to read; relative to the output folder, or absolute.",
+                ),
+            ],
+            outputs=[
+                io.NNModel.Output(display_name="model"),
+                io.Vocab.Output(display_name="vocab"),
+                io.Int.Output(display_name="params"),
+            ],
+        )
+
+    @classmethod
+    def execute(cls, path: str = DEFAULT_LM_LOAD_PATH) -> io.NodeOutput:
+        resolved = _resolve_parameter_path(path)
+        if not os.path.isfile(resolved):
+            raise ValueError(
+                f"[Network & Layers] Load Language Model found no file at "
+                f"{resolved}; run 'Save Language Model' first, or fix the "
+                "'path' widget (relative paths start at the output folder)."
+            )
+        state, metadata = comfy.utils.load_torch_file(
+            resolved, safe_load=True, return_metadata=True
+        )
+        metadata = metadata or {}
+        if metadata.get(mp.LM_META_FORMAT) != mp.LM_FILE_FORMAT:
+            raise ValueError(
+                f"[Network & Layers] {resolved} was not written by 'Save "
+                "Language Model' (missing or unknown format tag "
+                f"{mp.LM_FILE_FORMAT!r}); the node cannot rebuild the model."
+            )
+        try:
+            chain = mp.spec_chain_from_json(metadata[mp.LM_META_SPEC])
+            table = mp.vocab_from_json(metadata[mp.LM_META_VOCAB])
+        except KeyError as missing:
+            raise ValueError(
+                f"[Network & Layers] {resolved} is missing the {missing} "
+                "metadata entry; it was not written by 'Save Language Model'."
+            ) from missing
+        if chain[0].vocab_size != table.size:
+            raise ValueError(
+                f"[Network & Layers] {resolved} is inconsistent: its blueprint "
+                f"declares {chain[0].vocab_size} vocabulary entries but its "
+                f"vocabulary holds {table.size}; the file is corrupt."
+            )
+        with torch.inference_mode(False):
+            model = mp.build_model(chain)
+            model.load_state_dict(state, strict=True)
+            model.eval()
+        print(
+            f"[Network & Layers] Load Language Model: restored "
+            f"{mp.parameter_count(model)} parameter value(s) / {table.size} "
+            f"vocab token(s) from {resolved}"
+        )
+        return io.NodeOutput(model, table, mp.parameter_count(model))
+
+
 #: Every node this module registers, in node-library order.
 LM_NODES: list[type[io.ComfyNode]] = [
     LanguageModelEmbedding,
@@ -761,6 +983,8 @@ LM_NODES: list[type[io.ComfyNode]] = [
     LanguageModelTrain,
     LanguageModelForward,
     LanguageModelGenerate,
+    LanguageModelSave,
+    LanguageModelLoad,
 ]
 
 

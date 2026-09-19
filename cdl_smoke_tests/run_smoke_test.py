@@ -106,9 +106,16 @@ def _seed_fixtures(sandbox: Path) -> None:
     (``TrainingLoadParameters`` before ``TrainingSaveParameters``), so one has to
     exist before the run.  Its content is :func:`_train_fixture_parameters`,
     which ``_check_training_load_parameters`` pins the loaded values against.
+
+    The language-model file is the same trick for ``Load Language Model`` (which
+    sorts before ``Save Language Model``): a model built from the spec of
+    :func:`_f_lm_model_vocab` on the dummy 5-token vocabulary, with the spec
+    chain and the vocabulary in the metadata - exactly what the save node writes.
     """
     import torch
     from safetensors.torch import save_file
+
+    from comfy import lm_protocol as protocol
 
     torch.save(_f_model({}, "model").state_dict(), sandbox / "model.pt")
 
@@ -117,6 +124,20 @@ def _seed_fixtures(sandbox: Path) -> None:
     save_file(
         {"weight": _train_fixture_parameters()},
         str(bucket / "parameters_00001_.safetensors"),
+    )
+    lm_model = _f_lm_model_vocab({}, "model")
+    save_file(
+        lm_model.state_dict(),
+        str(bucket / "language_models_00001_.safetensors"),
+        metadata={
+            protocol.LM_META_FORMAT: protocol.LM_FILE_FORMAT,
+            protocol.LM_META_SPEC: protocol.spec_chain_to_json(
+                protocol.spec_chain_from_model(lm_model)
+            ),
+            protocol.LM_META_VOCAB: protocol.vocab_to_json(
+                _f_vocab_dummy({}, "vocab")
+            ),
+        },
     )
 
 
@@ -588,6 +609,25 @@ def _f_lm_model(cfg: dict, name: str) -> Any:
     return protocol.build_model(_f_lm_spec(cfg, name), seed=0)
 
 
+def _f_lm_model_vocab(cfg: dict, name: str) -> Any:
+    """``NNMODEL`` matched to the dummy 5-token vocabulary, seed 0.
+
+    ``Save Language Model`` stores the vocabulary next to the weights and
+    ``Load Language Model`` refuses a file whose blueprint and vocabulary
+    disagree, so the save fixture must use a model whose head addresses the
+    dummy vocabulary exactly.
+    """
+    from comfy import lm_protocol as protocol
+
+    return protocol.build_model(
+        (
+            protocol.EmbeddingSpec(5, 8, True),
+            protocol.TransformerBlockSpec(8, 4, 16),
+        ),
+        seed=0,
+    )
+
+
 def _f_stats_linked(cfg: dict, name: str) -> Any:
     """Per-channel statistics for the *linked* Training Run Stats slots.
 
@@ -967,6 +1007,8 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     },
     "LanguageModelForward": {"model": _f_lm_model, "ids": _f_ids_stream},
     "LanguageModelGenerate": {"model": _f_lm_model, "vocab": _f_vocab_dummy},
+    # The save node's model must address the dummy vocabulary (see the loader).
+    "LanguageModelSave": {"model": _f_lm_model_vocab, "vocab": _f_vocab_dummy},
     # MODEL protocol: the loader combos are empty in a fresh checkout, so every
     # loader is pointed at the fake checkpoint the harness writes into the sandbox
     # model folders.  Without this they would be skipped instead of really reading.
@@ -2279,6 +2321,86 @@ def _check_lm_generate(result: Any, args: dict[str, Any]) -> None:
     assert plain == "", "without a vocab the text output must be empty"
 
 
+def _check_lm_save(result: Any, args: dict[str, Any]) -> None:
+    """The file must carry spec + vocab metadata and round trip bit for bit."""
+    import torch
+
+    import comfy.utils
+    from comfy import lm_protocol as protocol
+
+    model, path = _as_tuple(result)
+    written = _written_files("comfydl/language_models_*.safetensors")
+    assert written, "Save Language Model wrote no .safetensors under output/comfydl/"
+    assert Path(path).is_file(), f"{path} was reported but does not exist"
+    assert Path(path).resolve() == written[-1].resolve(), (path, written)
+
+    state, metadata = comfy.utils.load_torch_file(
+        path, safe_load=True, return_metadata=True
+    )
+    metadata = metadata or {}
+    assert metadata.get(protocol.LM_META_FORMAT) == protocol.LM_FILE_FORMAT, (
+        "the file is not tagged with the language-model format version"
+    )
+    assert protocol.spec_chain_from_json(metadata[protocol.LM_META_SPEC]) == tuple(
+        protocol.spec_chain_from_model(model)
+    ), "the stored blueprint differs from the model's own structure"
+    assert protocol.vocab_from_json(metadata[protocol.LM_META_VOCAB]) == args["vocab"], (
+        "the stored vocabulary differs from the wired one"
+    )
+    for key, value in model.state_dict().items():
+        assert torch.equal(state[key], value), f"{key} changed on its way to disk"
+
+    # read the very same file back through the loader node
+    reloaded, revocab, params = _rerun_v3("LanguageModelLoad", path=path)
+    assert isinstance(reloaded, protocol.LanguageModel)
+    assert not reloaded.training, "the loaded model must be in eval mode"
+    assert revocab == args["vocab"], "the vocabulary did not survive the round trip"
+    assert params == protocol.parameter_count(reloaded) > 0, "the parameter count is wrong"
+    for a, b in zip(reloaded.parameters(), model.parameters()):
+        assert torch.equal(a, b), "the loaded weights differ from the saved model"
+    for a, b in zip(model.parameters(), args["model"].parameters()):
+        assert torch.equal(a, b), "Save changed the model it was handed"
+
+
+def _check_lm_load(result: Any, args: dict[str, Any]) -> None:
+    """The default path must read the seeded file; junk files must raise."""
+    import torch
+
+    import folder_paths
+    from comfy import lm_protocol as protocol
+    from safetensors.torch import save_file
+
+    model, vocab, params = _as_tuple(result)
+    seeded = _f_lm_model_vocab({}, "model")
+    assert isinstance(model, protocol.LanguageModel)
+    assert not model.training, "the loaded model must be in eval mode"
+    assert vocab == _f_vocab_dummy({}, "vocab"), "the vocabulary did not come back"
+    assert params == protocol.parameter_count(model) > 0, "the parameter count is wrong"
+    for a, b in zip(model.parameters(), seeded.parameters()):
+        assert torch.equal(a, b), "the loaded weights differ from the seeded model"
+
+    # a .safetensors without the language-model metadata must be rejected
+    junk = Path(folder_paths.get_output_directory()) / "comfydl" / "lm_junk.safetensors"
+    save_file({"weight": torch.zeros(2, 2)}, str(junk))
+    try:
+        _rerun_v3("LanguageModelLoad", path="comfydl/lm_junk.safetensors")
+    except ValueError as exc:
+        assert "Save Language Model" in str(exc), (
+            f"a non-language-model file must be named as such, got: {exc}"
+        )
+    else:
+        raise AssertionError("a file without the LM format tag must raise")
+
+    try:
+        _rerun_v3("LanguageModelLoad", path="no/such/lm.safetensors")
+    except ValueError as exc:
+        assert "lm.safetensors" in str(exc), (
+            f"the error must carry the path, got: {exc}"
+        )
+    else:
+        raise AssertionError("a missing file must raise instead of returning nothing")
+
+
 #: node id -> [callable(result, args)].  Extra assertions beyond "it ran and the
 #: arity matches", for the nodes whose returned *values* carry the contract.
 _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
@@ -2315,6 +2437,8 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "LanguageModelTrain": [_check_lm_train],
     "LanguageModelForward": [_check_lm_forward],
     "LanguageModelGenerate": [_check_lm_generate],
+    "LanguageModelSave": [_check_lm_save],
+    "LanguageModelLoad": [_check_lm_load],
     "CheckpointLoaderSimple": [_check_checkpoint_loader],
     "CheckpointSave": [_check_checkpoint_save],
     "ModelSave": [_check_model_save],

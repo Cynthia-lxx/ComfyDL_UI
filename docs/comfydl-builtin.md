@@ -381,13 +381,15 @@ imports only `torch` + `training_protocol`, matching the dehydration rule. See
 初始化与自回归循环）只 import `torch` 与 `training_protocol`，符合脱水构建规则。设计记录见
 [reform-step8-language-model.md](./reform-step8-language-model.md)。
 
-Measured after reform step 8: `IMPORT_FAILED []`, `CDL 109`; the host registry holds 300 nodes across
-46 categories; the smoke tester reports `277 PASS / 23 SKIP / 0 FAIL` across those 300 registered
-nodes; the documented library totals 194 nodes across 34 categories (109 ComfyDL + 85 core).
+Measured after reform step 8 (+ persistence pair): `IMPORT_FAILED []`, `CDL 109`; the host registry
+holds 302 nodes across 46 categories; the smoke tester reports `279 PASS / 23 SKIP / 0 FAIL` across
+those 302 registered nodes; the documented library totals 196 nodes across 34 categories
+(109 ComfyDL + 87 core).
 
-reform 第八步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 300 个节点、46 个分类；冒烟测试器
-在这 300 个已注册节点上给出 `277 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 194 个节点、
-34 个分类（109 个 ComfyDL + 85 个核心节点）。
+reform 第八步（含 Save / Load Language Model 持久化对）后实测：`IMPORT_FAILED []`、`CDL 109`；
+宿主注册表共 302 个节点、46 个分类；冒烟测试器在这 302 个已注册节点上给出
+`279 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 196 个节点、
+34 个分类（109 个 ComfyDL + 87 个核心节点）。
 
 ## Rollback (回退)
 
