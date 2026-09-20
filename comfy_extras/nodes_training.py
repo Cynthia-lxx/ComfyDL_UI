@@ -24,11 +24,25 @@ closure as ordinary, composable nodes:
   take one entry back out as a tensor.
 * ``Optimizer`` - publishes the optimizer settings (hyper-parameters live on
   widgets, the value travels on a link, so flipping a widget invalidates the
-  graph exactly like ``TrainingMode`` does).
+  graph exactly like ``TrainingMode`` does). The optimizer value also carries
+  the gradient-clipping settings (``grad_clip_norm`` / ``grad_clip_value``,
+  0 = off), which the trainer applies right before every ``optimizer.step()``.
+* ``LR Scheduler`` - publishes an ``SCHEDULER`` value, the hyper-parameters of
+  a ``torch.optim.lr_scheduler`` (StepLR / cosine / exponential / one-cycle /
+  plateau). Like ``OPTIMIZER`` it is a configuration, not a live scheduler;
+  the trainer builds the real one and steps it per iteration.
+* ``Loss`` / ``Metrics`` - the standalone loss / metric functions (shared with
+  the trainer through ``comfy.training_metrics``), for evaluation graphs and
+  custom training objectives.
+* ``Evaluate`` - the read-only twin of a trainer: forward only, no gradients,
+  on either an ``NNMODEL`` or a ``PARAMS`` set (rebuilt as an MLP).
 * ``Training Loop`` - the trainer: builds a small MLP from the ``hidden`` widget,
   then runs ``steps`` iterations of forward / backward / ``optimizer.step()``
   inside a ``torch.inference_mode(False)`` block and returns the trained
   parameters, the last loss, the per-step loss history and the predictions.
+  Optional per-iteration pieces: a wired ``SCHEDULER``, gradient clipping from
+  the optimizer config, and early stopping (patience on the smoothed loss,
+  rolling the parameters back to the best point).
 * ``Save Parameters`` / ``Load Parameters`` - the file half of the persistence
   story, plus ``Parameters to Text`` / ``Text to Parameters`` for the widget
   half, which survives inside a saved workflow without touching the disk.
@@ -42,12 +56,12 @@ import os
 import re
 
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
 from typing_extensions import override
 
 import comfy.utils
 import folder_paths
+from comfy import training_metrics as tm
 from comfy import training_protocol as tp
 from comfy_api.latest import ComfyExtension, io
 
@@ -56,9 +70,10 @@ CATEGORY = "Network & Layers/Training"
 #: How a freshly dropped ``Learnable Parameters`` node initialises its tensor.
 INIT_OPTIONS: tuple[str, ...] = ("normal", "zeros", "ones", "xavier_uniform", "kaiming_uniform")
 
-#: Loss functions the trainer can minimize. ``cross_entropy`` expects class
-#: targets (indices or one-hot), the two others regression targets.
-LOSS_OPTIONS: tuple[str, ...] = ("mse", "l1", "cross_entropy")
+#: Loss functions the trainer can minimize (shared with the Loss / Evaluate
+#: nodes; see ``comfy.training_metrics``). ``cross_entropy`` and ``perplexity``
+#: expect class targets (indices or one-hot), the others regression targets.
+LOSS_OPTIONS: tuple[str, ...] = tm.LOSS_OPTIONS
 
 #: Default of the ``shape`` widget, and the value a typo falls back to.
 DEFAULT_SHAPE = "2,3"
@@ -316,12 +331,13 @@ def _class_targets(y: torch.Tensor, samples: int) -> tuple[torch.Tensor, int]:
 
 
 def _loss_value(mode: str, prediction: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    """Apply the selected loss function to a batch."""
-    if mode == "l1":
-        return F.l1_loss(prediction, targets)
-    if mode == "cross_entropy":
-        return F.cross_entropy(prediction, targets)
-    return F.mse_loss(prediction, targets)
+    """Apply the selected loss function to a batch.
+
+    Delegates to :func:`comfy.training_metrics.compute_loss`, the single
+    implementation shared with the ``Loss`` and ``Evaluate`` nodes, so the
+    trainer's numbers can never drift from the standalone node's.
+    """
+    return tm.compute_loss(mode, prediction, targets)
 
 
 def _summarize_warm_start(
@@ -659,8 +675,14 @@ class TrainingOptimizer(io.ComfyNode):
           eps (FLOAT) - numerical floor of Adam / AdamW / RMSprop.
           weight_decay (FLOAT) - L2 penalty (AdamW applies it decoupled).
           amsgrad (BOOLEAN) - AMSGrad variant of Adam / AdamW.
+          grad_clip_norm (FLOAT) - clip gradients to this global L2 norm before
+          every ``optimizer.step()``; 0 (the default) disables norm clipping.
+          grad_clip_value (FLOAT) - clip every gradient element to
+          ``[-value, +value]``; 0 (the default) disables value clipping. When
+          both are set the norm clip runs first, then the value clip.
     Out:  optimizer (OPTIMIZER) - link this into the ``optimizer`` slot of a
-          ``Training Loop`` node.
+          ``Training Loop`` node; the clipping rides along in the same value,
+          so the trainer always sees one consistent hyper-parameter set.
     """
 
     @classmethod
@@ -734,6 +756,22 @@ class TrainingOptimizer(io.ComfyNode):
                     default=False,
                     tooltip="Use the AMSGrad variant (Adam / AdamW).",
                 ),
+                io.Float.Input(
+                    "grad_clip_norm",
+                    default=0.0,
+                    min=0.0,
+                    max=1000.0,
+                    step=0.1,
+                    tooltip="Clip gradients to this global L2 norm before each step; 0 disables norm clipping.",
+                ),
+                io.Float.Input(
+                    "grad_clip_value",
+                    default=0.0,
+                    min=0.0,
+                    max=1000.0,
+                    step=0.1,
+                    tooltip="Clip every gradient element to [-value, +value]; 0 disables value clipping.",
+                ),
             ],
             outputs=[io.Optimizer.Output(display_name="optimizer")],
         )
@@ -749,6 +787,8 @@ class TrainingOptimizer(io.ComfyNode):
         eps: float = 1e-8,
         weight_decay: float = tp.DEFAULT_WEIGHT_DECAY,
         amsgrad: bool = False,
+        grad_clip_norm: float = 0.0,
+        grad_clip_value: float = 0.0,
     ) -> io.NodeOutput:
         config = tp.optimizer_config(
             optimizer,
@@ -759,6 +799,8 @@ class TrainingOptimizer(io.ComfyNode):
             eps=eps,
             weight_decay=weight_decay,
             amsgrad=amsgrad,
+            grad_clip_norm=grad_clip_norm,
+            grad_clip_value=grad_clip_value,
         )
         return io.NodeOutput(config)
 
@@ -776,37 +818,59 @@ class TrainingLoop(io.ComfyNode):
           ``out_features`` from ``y``, activation between the hidden layers only -
           and returns the trained parameters, so the graph can be split anywhere
           between "train" and "use".
+          Three optional per-iteration pieces: a wired ``SCHEDULER`` is stepped
+          after every ``optimizer.step()`` (``ReduceLROnPlateau`` with the
+          smoothed step loss, the others without arguments), gradient clipping
+          travels in the ``OPTIMIZER`` config (``grad_clip_norm`` /
+          ``grad_clip_value``, 0 = off) and runs right before the step, and
+          early stopping watches the moving average of the step loss (window 8):
+          once ``early_stop_patience`` steps pass without an improvement of
+          ``early_stop_min_delta``, the parameters are rolled back to the best
+          point and the run ends there.
           Every output is detached: no autograd graph is left in ComfyUI's cache.
     In:   x (TENSOR) - inputs, ``(N, in_features)`` or any shape whose *last*
           dimension is the feature dimension (a 1-D tensor is read as a single
           feature column). Cast to float32.
-          y (TENSOR) - targets. For ``mse`` / ``l1``: ``(N, out_features)``, or a
-          1-D tensor for a single output. For ``cross_entropy``: class indices,
-          or a 2-D one-hot / probability tensor, whose last dimension is the
-          class count.
-          optimizer (OPTIMIZER) - settings published by an ``Optimizer`` node.
+          y (TENSOR) - targets. For ``mse`` / ``l1`` / ``smooth_l1`` /
+          ``bce_with_logits`` / ``kl_div``: ``(N, out_features)``. For
+          ``cross_entropy``: class indices, or a 2-D one-hot / probability
+          tensor, whose last dimension is the class count.
+          optimizer (OPTIMIZER) - settings published by an ``Optimizer`` node,
+          including the gradient clipping widgets.
           params (PARAMS, optional) - warm start: entries whose name *and* shape
           match the freshly built network are loaded, every other entry is
           reported and ignored. Unconnected means a fresh initialisation.
+          scheduler (SCHEDULER, optional) - settings published by an
+          ``LR Scheduler`` node. Unconnected means a constant learning rate,
+          exactly like before this slot existed.
           hidden (STRING) - widths of the hidden layers, e.g. ``"8"`` or
           ``"16,8"``; empty means no hidden layer, i.e. plain linear regression.
           Unreadable text falls back to ``"8"`` with a warning.
           activation (COMBO) - applied between the hidden layers; ``none`` makes
           the whole network linear.
-          loss (COMBO) - ``mse``, ``l1`` or ``cross_entropy``.
+          loss (COMBO) - ``mse``, ``l1``, ``smooth_l1``, ``cross_entropy``,
+          ``bce_with_logits`` or ``kl_div``.
           steps (INT) - number of optimizer steps (200 by default); each step is
           one forward + backward + update.
           batch_size (INT) - samples per step; ``0`` (default) uses the whole
           dataset every step, the most stable choice for small teaching data.
           seed (INT) - seeds the initialisation and the batch shuffling, so the
           same inputs always produce the same run.
+          early_stop_patience (INT) - stop after this many steps without an
+          improvement of the smoothed loss; 0 (the default) disables early
+          stopping.
+          early_stop_min_delta (FLOAT) - the smallest improvement of the
+          smoothed loss that resets the patience counter.
     Out:  params (PARAMS) - the trained parameters, named ``layer0.weight``,
           ``layer0.bias``, ``layer1.weight``, ... in layer order. Feed them to
           ``Parameters to Tensor`` to run inference with the ``Basic`` layer
           nodes, to ``Save Parameters``, or back into another ``Training Loop``
-          to continue training.
-          loss (TENSOR) - scalar, the last step's loss.
-          loss_history (TENSOR) - 1-D, one entry per step; the convergence curve,
+          to continue training. With early stopping they are the parameters of
+          the *best* step, not the last one.
+          loss (TENSOR) - scalar, the last entry of the (possibly truncated)
+          loss history.
+          loss_history (TENSOR) - 1-D, one entry per executed step; with early
+          stopping it is truncated to the best step, the convergence curve,
           ready for any of the visualisation nodes.
           prediction (TENSOR) - ``model(x)`` of the trained network, detached.
     """
@@ -840,6 +904,11 @@ class TrainingLoop(io.ComfyNode):
                     optional=True,
                     tooltip="Optional starting parameters (warm start); entries with a matching name and shape are loaded.",
                 ),
+                io.Scheduler.Input(
+                    "scheduler",
+                    optional=True,
+                    tooltip="Optional LR scheduler settings from an LR Scheduler node; unconnected = constant learning rate.",
+                ),
                 io.String.Input(
                     "hidden",
                     default=DEFAULT_HIDDEN,
@@ -856,7 +925,7 @@ class TrainingLoop(io.ComfyNode):
                     "loss",
                     options=list(LOSS_OPTIONS),
                     default="mse",
-                    tooltip="Loss: mse / l1 for regression targets, cross_entropy for class targets.",
+                    tooltip="Loss: mse / l1 / smooth_l1 / bce_with_logits / kl_div for regression targets, cross_entropy for class targets.",
                 ),
                 io.Int.Input(
                     "steps",
@@ -882,6 +951,22 @@ class TrainingLoop(io.ComfyNode):
                     step=1,
                     tooltip="Seeds the initialisation and the batch shuffling.",
                 ),
+                io.Int.Input(
+                    "early_stop_patience",
+                    default=0,
+                    min=0,
+                    max=100000,
+                    step=1,
+                    tooltip="Stop after this many steps without an improvement of the smoothed loss; 0 disables early stopping.",
+                ),
+                io.Float.Input(
+                    "early_stop_min_delta",
+                    default=1e-4,
+                    min=0.0,
+                    max=1.0,
+                    step=1e-4,
+                    tooltip="Smallest improvement of the smoothed loss that resets the patience counter.",
+                ),
             ],
             outputs=[
                 io.Params.Output(display_name="params"),
@@ -898,12 +983,15 @@ class TrainingLoop(io.ComfyNode):
         y: torch.Tensor,
         optimizer,
         params=None,
+        scheduler=None,
         hidden: str = DEFAULT_HIDDEN,
         activation: str = "relu",
         loss: str = "mse",
         steps: int = 200,
         batch_size: int = 0,
         seed: int = 0,
+        early_stop_patience: int = 0,
+        early_stop_min_delta: float = 1e-4,
     ) -> io.NodeOutput:
         data = _TrainingData.from_inputs(x, y, loss)
         widths = (data.features,) + _hidden_sizes(hidden) + (data.outputs,)
@@ -914,6 +1002,12 @@ class TrainingLoop(io.ComfyNode):
                 "default AdamW settings."
             )
             optimizer = tp.optimizer_config()
+        if scheduler is not None and not isinstance(scheduler, tp.SchedulerConfig):
+            _warn(
+                "the 'scheduler' slot did not receive an LR Scheduler node; "
+                "keeping the learning rate constant."
+            )
+            scheduler = None
 
         iterations = max(1, int(steps))
         if iterations > STEPS_WARN_THRESHOLD:
@@ -947,11 +1041,24 @@ class TrainingLoop(io.ComfyNode):
                 )
                 notes.append(_summarize_warm_start(loaded, missing, skipped))
             trainer = tp.build_optimizer(optimizer, model.parameters())
+            # Optional LR schedule, built against the real step count so a
+            # follow-the-trainer horizon (t_max 0 / OneCycleLR) is exact.
+            lr_schedule = None
+            if scheduler is not None:
+                lr_schedule, schedule_needs_metric = tp.build_scheduler(
+                    scheduler, trainer, iterations
+                )
+            # Optional early stopping on the smoothed loss; the tracker owns no
+            # tensors, the snapshot / rollback below do.
+            stopper = tp.EarlyStopTracker(early_stop_patience, early_stop_min_delta)
+            best_state: dict[str, torch.Tensor] | None = None
+            best_length = 0
+            stopped_at: int | None = None
             # Live progress: one update per optimizer step.  The ProgressBar hook
             # binds itself to the executing node (see comfy_execution.utils) and
             # doubles as the interrupt check, so long runs stay cancellable.
             pbar = comfy.utils.ProgressBar(iterations)
-            for _ in range(iterations):
+            for step in range(iterations):
                 if per_step:
                     order = torch.randperm(data.samples, generator=shuffler)[:per_step].to(device)
                     inputs = data.inputs.index_select(0, order)
@@ -961,11 +1068,33 @@ class TrainingLoop(io.ComfyNode):
                 step_loss = _loss_value(data.loss, model(inputs), targets)
                 trainer.zero_grad(set_to_none=True)
                 step_loss.backward()
+                if optimizer.grad_clip_norm > 0.0 or optimizer.grad_clip_value > 0.0:
+                    tp.clip_gradients(optimizer, model.parameters())
                 trainer.step()
+                if lr_schedule is not None:
+                    if schedule_needs_metric:
+                        lr_schedule.step(float(step_loss.detach()))
+                    else:
+                        lr_schedule.step()
                 # Detached scalars, stacked into one tensor at the end: the loss
                 # history must not keep the graph (or the dataset) alive.
                 history.append(step_loss.detach().reshape(()))
+                if stopper.update(step, float(step_loss.detach())):
+                    stopped_at = step
+                    break
+                if stopper.improved:
+                    best_state = tp.snapshot_state(model)
+                    best_length = len(history)
                 pbar.update(1)
+            if stopped_at is not None and best_state is not None:
+                # Roll back to the best point and cut the history there, so the
+                # outputs are what "the best model of this run" means.
+                tp.restore_state(model, best_state)
+                del history[best_length:]
+                _warn(
+                    f"Training Loop: early stop at step {stopped_at + 1} - "
+                    f"{stopper.describe_stop()}"
+                )
             trainer.zero_grad(set_to_none=True)
             for parameter in model.parameters():
                 parameter.grad = None
@@ -974,6 +1103,15 @@ class TrainingLoop(io.ComfyNode):
                 predictions = model(data.inputs).detach()
 
         summary = ", ".join(str(width) for width in widths)
+        if scheduler is not None:
+            notes.append(f"lr schedule: {scheduler.describe()}")
+        if early_stop_patience > 0:
+            notes.append(
+                f"early stop: patience {early_stop_patience}, "
+                f"min_delta {early_stop_min_delta:g}"
+            )
+        if stopped_at is not None:
+            notes.append(f"stopped at step {stopped_at + 1} of {iterations}")
         print(
             f"[Network & Layers] Training Loop: {model.depth} dense layer(s) [{summary}], "
             f"{data.samples} sample(s) x {data.features} feature(s) -> {data.outputs} "
@@ -1234,12 +1372,533 @@ class TrainingTextToParameters(io.ComfyNode):
         return io.NodeOutput(payload)
 
 
+class TrainingLRScheduler(io.ComfyNode):
+    """Publishes the settings of a ``torch.optim.lr_scheduler`` as a ``SCHEDULER`` value.
+
+    What: the learning-rate schedule half of the training loop, kept on widgets
+          while the value travels on a link - the same deliberate split as the
+          ``Optimizer`` node: the link is part of ComfyUI's cache signature, so
+          changing the schedule re-runs every trainer that consumes it, and one
+          scheduler node can drive several trainers at once. The value is a
+          *configuration*, not a live scheduler; the trainer builds the real one
+          against its own step count, so no optimizer or device state is cached
+          and nothing leaks between prompts.
+    In:   scheduler (COMBO) - ``CosineAnnealingLR``, ``StepLR``, ``ExponentialLR``,
+          ``OneCycleLR`` or ``ReduceLROnPlateau``.
+          step_size (INT) - ``StepLR`` only: decay the lr every this many steps.
+          gamma (FLOAT) - ``StepLR`` / ``ExponentialLR``: multiply the lr by this
+          on each decay.
+          t_max (INT) - ``CosineAnnealingLR`` only: the horizon of the cosine;
+          ``0`` (the default) means "the consuming trainer's step count", which
+          is exact and needs no bookkeeping from the user.
+          eta_min (FLOAT) - ``CosineAnnealingLR`` / ``ReduceLROnPlateau``: the
+          lower bound of the lr.
+          pct_start (FLOAT) - ``OneCycleLR`` only: the fraction of the steps
+          spent warming the lr up (``max_lr`` is the wired optimizer's ``lr``).
+          patience (INT) - ``ReduceLROnPlateau`` only: steps without improvement
+          of the (smoothed) loss before the lr is reduced.
+          factor (FLOAT) - ``ReduceLROnPlateau`` only: multiply the lr by this
+          on each reduction.
+    Out:  scheduler (SCHEDULER) - link this into the ``scheduler`` slot of a
+          ``Training Loop`` or ``Language Model Train`` node. Unused fields of
+          the chosen scheduler are ignored, so one node serves all five.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="TrainingLRScheduler",
+            display_name="LR Scheduler",
+            category=CATEGORY,
+            description="Publishes the LR scheduler settings (StepLR / cosine / exponential / one-cycle / plateau) for a trainer node.",
+            search_aliases=[
+                "lr", "learning rate", "schedule", "scheduler", "decay", "cosine",
+                "step", "one cycle", "plateau", "annealing",
+            ],
+            inputs=[
+                io.Combo.Input(
+                    "scheduler",
+                    options=list(tp.SCHEDULER_OPTIONS),
+                    default="CosineAnnealingLR",
+                    tooltip="Scheduler to use; only its fields are read.",
+                ),
+                io.Int.Input(
+                    "step_size",
+                    default=30,
+                    min=1,
+                    max=100000,
+                    step=1,
+                    tooltip="StepLR: decay the lr every this many steps.",
+                ),
+                io.Float.Input(
+                    "gamma",
+                    default=0.1,
+                    min=0.0001,
+                    max=0.999,
+                    step=0.01,
+                    tooltip="StepLR / ExponentialLR: multiplier applied on each decay.",
+                ),
+                io.Int.Input(
+                    "t_max",
+                    default=0,
+                    min=0,
+                    max=1000000,
+                    step=1,
+                    tooltip="CosineAnnealingLR: horizon of the cosine; 0 = the trainer's step count.",
+                ),
+                io.Float.Input(
+                    "eta_min",
+                    default=0.0,
+                    min=0.0,
+                    max=1.0,
+                    step=0.0001,
+                    tooltip="CosineAnnealingLR / ReduceLROnPlateau: lower bound of the lr.",
+                ),
+                io.Float.Input(
+                    "pct_start",
+                    default=0.3,
+                    min=0.01,
+                    max=1.0,
+                    step=0.01,
+                    tooltip="OneCycleLR: fraction of the steps spent warming up.",
+                ),
+                io.Int.Input(
+                    "patience",
+                    default=10,
+                    min=1,
+                    max=100000,
+                    step=1,
+                    tooltip="ReduceLROnPlateau: steps without improvement before the lr is reduced.",
+                ),
+                io.Float.Input(
+                    "factor",
+                    default=0.1,
+                    min=0.01,
+                    max=0.99,
+                    step=0.01,
+                    tooltip="ReduceLROnPlateau: multiplier applied on each reduction.",
+                ),
+            ],
+            outputs=[io.Scheduler.Output(display_name="scheduler")],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        scheduler: str = "CosineAnnealingLR",
+        step_size: int = 30,
+        gamma: float = 0.1,
+        t_max: int = 0,
+        eta_min: float = 0.0,
+        pct_start: float = 0.3,
+        patience: int = 10,
+        factor: float = 0.1,
+    ) -> io.NodeOutput:
+        config = tp.scheduler_config(
+            scheduler,
+            step_size=step_size,
+            gamma=gamma,
+            t_max=t_max,
+            eta_min=eta_min,
+            pct_start=pct_start,
+            patience=patience,
+            factor=factor,
+        )
+        return io.NodeOutput(config)
+
+
+class TrainingLoss(io.ComfyNode):
+    """Computes one loss between a prediction and a target.
+
+    What: the standalone form of the trainer's loss, on the shared math of
+          ``comfy.training_metrics`` - the same function a ``Training Loop``
+          minimizes, available for evaluation graphs, comparisons of custom
+          objectives, or feeding a number into any tensor node. Forward only:
+          no gradients are taken here (they cannot cross a node boundary
+          anyway), so it is safe anywhere in a graph.
+    In:   prediction (TENSOR) - model output; logits for the classification
+          losses, raw values for the regression losses.
+          target (TENSOR) - ground truth; see the loss below for the expected
+          form.
+          loss (COMBO) - ``mse`` / ``l1`` / ``smooth_l1``: regression targets of
+          the prediction's shape. ``cross_entropy``: class indices, or a
+          one-hot / probability tensor of the prediction's shape. 
+          ``bce_with_logits``: 0/1 targets of the prediction's shape.
+          ``kl_div``: probabilities of the prediction's shape (the KL of the
+          target distribution from the prediction's softmax).
+    Out:  loss (TENSOR) - scalar, the mean loss of the pair.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="TrainingLoss",
+            display_name="Loss",
+            category=CATEGORY,
+            description="Computes one loss (mse / l1 / smooth_l1 / cross_entropy / bce_with_logits / kl_div) between a prediction and a target.",
+            search_aliases=[
+                "loss", "mse", "l1", "smooth l1", "cross entropy", "bce",
+                "binary cross entropy", "kl divergence", "objective", "cost",
+            ],
+            inputs=[
+                io.Tensor.Input(
+                    "prediction",
+                    tooltip="Model output: logits for the classification losses, values for the regression losses.",
+                ),
+                io.Tensor.Input(
+                    "target",
+                    tooltip="Ground truth: same shape as the prediction, or class indices for cross_entropy.",
+                ),
+                io.Combo.Input(
+                    "loss",
+                    options=list(tm.LOSS_OPTIONS),
+                    default="mse",
+                    tooltip="Loss function; see the node's help for the expected target form.",
+                ),
+            ],
+            outputs=[io.Tensor.Output(display_name="loss")],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+        loss: str = "mse",
+    ) -> io.NodeOutput:
+        mode = _loss_mode(loss)
+        try:
+            value = tm.compute_loss(mode, prediction, target)
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"[Network & Layers] Loss ({mode}): {error}") from error
+        return io.NodeOutput(value.detach().reshape(()))
+
+
+class TrainingMetrics(io.ComfyNode):
+    """Computes one metric between a prediction and a target.
+
+    What: the evaluation twin of the ``Loss`` node, on the shared math of
+          ``comfy.training_metrics``. Metrics are read-only numbers (detached
+          scalars): wire the prediction of any model node together with its
+          targets and read the quality of the fit, without running a trainer.
+    In:   prediction (TENSOR) - model output; logits for the classification
+          metrics, raw values for the regression metrics.
+          target (TENSOR) - ground truth; see the metric below for the expected
+          form.
+          metric (COMBO) - ``mae`` / ``rmse``: regression targets of the
+          prediction's shape. ``accuracy`` / ``top_3`` / ``top_5``: class
+          indices, or a one-hot / probability tensor of the prediction's shape
+          (top-k accuracy; k is clamped to the class count). ``perplexity``:
+          class indices / one-hot; ``exp(cross_entropy)`` of the token
+          predictions - the natural LM quality number.
+    Out:  metric (TENSOR) - scalar, the metric of the pair.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="TrainingMetrics",
+            display_name="Metrics",
+            category=CATEGORY,
+            description="Computes one metric (mae / rmse / accuracy / top_3 / top_5 / perplexity) between a prediction and a target.",
+            search_aliases=[
+                "metric", "accuracy", "top-k", "perplexity", "mae", "rmse",
+                "evaluation", "score", "quality",
+            ],
+            inputs=[
+                io.Tensor.Input(
+                    "prediction",
+                    tooltip="Model output: logits for the classification metrics, values for the regression metrics.",
+                ),
+                io.Tensor.Input(
+                    "target",
+                    tooltip="Ground truth: same shape as the prediction, or class indices for the classification metrics.",
+                ),
+                io.Combo.Input(
+                    "metric",
+                    options=list(tm.METRIC_OPTIONS),
+                    default="mae",
+                    tooltip="Metric to compute; see the node's help for the expected target form.",
+                ),
+            ],
+            outputs=[io.Tensor.Output(display_name="metric")],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+        metric: str = "mae",
+    ) -> io.NodeOutput:
+        text = "" if metric is None else str(metric).strip().lower()
+        if text not in tm.METRIC_OPTIONS:
+            _warn(
+                f"metric '{metric}' is unknown; using 'mae' (one of "
+                f"{', '.join(tm.METRIC_OPTIONS)})."
+            )
+            text = "mae"
+        try:
+            value = tm.compute_metric(text, prediction, target)
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"[Network & Layers] Metrics ({text}): {error}") from error
+        return io.NodeOutput(value.reshape(()))
+
+
+def _mlp_widths_from_params(payload: dict) -> tuple[int, ...]:
+    """Read the layer widths out of a trainer parameter set.
+
+    In:  payload - a ``PARAMS`` value whose keys follow the trainer's naming
+         convention, ``layer0.weight`` / ``layer0.bias`` / ...
+    Out: the MLP widths ``(in, hidden..., out)`` implied by the ``layer{i}.weight``
+         shapes (``(out, in)`` per ``nn.Linear``). Raises ``ValueError`` when no
+         ``layer*.weight`` entry exists or the layers do not chain.
+    """
+    layers: list[tuple[int, torch.Tensor]] = []
+    for name, value in payload.items():
+        match = re.fullmatch(r"layer(\d+)\.weight", name)
+        if match:
+            layers.append((int(match.group(1)), value))
+    layers.sort(key=lambda item: item[0])
+    if not layers:
+        raise ValueError(
+            "[Network & Layers] Evaluate: the parameter set holds no "
+            "'layer<i>.weight' entry, so its network cannot be rebuilt; expected "
+            "the names a Training Loop produces."
+        )
+    widths: list[int] = []
+    for _index, weight in layers:
+        if weight.dim() != 2:
+            raise ValueError(
+                "[Network & Layers] Evaluate: 'layer<i>.weight' must be 2-D "
+                f"(out, in); got shape {tuple(weight.shape)}."
+            )
+        fan_in = int(weight.shape[1])
+        if not widths:
+            widths.append(fan_in)
+        elif widths[-1] != fan_in:
+            raise ValueError(
+                "[Network & Layers] Evaluate: the layers do not chain "
+                f"(layer expects {fan_in} input(s) but the previous one outputs "
+                f"{widths[-1]}); the parameter set is not a plain MLP."
+            )
+        widths.append(int(weight.shape[0]))
+    return tuple(widths)
+
+
+class TrainingEvaluate(io.ComfyNode):
+    """Evaluates a model on ``x`` / ``y`` - forward only, no training.
+
+    What: the read-only twin of a trainer. It runs the model (or a network
+          rebuilt from a parameter set) on the data, and reports the loss, one
+          metric and the raw predictions - the numbers a decision like "is this
+          checkpoint better" needs, without spending a single optimizer step.
+          No gradients are taken, the model is left untouched, and the
+          parameters are never mutated, so the node can sit on the cached path
+          of any workflow.
+    In:   model (NNMODEL, optional) - a materialised ``nn.Module``, e.g. from
+          ``Language Model Build`` / ``Language Model Train``. Takes precedence
+          when both a model and parameters are wired.
+          params (PARAMS, optional) - a parameter set with the trainer's naming
+          convention (``layer0.weight``, ...): the MLP is rebuilt from the
+          layer shapes (with ``activation`` between the hidden layers, exactly
+          like ``Training Loop`` builds it) and the parameters are loaded in.
+          x (TENSOR) - inputs. For a model: as the model expects it (a language
+          model takes ``(N, L)`` token indices). For parameters:
+          ``(N, in_features)`` or any shape whose last dimension is the feature
+          dimension.
+          y (TENSOR) - targets aligned with the model's *outputs*: per-position
+          token indices for a language model (the Sliding Window ``(N,)``
+          next-token form is also accepted, read exactly like in
+          ``Language Model Train``), class indices / one-hot or same-shaped
+          values otherwise.
+          activation (COMBO) - the activation between the hidden layers of the
+          rebuilt MLP (parameters path only); must match the network the
+          parameters were trained with.
+          loss (COMBO) - ``auto`` (the default) picks ``cross_entropy`` for
+          class-index targets and ``mse`` for value targets; or one of the six
+          explicit losses of the ``Loss`` node.
+          metric (COMBO) - ``auto`` (the default) picks ``accuracy`` for
+          class-index targets and ``mae`` for value targets; one of the six
+          explicit metrics of the ``Metrics`` node; or ``none`` to skip the
+          metric (the output is ``nan``).
+    Out:  loss (TENSOR) - scalar, the selected loss of the evaluated pair.
+          metric (TENSOR) - scalar, the selected metric (``nan`` for ``none``).
+          prediction (TENSOR) - the model's raw outputs on ``x``, detached.
+    Raises:
+        ValueError: when neither ``model`` nor ``params`` is wired, when the
+            parameter set cannot be rebuilt as an MLP, or when the data does
+            not align with the model.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="TrainingEvaluate",
+            display_name="Evaluate",
+            category=CATEGORY,
+            description="Evaluates a model (NNMODEL) or a parameter set (PARAMS) on x/y: loss, metric and predictions, without training.",
+            search_aliases=[
+                "evaluate", "eval", "test", "validation", "metric", "loss",
+                "score", "perplexity", "accuracy", "benchmark",
+            ],
+            inputs=[
+                io.NNModel.Input(
+                    "model",
+                    optional=True,
+                    tooltip="A materialised nn.Module to evaluate; takes precedence over 'params'.",
+                ),
+                io.Params.Input(
+                    "params",
+                    optional=True,
+                    tooltip="A trainer parameter set (layer0.weight, ...); its MLP is rebuilt and evaluated.",
+                ),
+                io.Tensor.Input(
+                    "x",
+                    tooltip="Inputs: as the model expects (language models take token indices), or (N, in_features) for parameters.",
+                ),
+                io.Tensor.Input(
+                    "y",
+                    tooltip="Targets aligned with the model's outputs: per-position tokens, class indices / one-hot, or values.",
+                ),
+                io.Combo.Input(
+                    "activation",
+                    options=list(tp.ACTIVATION_OPTIONS),
+                    default="relu",
+                    tooltip="Activation between the hidden layers of the rebuilt MLP (parameters path only).",
+                ),
+                io.Combo.Input(
+                    "loss",
+                    options=list(tm.AUTO_LOSS_OPTIONS),
+                    default=tm.AUTO,
+                    tooltip="Loss to report; auto picks cross_entropy for class targets and mse for value targets.",
+                ),
+                io.Combo.Input(
+                    "metric",
+                    options=list(tm.EVALUATE_METRIC_OPTIONS),
+                    default=tm.AUTO,
+                    tooltip="Metric to report; auto picks accuracy for class targets and mae for value targets; none skips it.",
+                ),
+            ],
+            outputs=[
+                io.Tensor.Output(display_name="loss"),
+                io.Tensor.Output(display_name="metric"),
+                io.Tensor.Output(display_name="prediction"),
+            ],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        model=None,
+        params=None,
+        x: torch.Tensor = None,
+        y: torch.Tensor = None,
+        activation: str = "relu",
+        loss: str = tm.AUTO,
+        metric: str = tm.AUTO,
+    ) -> io.NodeOutput:
+        if not isinstance(x, torch.Tensor) or not isinstance(y, torch.Tensor):
+            raise TypeError(
+                "[Network & Layers] Evaluate needs a tensor on both the 'x' and "
+                "the 'y' slot."
+            )
+        if model is None and params is None:
+            raise ValueError(
+                "[Network & Layers] Evaluate: wire either a model (NNMODEL) or a "
+                "parameter set (PARAMS) to evaluate."
+            )
+        # The network has to be built / run outside ComfyUI's inference_mode:
+        # parameters cannot be created on inference tensors, and loading a
+        # state is an in-place copy.
+        with torch.inference_mode(False):
+            network = model
+            token_level = False
+            if network is not None:
+                token_level = hasattr(network, "vocab_size")
+            else:
+                payload = tp.as_parameter_dict(params)
+                widths = _mlp_widths_from_params(payload)
+                network = tp.build_mlp(widths, activation, seed=0, device=x.device)
+                loaded, _missing, _skipped = tp.load_into_module(network, payload)
+                if not loaded:
+                    raise ValueError(
+                        "[Network & Layers] Evaluate: none of the parameters "
+                        "matched the rebuilt network; check the layer names."
+                    )
+            was_training = network.training
+            network.eval()
+            try:
+                with torch.no_grad():
+                    if token_level:
+                        # Language model: (N, L) token indices in, (N, L, V)
+                        # logits out. y is either already aligned (N, L), or
+                        # the Sliding Window next-token form (N,) - then each
+                        # position predicts its successor, exactly like the
+                        # Language Model Train node reads it.
+                        if x.dim() < 2:
+                            batch_x = x.reshape(1, -1).long()
+                        else:
+                            batch_x = x.reshape(x.shape[0], -1).long()
+                        prediction = network(batch_x)
+                        if y.dim() == 2 and tuple(y.shape) == tuple(batch_x.shape):
+                            target = y.long()
+                        elif y.dim() == 1 and y.numel() == batch_x.shape[0]:
+                            target = torch.cat(
+                                [batch_x[:, 1:], y.reshape(-1, 1).long()], dim=1
+                            )
+                        else:
+                            raise ValueError(
+                                "[Network & Layers] Evaluate: 'y' must be the (N,) "
+                                "next-token tensor of the Sliding Window node or an "
+                                "(N, L) tensor aligned with 'x' "
+                                f"(N={batch_x.shape[0]}, L={batch_x.shape[1]}); got "
+                                f"shape {tuple(y.shape)}."
+                            )
+                    else:
+                        inputs = _flatten_features(x).to(dtype=torch.float32)
+                        prediction = network(inputs)
+                        target = y
+                    if prediction.dim() == 0:
+                        prediction = prediction.reshape(1)
+                    try:
+                        loss_name = tm.resolve_loss(loss, prediction, target)
+                        loss_value = tm.compute_loss(loss_name, prediction, target)
+                    except (ValueError, TypeError) as error:
+                        raise ValueError(
+                            f"[Network & Layers] Evaluate (loss): {error}"
+                        ) from error
+                    metric_name = tm.resolve_metric(metric, prediction, target)
+                    if metric_name is None:
+                        metric_value = torch.tensor(float("nan"))
+                    else:
+                        try:
+                            metric_value = tm.compute_metric(
+                                metric_name, prediction, target
+                            )
+                        except (ValueError, TypeError) as error:
+                            raise ValueError(
+                                f"[Network & Layers] Evaluate (metric): {error}"
+                            ) from error
+            finally:
+                network.train(was_training)
+        return io.NodeOutput(
+            loss_value.detach().reshape(()),
+            metric_value.detach().reshape(()),
+            prediction.detach(),
+        )
+
+
 TRAINING_NODES = [
     TrainingParameters,
     TrainingParametersMerge,
     TrainingParametersExtract,
     TrainingOptimizer,
+    TrainingLRScheduler,
     TrainingLoop,
+    TrainingLoss,
+    TrainingMetrics,
+    TrainingEvaluate,
     TrainingSaveParameters,
     TrainingLoadParameters,
     TrainingParametersToText,

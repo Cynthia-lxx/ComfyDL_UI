@@ -405,10 +405,19 @@ class LanguageModelTrain(io.ComfyNode):
           cannot survive a node boundary: this node therefore runs forward,
           backward and ``optimizer.step()`` itself, for ``steps`` iterations,
           on a *deep copy* of the input model - the cached input stays
-          untouched and the node returns a new trained model. The loss is
+          untouched and the node returns a new trained model.           The loss is
           token-level cross entropy computed at every position: each context
           token predicts its successor and the last position predicts the
           wired ``y``, so one sample trains ``window`` predictions at once.
+          Three optional per-iteration pieces: a wired ``SCHEDULER`` is stepped
+          after every ``optimizer.step()`` (``ReduceLROnPlateau`` with the
+          smoothed step loss, the others without arguments), gradient clipping
+          travels in the ``OPTIMIZER`` config (``grad_clip_norm`` /
+          ``grad_clip_value``, 0 = off) and runs right before the step, and
+          early stopping watches the moving average of the step loss (window 8):
+          once ``early_stop_patience`` steps pass without an improvement of
+          ``early_stop_min_delta``, the copy's parameters are rolled back to the
+          best point and the run ends there.
     In:   model (NNMODEL) - link from Language Model Build (or another Train
           node, to continue training).
           x (TENSOR) - ``(samples, window)`` long contexts; link from Sliding
@@ -416,17 +425,30 @@ class LanguageModelTrain(io.ComfyNode):
           y (TENSOR) - ``(samples,)`` long next tokens; link from Sliding
           Window's ``y``. An ``(N, L)`` tensor aligned with ``x`` is also
           accepted.
-          optimizer (OPTIMIZER) - settings published by an Optimizer node.
+          optimizer (OPTIMIZER) - settings published by an Optimizer node,
+          including the gradient clipping widgets.
+          scheduler (SCHEDULER, optional) - settings published by an
+          ``LR Scheduler`` node. Unconnected means a constant learning rate,
+          exactly like before this slot existed.
           steps (INT) - optimizer steps (default 300; each step is one
           forward + backward + update on the chosen batch).
           batch_size (INT) - samples per step; ``0`` (default) uses the whole
           dataset every step, the most stable choice for small teaching data.
           seed (INT) - seeds the dropout draws and the batch shuffling, so the
           same inputs always produce the same run.
-    Out:  model (NNMODEL) - the trained copy, in eval mode (dropout off).
-          loss (FLOAT) - the last step's loss.
-          loss_history (TENSOR) - 1-D, one entry per step; the convergence
-          curve, ready for any of the visualisation nodes.
+          early_stop_patience (INT) - stop after this many steps without an
+          improvement of the smoothed loss; 0 (the default) disables early
+          stopping.
+          early_stop_min_delta (FLOAT) - the smallest improvement of the
+          smoothed loss that resets the patience counter.
+    Out:  model (NNMODEL) - the trained copy, in eval mode (dropout off); with
+          early stopping it holds the parameters of the *best* step, not the
+          last one.
+          loss (FLOAT) - the last entry of the (possibly truncated) loss
+          history.
+          loss_history (TENSOR) - 1-D, one entry per executed step; with early
+          stopping it is truncated to the best step. The convergence curve,
+          ready for any of the visualisation nodes.
     """
 
     @classmethod
@@ -454,6 +476,11 @@ class LanguageModelTrain(io.ComfyNode):
                     "optimizer",
                     tooltip="Optimizer settings, linked from an Optimizer node.",
                 ),
+                io.Scheduler.Input(
+                    "scheduler",
+                    optional=True,
+                    tooltip="Optional LR scheduler settings from an LR Scheduler node; unconnected = constant learning rate.",
+                ),
                 io.Int.Input(
                     "steps",
                     default=300,
@@ -479,6 +506,22 @@ class LanguageModelTrain(io.ComfyNode):
                     control_after_generate=True,
                     tooltip="Seeds the dropout draws and the batch shuffling; the same seed reproduces the same run.",
                 ),
+                io.Int.Input(
+                    "early_stop_patience",
+                    default=0,
+                    min=0,
+                    max=100000,
+                    step=1,
+                    tooltip="Stop after this many steps without an improvement of the smoothed loss; 0 disables early stopping.",
+                ),
+                io.Float.Input(
+                    "early_stop_min_delta",
+                    default=1e-4,
+                    min=0.0,
+                    max=1.0,
+                    step=1e-4,
+                    tooltip="Smallest improvement of the smoothed loss that resets the patience counter.",
+                ),
             ],
             outputs=[
                 io.NNModel.Output(display_name="model"),
@@ -494,12 +537,21 @@ class LanguageModelTrain(io.ComfyNode):
         x: torch.Tensor,
         y: torch.Tensor,
         optimizer,
+        scheduler=None,
         steps: int = 300,
         batch_size: int = 0,
         seed: int = 0,
+        early_stop_patience: int = 0,
+        early_stop_min_delta: float = 1e-4,
     ) -> io.NodeOutput:
         source = _as_language_model(model)
         config = _as_optimizer(optimizer)
+        if scheduler is not None and not isinstance(scheduler, tp.SchedulerConfig):
+            _warn(
+                "the 'scheduler' slot did not receive an LR Scheduler node; "
+                "keeping the learning rate constant."
+            )
+            scheduler = None
 
         if x.dim() != 2:
             raise ValueError(
@@ -555,11 +607,24 @@ class LanguageModelTrain(io.ComfyNode):
             with tp.seeded_rng(int(seed)):
                 trainer = tp.build_optimizer(config, trainee.parameters())
                 trainee.train()
+                # Optional LR schedule, built against the real step count so a
+                # follow-the-trainer horizon (t_max 0 / OneCycleLR) is exact.
+                lr_schedule = None
+                if scheduler is not None:
+                    lr_schedule, schedule_needs_metric = tp.build_scheduler(
+                        scheduler, trainer, iterations
+                    )
+                # Optional early stopping on the smoothed loss; the tracker owns
+                # no tensors, the snapshot / rollback below do.
+                stopper = tp.EarlyStopTracker(early_stop_patience, early_stop_min_delta)
+                best_state: dict[str, torch.Tensor] | None = None
+                best_length = 0
+                stopped_at: int | None = None
                 # Live progress: one update per optimizer step.  The ProgressBar
                 # hook binds itself to the executing node and doubles as the
                 # interrupt check, so a long run stays cancellable from the UI.
                 pbar = comfy.utils.ProgressBar(iterations)
-                for _ in range(iterations):
+                for step in range(iterations):
                     if per_step:
                         order = torch.randperm(samples, generator=shuffler)[:per_step]
                         batch_x = inputs.index_select(0, order)
@@ -572,9 +637,31 @@ class LanguageModelTrain(io.ComfyNode):
                     )
                     trainer.zero_grad(set_to_none=True)
                     step_loss.backward()
+                    if config.grad_clip_norm > 0.0 or config.grad_clip_value > 0.0:
+                        tp.clip_gradients(config, trainee.parameters())
                     trainer.step()
+                    if lr_schedule is not None:
+                        if schedule_needs_metric:
+                            lr_schedule.step(float(step_loss.detach()))
+                        else:
+                            lr_schedule.step()
                     history.append(step_loss.detach().reshape(()))
+                    if stopper.update(step, float(step_loss.detach())):
+                        stopped_at = step
+                        break
+                    if stopper.improved:
+                        best_state = tp.snapshot_state(trainee)
+                        best_length = len(history)
                     pbar.update(1)
+                if stopped_at is not None and best_state is not None:
+                    # Roll back to the best point and cut the history there, so
+                    # the outputs are what "the best model of this run" means.
+                    tp.restore_state(trainee, best_state)
+                    del history[best_length:]
+                    _warn(
+                        f"Language Model Train: early stop at step {stopped_at + 1} "
+                        f"- {stopper.describe_stop()}"
+                    )
                 trainer.zero_grad(set_to_none=True)
             trainee.eval()
             for parameter in trainee.parameters():

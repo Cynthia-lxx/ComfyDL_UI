@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from comfy.samplers import CFGGuider, Sampler
     from comfy.sd import CLIP, VAE
     from comfy.sd import StyleModel as StyleModel_
-    from comfy.training_protocol import OptimizerConfig
+    from comfy.training_protocol import OptimizerConfig, SchedulerConfig
     from comfy_api.input import VideoInput, CurveInput as CurveInput_
 from comfy_api.internal import (_ComfyNodeInternal, _NodeOutputInternal, classproperty, copy_class, first_real_override, is_class,
     prune_dict, shallow_clone_class)
@@ -714,6 +714,21 @@ class Optimizer(ComfyTypeIO):
     """
     if TYPE_CHECKING:
         Type = OptimizerConfig
+
+@comfytype(io_type="SCHEDULER")
+class Scheduler(ComfyTypeIO):
+    """The hyper-parameter set of a ``torch.optim.lr_scheduler``.
+
+    A configuration object rather than a live scheduler: a trainer builds the
+    real scheduler from it inside its own call (reading its step count for
+    schedulers that need a horizon, e.g. ``OneCycleLR`` / cosine with the
+    follow-trainer ``T_max``), which keeps the payload free of optimizer or
+    device state and safe for ComfyUI to cache.
+
+    Tutorial: https://docs.pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+    """
+    if TYPE_CHECKING:
+        Type = SchedulerConfig
 
 @comfytype(io_type="VOCAB")
 class Vocab(ComfyTypeIO):
@@ -2513,6 +2528,7 @@ __all__ = [
     "LossMap",
     "Params",
     "Optimizer",
+    "Scheduler",
     "Vocab",
     "ModelSpec",
     "NNModel",

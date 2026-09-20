@@ -74,6 +74,25 @@ ACTIVATION_OPTIONS: tuple[str, ...] = ("relu", "gelu", "tanh", "sigmoid", "none"
 #: Optimizers the ``Optimizer`` node can publish, in dropdown order.
 OPTIMIZER_OPTIONS: tuple[str, ...] = ("AdamW", "Adam", "SGD", "RMSprop")
 
+#: LR schedulers the ``LR Scheduler`` node can publish, in dropdown order.
+SCHEDULER_OPTIONS: tuple[str, ...] = (
+    "CosineAnnealingLR",
+    "StepLR",
+    "ExponentialLR",
+    "OneCycleLR",
+    "ReduceLROnPlateau",
+)
+
+#: Window of the moving average the early-stopping monitor watches.  A raw
+#: per-step loss is noisy (mini-batches, dropout), so patience is counted on the
+#: smoothed curve; the window is deliberately small so a teaching run of a few
+#: hundred steps still sees the trend.
+EARLY_STOP_SMOOTHING = 8
+
+#: Default ``t_max`` sentinel of :class:`SchedulerConfig`: ``0`` means "take the
+#: number of steps from the trainer that consumes the config".
+FOLLOW_TRAINER_STEPS = 0
+
 #: Learning rate of a freshly dropped optimizer node. AdamW's own default is
 #: 1e-3, but the tiny teaching networks of this toolchain converge better one
 #: order of magnitude higher within the trainer's default step count.
@@ -113,24 +132,32 @@ class OptimizerConfig:
     eps: float = 1e-8
     weight_decay: float = DEFAULT_WEIGHT_DECAY
     amsgrad: bool = False
+    grad_clip_norm: float = 0.0
+    grad_clip_value: float = 0.0
 
     def describe(self) -> str:
         """One-line ``repr``-like summary used by the trainer's log line."""
         if self.name == "SGD":
-            return (
+            summary = (
                 f"SGD(lr={self.lr:g}, momentum={self.momentum:g}, "
                 f"weight_decay={self.weight_decay:g})"
             )
-        if self.name == "RMSprop":
-            return (
+        elif self.name == "RMSprop":
+            summary = (
                 f"RMSprop(lr={self.lr:g}, alpha={self.beta2:g}, eps={self.eps:g}, "
                 f"momentum={self.momentum:g}, weight_decay={self.weight_decay:g})"
             )
-        return (
-            f"{self.name}(lr={self.lr:g}, betas=({self.beta1:g}, {self.beta2:g}), "
-            f"eps={self.eps:g}, weight_decay={self.weight_decay:g}, "
-            f"amsgrad={self.amsgrad})"
-        )
+        else:
+            summary = (
+                f"{self.name}(lr={self.lr:g}, betas=({self.beta1:g}, {self.beta2:g}), "
+                f"eps={self.eps:g}, weight_decay={self.weight_decay:g}, "
+                f"amsgrad={self.amsgrad})"
+            )
+        if self.grad_clip_norm > 0.0:
+            summary += f", clip norm {self.grad_clip_norm:g}"
+        if self.grad_clip_value > 0.0:
+            summary += f", clip value {self.grad_clip_value:g}"
+        return summary
 
 
 def _finite(value: float, fallback: float, label: str) -> float:
@@ -159,6 +186,8 @@ def optimizer_config(
     eps: float = 1e-8,
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
     amsgrad: bool = False,
+    grad_clip_norm: float = 0.0,
+    grad_clip_value: float = 0.0,
 ) -> OptimizerConfig:
     """Normalise widget values into a valid :class:`OptimizerConfig`.
 
@@ -199,6 +228,21 @@ def optimizer_config(
             "training_protocol: weight_decay=%r is negative; using 0.0.", weight_decay
         )
         decay = 0.0
+    # Clipping is off at 0; a negative value is a typo and is treated as off.
+    clip_norm = _finite(grad_clip_norm, 0.0, "grad_clip_norm")
+    if clip_norm < 0.0:
+        LOGGER.warning(
+            "training_protocol: grad_clip_norm=%r is negative; clipping disabled.",
+            grad_clip_norm,
+        )
+        clip_norm = 0.0
+    clip_value = _finite(grad_clip_value, 0.0, "grad_clip_value")
+    if clip_value < 0.0:
+        LOGGER.warning(
+            "training_protocol: grad_clip_value=%r is negative; clipping disabled.",
+            grad_clip_value,
+        )
+        clip_value = 0.0
 
     return OptimizerConfig(
         name=text,
@@ -209,6 +253,8 @@ def optimizer_config(
         eps=epsilon,
         weight_decay=decay,
         amsgrad=bool(amsgrad),
+        grad_clip_norm=clip_norm,
+        grad_clip_value=clip_value,
     )
 
 
@@ -263,6 +309,326 @@ def build_optimizer(
         weight_decay=config.weight_decay,
         amsgrad=config.amsgrad,
     )
+
+
+# --------------------------------------------------------------------------- #
+# LR schedulers, gradient clipping, early stopping
+# --------------------------------------------------------------------------- #
+
+
+@dataclasses.dataclass(frozen=True)
+class SchedulerConfig:
+    """Hyper-parameters of one ``torch.optim.lr_scheduler``, as a graph value.
+
+    What: the payload of the ``SCHEDULER`` slot. Like
+          :class:`OptimizerConfig` it is a *configuration*, not a live scheduler:
+          the trainer builds the real scheduler from it inside its own call
+          (see :func:`build_scheduler`), so nothing device bound is cached and
+          no scheduler state leaks between prompts.
+    In:   ``name`` selects the scheduler; the remaining fields are read as
+          follows. ``StepLR``: ``step_size``, ``gamma``.
+          ``ExponentialLR``: ``gamma``. ``CosineAnnealingLR``: ``t_max``
+          (``0`` = the consuming trainer's step count), ``eta_min``.
+          ``OneCycleLR``: ``max_lr`` is taken from the wired optimizer's
+          ``lr``, ``total_steps`` from the trainer's step count; ``pct_start``
+          is the warm-up fraction. ``ReduceLROnPlateau``: ``patience``,
+          ``factor``, ``eta_min`` (as ``min_lr``).
+    Out: a frozen dataclass; :func:`build_scheduler` turns it into a real
+         scheduler, :meth:`describe` into a log line.
+    """
+
+    name: str = "CosineAnnealingLR"
+    step_size: int = 30
+    gamma: float = 0.1
+    t_max: int = FOLLOW_TRAINER_STEPS
+    eta_min: float = 0.0
+    pct_start: float = 0.3
+    patience: int = 10
+    factor: float = 0.1
+
+    def describe(self) -> str:
+        """One-line ``repr``-like summary used by the trainer's log line."""
+        if self.name == "StepLR":
+            return f"StepLR(step_size={self.step_size}, gamma={self.gamma:g})"
+        if self.name == "ExponentialLR":
+            return f"ExponentialLR(gamma={self.gamma:g})"
+        if self.name == "OneCycleLR":
+            return (
+                f"OneCycleLR(max_lr=optimizer.lr, pct_start={self.pct_start:g})"
+            )
+        if self.name == "ReduceLROnPlateau":
+            return (
+                f"ReduceLROnPlateau(patience={self.patience}, "
+                f"factor={self.factor:g}, min_lr={self.eta_min:g})"
+            )
+        if self.t_max > FOLLOW_TRAINER_STEPS:
+            return (
+                f"CosineAnnealingLR(T_max={self.t_max}, eta_min={self.eta_min:g})"
+            )
+        return f"CosineAnnealingLR(T_max=trainer steps, eta_min={self.eta_min:g})"
+
+
+def scheduler_config(
+    name: str = "CosineAnnealingLR",
+    step_size: int = 30,
+    gamma: float = 0.1,
+    t_max: int = FOLLOW_TRAINER_STEPS,
+    eta_min: float = 0.0,
+    pct_start: float = 0.3,
+    patience: int = 10,
+    factor: float = 0.1,
+) -> SchedulerConfig:
+    """Normalise widget values into a valid :class:`SchedulerConfig`.
+
+    What: the safe constructor behind the ``LR Scheduler`` node. Widget values
+          are already range limited by the frontend, but a workflow file or an
+          API call can carry anything; every value is checked, reported and
+          clamped here once, at the edge, so ``torch.optim.lr_scheduler``
+          never raises deep inside a trainer.
+    In:   the raw widget values; see :class:`SchedulerConfig` for their meaning.
+    Out: a frozen config. ``name`` falls back to ``CosineAnnealingLR``;
+         ``step_size`` / ``t_max`` / ``patience`` are clamped to ``>= 1``
+         (``t_max`` keeps ``0`` as the "follow the trainer" sentinel),
+         ``gamma`` / ``factor`` to ``(0, 1)``, ``pct_start`` to ``(0, 1]`` and
+         ``eta_min`` to ``>= 0``.
+    """
+    text = str(name or "").strip()
+    if text not in SCHEDULER_OPTIONS:
+        LOGGER.warning(
+            "training_protocol: scheduler %r is not one of %s; using 'CosineAnnealingLR'.",
+            name, ", ".join(SCHEDULER_OPTIONS),
+        )
+        text = "CosineAnnealingLR"
+
+    def _at_least(value: int, floor: int, label: str, allow_zero: bool) -> int:
+        number = int(value)
+        if allow_zero and number == 0:
+            return 0
+        if number < floor:
+            LOGGER.warning(
+                "training_protocol: %s=%r is below %d; using %d.", label, value, floor, floor
+            )
+            return floor
+        return number
+
+    size = _at_least(step_size, 1, "step_size", allow_zero=False)
+    horizon = _at_least(t_max, 1, "t_max", allow_zero=True)
+    plateau_patience = _at_least(patience, 1, "patience", allow_zero=False)
+
+    decay = _finite(gamma, 0.1, "gamma")
+    if not 0.0 < decay < 1.0:
+        LOGGER.warning("training_protocol: gamma=%r is outside (0, 1); using 0.1.", gamma)
+        decay = 0.1
+    reduction = _finite(factor, 0.1, "factor")
+    if not 0.0 < reduction < 1.0:
+        LOGGER.warning("training_protocol: factor=%r is outside (0, 1); using 0.1.", factor)
+        reduction = 0.1
+    warmup = _finite(pct_start, 0.3, "pct_start")
+    if not 0.0 < warmup <= 1.0:
+        LOGGER.warning("training_protocol: pct_start=%r is outside (0, 1]; using 0.3.", pct_start)
+        warmup = 0.3
+    floor_lr = _finite(eta_min, 0.0, "eta_min")
+    if floor_lr < 0.0:
+        LOGGER.warning("training_protocol: eta_min=%r is negative; using 0.0.", eta_min)
+        floor_lr = 0.0
+
+    return SchedulerConfig(
+        name=text,
+        step_size=size,
+        gamma=decay,
+        t_max=horizon,
+        eta_min=floor_lr,
+        pct_start=warmup,
+        patience=plateau_patience,
+        factor=reduction,
+    )
+
+
+def build_scheduler(
+    config: SchedulerConfig,
+    optimizer: torch.optim.Optimizer,
+    total_steps: int,
+) -> tuple[object, bool]:
+    """Create the real ``torch.optim.lr_scheduler`` described by ``config``.
+
+    What: the only place the five supported schedulers are constructed, so a
+          trainer never branches on the scheduler name itself.
+    In:   config - a normalised :class:`SchedulerConfig`.
+          optimizer - the freshly built optimizer whose param groups carry the
+          base learning rate (``OneCycleLR`` reads it as ``max_lr``).
+          total_steps - the trainer's step count, used as ``T_max`` when
+          ``t_max`` is the "follow the trainer" sentinel ``0`` and as
+          ``total_steps`` of ``OneCycleLR``.
+    Out: ``(scheduler, needs_metric)``. ``needs_metric`` is ``True`` only for
+         ``ReduceLROnPlateau``, whose ``step`` takes the monitored value; the
+         caller then steps the scheduler with the smoothed training loss.
+         Every other scheduler is stepped without arguments, once per iteration
+         after ``optimizer.step()``.
+    """
+    steps = max(1, int(total_steps))
+    base_lr = optimizer.param_groups[0]["lr"]
+    if config.name == "StepLR":
+        return (
+            torch.optim.lr_scheduler.StepLR(
+                optimizer, step_size=max(1, config.step_size), gamma=config.gamma
+            ),
+            False,
+        )
+    if config.name == "ExponentialLR":
+        return (
+            torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=config.gamma),
+            False,
+        )
+    if config.name == "OneCycleLR":
+        return (
+            torch.optim.lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=base_lr,
+                total_steps=steps,
+                pct_start=config.pct_start,
+            ),
+            False,
+        )
+    if config.name == "ReduceLROnPlateau":
+        return (
+            torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=config.factor,
+                patience=config.patience,
+                min_lr=config.eta_min,
+            ),
+            True,
+        )
+    horizon = config.t_max if config.t_max > FOLLOW_TRAINER_STEPS else steps
+    return (
+        torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=horizon, eta_min=config.eta_min
+        ),
+        False,
+    )
+
+
+def clip_gradients(
+    config: OptimizerConfig, parameters
+) -> None:
+    """Apply the gradient clipping a trainer's optimizer config asks for.
+
+    What: the single place ``torch.nn.utils.clip_grad_norm_`` /
+          ``clip_grad_value_`` are called, so the two widgets of the
+          ``Optimizer`` node cannot drift into different behaviours per trainer.
+    In:   config - the trainer's :class:`OptimizerConfig`; ``grad_clip_norm``
+          and / or ``grad_clip_value`` are ``0`` (the default) meaning "off".
+          parameters - the module's parameters, as passed to the optimizer.
+    Out: nothing; the gradients of ``parameters`` are clipped in place. When
+         both widgets are set, the norm clip runs first and the value clip
+         second - a deterministic, documented combination rather than a silent
+         either / or.
+    """
+    trainable = [p for p in parameters if isinstance(p, nn.Parameter) and p.grad is not None]
+    if config.grad_clip_norm > 0.0 and trainable:
+        nn.utils.clip_grad_norm_(trainable, config.grad_clip_norm)
+    if config.grad_clip_value > 0.0 and trainable:
+        nn.utils.clip_grad_value_(trainable, config.grad_clip_value)
+
+
+def snapshot_state(module: nn.Module) -> dict[str, torch.Tensor]:
+    """Detached clone of every parameter of ``module`` (an early-stopping save point).
+
+    In:  module - usually the trainer's working copy.
+    Out: ``{name: tensor}``; every tensor is a plain clone, so later training
+         steps can never reach into the snapshot. ``restore_state`` accepts it.
+    """
+    return {
+        name: value.detach().clone()
+        for name, value in module.named_parameters()
+    }
+
+
+def restore_state(module: nn.Module, state: Mapping[str, torch.Tensor]) -> None:
+    """Copy a :func:`snapshot_state` payload back into ``module`` (a rollback).
+
+    In:  module - the module whose parameters are overwritten.
+         state - a payload of :func:`snapshot_state`; entries whose shape no
+         longer matches are skipped, which cannot happen for a snapshot of the
+         same module but keeps a hand-edited payload from raising mid-roll-back.
+    """
+    with torch.no_grad():
+        for name, value in module.named_parameters():
+            saved = state.get(name)
+            if saved is not None and tuple(saved.shape) == tuple(value.shape):
+                value.copy_(saved.to(device=value.device, dtype=value.dtype))
+
+
+class EarlyStopTracker:
+    """Patience-based early stopping on the moving average of the step loss.
+
+    What: the monitor half of early stopping. A raw per-step loss is noisy, so
+          the monitored value is the moving average of the last
+          :data:`EARLY_STOP_SMOOTHING` step losses; a value only counts as an
+          improvement when it beats the best one by more than ``min_delta``.
+          The tracker owns no tensors - the caller snapshots the parameters on
+          :meth:`improved` and rolls back on :meth:`update` returning ``True``
+          - so the decision is a pure function of the loss sequence and a run
+          is exactly reproducible for a given seed.
+    In:   patience - how many *steps without improvement* are tolerated before
+          stopping; ``0`` disables the monitor entirely.
+          min_delta - the smallest improvement that resets the patience.
+    Out: call :meth:`update` once per step with the raw step loss; it returns
+         ``True`` when training should stop (patience exhausted), and
+         :meth:`improved` reports whether the just-updated step set a new best
+         (the caller snapshots at that point).
+    """
+
+    def __init__(self, patience: int, min_delta: float) -> None:
+        self.patience = max(0, int(patience))
+        self.min_delta = max(0.0, float(min_delta))
+        self.best: float | None = None
+        self.best_step: int = -1
+        self._window: list[float] = []
+        self._since_best = 0
+
+    @property
+    def enabled(self) -> bool:
+        """True when the monitor can ever fire (``patience > 0``)."""
+        return self.patience > 0
+
+    def update(self, step: int, value: float) -> bool:
+        """Feed one step loss; return ``True`` when training should stop.
+
+        In:  step - the 0-based step index (used for the best-step report).
+             value - the raw loss of that step.
+        Out: ``False`` while patience is not exhausted or the monitor is off;
+             ``True`` once ``patience`` steps passed without an improvement of
+             more than ``min_delta``.  The first step always counts as the
+             initial best so a flat loss eventually stops the run.
+        """
+        if not self.enabled:
+            return False
+        self._window.append(float(value))
+        if len(self._window) > EARLY_STOP_SMOOTHING:
+            self._window.pop(0)
+        monitored = sum(self._window) / len(self._window)
+        if self.best is None or monitored < self.best - self.min_delta:
+            self.best = monitored
+            self.best_step = step
+            self._since_best = 0
+        else:
+            self._since_best += 1
+        return self._since_best > self.patience
+
+    @property
+    def improved(self) -> bool:
+        """True when the most recent :meth:`update` set a new best value."""
+        return self.enabled and self._since_best == 0
+
+    def describe_stop(self) -> str:
+        """One-line report for the stop case: best step, best value, patience."""
+        return (
+            f"no improvement for {self._since_best} step(s) "
+            f"(patience {self.patience}, min_delta {self.min_delta:g}); "
+            f"best monitored loss {self.best:.6g} at step {self.best_step}"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -648,16 +1014,23 @@ __all__ = [
     "BIAS_SUFFIX",
     "DEFAULT_LR",
     "DEFAULT_WEIGHT_DECAY",
+    "EARLY_STOP_SMOOTHING",
+    "EarlyStopTracker",
+    "FOLLOW_TRAINER_STEPS",
     "LAYER_PREFIX",
     "MLP",
     "OPTIMIZER_OPTIONS",
     "OptimizerConfig",
     "PARAMS_TEXT_PREFIX",
+    "SCHEDULER_OPTIONS",
+    "SchedulerConfig",
     "WEIGHT_SUFFIX",
     "apply_activation",
     "as_parameter_dict",
     "build_mlp",
     "build_optimizer",
+    "build_scheduler",
+    "clip_gradients",
     "decode_parameters",
     "encode_parameters",
     "load_into_module",
@@ -666,5 +1039,8 @@ __all__ = [
     "parameter_count",
     "parameter_names",
     "parameters_to_tensors",
+    "restore_state",
+    "scheduler_config",
     "seeded_rng",
+    "snapshot_state",
 ]
