@@ -36,8 +36,10 @@ _DOC = _ROOT / "comfydl" / "FUNCTIONS_zh.md"
 _OUT = _ROOT / "locales" / "zh" / "nodeDefs.json"
 
 # 一个中文小节：标题行 + 紧随其后的 `- **类名**：` 行，直到下一个小节。
+# 标题用 [^\n]+ 限定单行：开启 re.S 后 `.+?` 会跨小节吞文本，把 Network & Layers
+# 这类纯表格分组的标题一路匹配到 18 节的 `- **类名**：` 行，生成超长垃圾标题。
 _ENTRY_RE = re.compile(
-    r"^### (.+?)\n- \*\*类名\*\*：`(\w+)`(.*?)(?=^### |\Z)", re.M | re.S
+    r"^### ([^\n]+?)\n- \*\*类名\*\*：`(\w+)`(.*?)(?=^### |\Z)", re.M | re.S
 )
 _FUNC_RE = re.compile(r"^- \*\*功能\*\*：(.+)$", re.M)
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
