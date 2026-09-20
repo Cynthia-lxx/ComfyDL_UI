@@ -816,6 +816,46 @@ def _f_optimizer(cfg: dict, name: str) -> Any:
     return protocol.optimizer_config()
 
 
+def _f_scheduler(cfg: dict, name: str) -> Any:
+    """``SCHEDULER`` dummy: what the ``LR Scheduler`` node publishes by default."""
+    from comfy import training_protocol as protocol
+
+    return protocol.scheduler_config()
+
+
+def _regression_pair() -> Any:
+    """A matched float ``(prediction, target)`` pair for the loss / metric nodes.
+
+    Same shape, deterministic, and *not* the values the generic ``TENSOR`` dummy
+    produces, so the checks can pin the default widget (``mse`` / ``mae``)
+    against exactly these numbers.
+    """
+    import torch
+
+    generator = torch.Generator().manual_seed(11)
+    return torch.randn(5, 3, generator=generator), torch.randn(5, 3, generator=generator)
+
+
+def _classification_pair() -> Any:
+    """A matched ``(logits, class-index)`` pair, 4 classes over 6 samples."""
+    import torch
+
+    generator = torch.Generator().manual_seed(12)
+    logits = torch.randn(6, 4, generator=generator)
+    classes = torch.randint(0, 4, (6,), generator=generator)
+    return logits, classes
+
+
+def _f_loss_prediction(cfg: dict, name: str) -> Any:
+    """The prediction half of the regression pair (default run: loss=mse)."""
+    return _regression_pair()[0]
+
+
+def _f_loss_target(cfg: dict, name: str) -> Any:
+    """The target half of the regression pair (default run: loss=mse)."""
+    return _regression_pair()[1]
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -841,6 +881,7 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "VAE": _f_protocol_vae,
     "PARAMS": _f_params,
     "OPTIMIZER": _f_optimizer,
+    "SCHEDULER": _f_scheduler,
     "VOCAB": _f_vocab_dummy,
     "MODELSPEC": _f_lm_spec,
     "NNMODEL": _f_lm_model,
@@ -1025,6 +1066,13 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
         "y": lambda cfg, name: _training_pair()[1],
     },
     "TrainingParametersMerge": {"params_b": _f_params_alt},
+    # Loss / Metrics: a *matched* float pair, so the default widgets (mse / mae)
+    # run on data that is actually valid for them.
+    "TrainingLoss": {"prediction": _f_loss_prediction, "target": _f_loss_target},
+    "TrainingMetrics": {"prediction": _f_loss_prediction, "target": _f_loss_target},
+    # Evaluate: the NNMODEL path on the shared LM world (the optional 'params'
+    # slot stays unconnected, so 'model' has to be wired for the node to run).
+    "TrainingEvaluate": {"model": _f_lm_model, "x": _f_lm_x, "y": _f_lm_y},
 }
 
 
@@ -1766,6 +1814,342 @@ def _check_training_loop(result: Any, args: dict[str, Any]) -> None:
     else:
         raise AssertionError("mismatched x/y sample counts must be refused")
 
+    # --- step9: scheduler wiring, gradient clipping, early stopping, purity ---
+    features, targets = _training_pair()
+    x_before, y_before = features.clone(), targets.clone()
+    (step_lr,) = _rerun_v3("TrainingLRScheduler", scheduler="StepLR", step_size=25)
+    clipped = protocol.optimizer_config("SGD", lr=0.1, grad_clip_norm=1e-6)
+    (plateau,) = _rerun_v3("TrainingLRScheduler", scheduler="ReduceLROnPlateau")
+    scheduled, sched_loss, sched_curve, _ = _rerun_v3(
+        "TrainingLoop",
+        x=features,
+        y=targets,
+        optimizer=clipped,
+        scheduler=step_lr,
+        steps=50,
+    )
+    assert torch.equal(x_before, features) and torch.equal(y_before, targets), (
+        "the trainer mutated its input tensors"
+    )
+    assert tuple(sched_curve.shape) == (50,), sched_curve.shape
+    # the plateau branch (step-with-metric) must run too, not just compile
+    _rerun_v3(
+        "TrainingLoop",
+        x=features,
+        y=targets,
+        optimizer=protocol.optimizer_config(),
+        scheduler=plateau,
+        steps=10,
+    )
+    # bit-identical rerun of the same seed: clipping + scheduler stay deterministic
+    again = _rerun_v3(
+        "TrainingLoop", x=features, y=targets, optimizer=clipped, scheduler=step_lr, steps=50
+    )
+    assert torch.equal(sched_curve, again[2]), "the same seed did not reproduce the curve"
+    assert torch.equal(scheduled["layer0.weight"], again[0]["layer0.weight"]), (
+        "the same seed did not reproduce the parameters"
+    )
+    # clipping must actually change the update the trainer makes
+    unclipped = _rerun_v3(
+        "TrainingLoop",
+        x=features,
+        y=targets,
+        optimizer=protocol.optimizer_config("SGD", lr=0.1),
+        steps=5,
+    )
+    clipped_run = _rerun_v3(
+        "TrainingLoop", x=features, y=targets, optimizer=clipped, steps=5
+    )
+    assert not torch.equal(unclipped[0]["layer0.weight"], clipped_run[0]["layer0.weight"]), (
+        "grad_clip_norm did not change the parameter update"
+    )
+    # early stopping: once the per-step improvement of the smoothed loss stays
+    # under min_delta, patience runs out and the run ends before 'steps'
+    stopped_loss_hist = _rerun_v3(
+        "TrainingLoop",
+        x=features,
+        y=targets,
+        optimizer=protocol.optimizer_config("AdamW"),
+        hidden="",
+        steps=200,
+        early_stop_patience=3,
+        early_stop_min_delta=0.5,
+    )
+    stopped_curve = stopped_loss_hist[2]
+    assert 1 <= stopped_curve.numel() < 200, (
+        f"early stopping must fire before 200 steps on a converged problem, "
+        f"got {stopped_curve.numel()}"
+    )
+    assert float(stopped_loss_hist[1]) == float(stopped_curve[-1]), (
+        "the loss output must stay the last entry of the truncated history"
+    )
+
+
+def _check_training_scheduler(result: Any, args: dict[str, Any]) -> None:
+    """The published config must step exactly like its torch.optim reference.
+
+    The node's own value is a configuration, so the check is about
+    ``training_protocol.build_scheduler``: for every scheduler of the dropdown,
+    ten steps of a built scheduler and of the same-named torch scheduler driven
+    over identical optimizers must report the same learning rate after *every*
+    step.  Also covers the explicit ``t_max`` override and the unknown-name
+    fallback.
+    """
+    import torch
+
+    from comfy import training_protocol as protocol
+
+    (config,) = _as_tuple(result)
+    assert isinstance(config, protocol.SchedulerConfig)
+    assert config.name == "CosineAnnealingLR", config.name
+    assert config.t_max == protocol.FOLLOW_TRAINER_STEPS
+
+    total = 10
+    for name in protocol.SCHEDULER_OPTIONS:
+        (cfg,) = _rerun_v3("TrainingLRScheduler", scheduler=name)
+        model = protocol.build_mlp((2, 4, 1), seed=0)
+        optimizer = protocol.build_optimizer(protocol.optimizer_config(), model.parameters())
+        reference_model = protocol.build_mlp((2, 4, 1), seed=0)
+        reference = protocol.build_optimizer(
+            protocol.optimizer_config(), reference_model.parameters()
+        )
+        built, needs_metric = protocol.build_scheduler(cfg, optimizer, total_steps=total)
+        assert needs_metric == (name == "ReduceLROnPlateau"), name
+        if name == "StepLR":
+            ref = torch.optim.lr_scheduler.StepLR(
+                reference, step_size=cfg.step_size, gamma=cfg.gamma
+            )
+        elif name == "ExponentialLR":
+            ref = torch.optim.lr_scheduler.ExponentialLR(reference, gamma=cfg.gamma)
+        elif name == "OneCycleLR":
+            ref = torch.optim.lr_scheduler.OneCycleLR(
+                reference,
+                max_lr=protocol.DEFAULT_LR,
+                total_steps=total,
+                pct_start=cfg.pct_start,
+            )
+        elif name == "ReduceLROnPlateau":
+            ref = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                reference,
+                mode="min",
+                factor=cfg.factor,
+                patience=cfg.patience,
+                min_lr=cfg.eta_min,
+            )
+        else:
+            ref = torch.optim.lr_scheduler.CosineAnnealingLR(
+                reference, T_max=total, eta_min=cfg.eta_min
+            )
+        metric = 0.5
+        for _step in range(total):
+            if needs_metric:
+                built.step(metric)
+                ref.step(metric)
+            else:
+                built.step()
+                ref.step()
+            lr_built = optimizer.param_groups[0]["lr"]
+            lr_ref = reference.param_groups[0]["lr"]
+            assert abs(lr_built - lr_ref) < 1e-12, f"{name}: {lr_built} != {lr_ref}"
+
+    # an explicit t_max wins over the trainer's step count
+    (explicit,) = _rerun_v3("TrainingLRScheduler", scheduler="CosineAnnealingLR", t_max=4)
+    assert explicit.t_max == 4, explicit.t_max
+    model = protocol.build_mlp((2, 4, 1), seed=0)
+    optimizer = protocol.build_optimizer(protocol.optimizer_config(), model.parameters())
+    built, _ = protocol.build_scheduler(explicit, optimizer, total_steps=100)
+    ref_optimizer = torch.optim.AdamW(
+        protocol.build_mlp((2, 4, 1), seed=0).parameters(), lr=protocol.DEFAULT_LR
+    )
+    ref = torch.optim.lr_scheduler.CosineAnnealingLR(ref_optimizer, T_max=4)
+    for _step in range(6):
+        built.step()
+        ref.step()
+        assert abs(optimizer.param_groups[0]["lr"] - ref_optimizer.param_groups[0]["lr"]) < 1e-12
+
+    # an unknown name falls back to cosine with a warning, not an exception
+    (fallback,) = _rerun_v3("TrainingLRScheduler", scheduler="NotAScheduler")
+    assert fallback.name == "CosineAnnealingLR", fallback.name
+
+
+def _check_training_loss(result: Any, args: dict[str, Any]) -> None:
+    """Every loss must match its torch.nn.functional reference on fixed data."""
+    import torch
+    import torch.nn.functional as F
+
+    prediction, target = args["prediction"], args["target"]
+    (value,) = _as_tuple(result)
+    assert value.dim() == 0, "the loss must be a scalar"
+    assert torch.allclose(value, F.mse_loss(prediction, target)), (
+        "the default (mse) does not match torch.nn.functional.mse_loss"
+    )
+
+    logits, classes = _classification_pair()
+    one_hot = F.one_hot(classes, logits.shape[1]).float()
+    cases = [
+        ("l1", prediction, target, F.l1_loss(prediction, target)),
+        ("smooth_l1", prediction, target, F.smooth_l1_loss(prediction, target)),
+        ("bce_with_logits", prediction, target, F.binary_cross_entropy_with_logits(prediction, target)),
+        (
+            "kl_div",
+            prediction,
+            target,
+            F.kl_div(F.log_softmax(prediction, -1), F.softmax(target, -1), reduction="batchmean"),
+        ),
+        ("cross_entropy", logits, classes, F.cross_entropy(logits, classes)),
+        # one-hot targets take the argmax path and must land on the same number
+        ("cross_entropy", logits, one_hot, F.cross_entropy(logits, classes)),
+    ]
+    for name, p, t, expected in cases:
+        (got,) = _rerun_v3("TrainingLoss", prediction=p, target=t, loss=name)
+        assert torch.allclose(got, expected, atol=1e-6), (
+            f"{name}: {float(got)} != {float(expected)}"
+        )
+
+    # shape mismatches are refused with a readable message
+    try:
+        _rerun_v3("TrainingLoss", prediction=torch.randn(3, 2), target=torch.randn(4, 2))
+    except ValueError as exc:
+        assert "same shape" in str(exc), f"the mismatch must be explained, got: {exc}"
+    else:
+        raise AssertionError("mismatched loss inputs must be refused")
+
+
+def _check_training_metrics(result: Any, args: dict[str, Any]) -> None:
+    """Every metric must match its torch reference on fixed data."""
+    import torch
+    import torch.nn.functional as F
+
+    prediction, target = args["prediction"], args["target"]
+    (value,) = _as_tuple(result)
+    assert value.dim() == 0, "the metric must be a scalar"
+    assert torch.allclose(value, (prediction - target).abs().mean()), (
+        "the default (mae) does not match the mean absolute error"
+    )
+
+    (rmse,) = _rerun_v3("TrainingMetrics", prediction=prediction, target=target, metric="rmse")
+    assert torch.allclose(rmse, (prediction - target).pow(2).mean().sqrt())
+
+    logits, classes = _classification_pair()
+    (accuracy,) = _rerun_v3("TrainingMetrics", prediction=logits, target=classes, metric="accuracy")
+    assert torch.allclose(accuracy, (logits.argmax(1) == classes).float().mean()), (
+        "accuracy is not the argmax hit rate"
+    )
+    k = min(3, logits.shape[1])
+    expected_top3 = (
+        (logits.topk(k, dim=1).indices == classes.reshape(-1, 1)).any(dim=1).float().mean()
+    )
+    (top3,) = _rerun_v3("TrainingMetrics", prediction=logits, target=classes, metric="top_3")
+    assert torch.allclose(top3, expected_top3), "top_3 is not the top-3 hit rate"
+    k = min(5, logits.shape[1])
+    expected_top5 = (
+        (logits.topk(k, dim=1).indices == classes.reshape(-1, 1)).any(dim=1).float().mean()
+    )
+    (top5,) = _rerun_v3("TrainingMetrics", prediction=logits, target=classes, metric="top_5")
+    assert torch.allclose(top5, expected_top5), "top_5 is not the top-5 hit rate"
+    (perplexity,) = _rerun_v3(
+        "TrainingMetrics", prediction=logits, target=classes, metric="perplexity"
+    )
+    assert torch.allclose(perplexity, F.cross_entropy(logits, classes).exp()), (
+        "perplexity is not exp(cross_entropy)"
+    )
+
+    # an unknown metric falls back to mae with a warning, not an exception
+    (fallback,) = _rerun_v3(
+        "TrainingMetrics", prediction=prediction, target=target, metric="nope"
+    )
+    assert torch.allclose(fallback, (prediction - target).abs().mean())
+
+
+def _check_training_evaluate(result: Any, args: dict[str, Any]) -> None:
+    """Evaluate must report the model's own numbers, and rebuild PARAMS networks.
+
+    The default run exercises the NNMODEL path on the shared LM world: the
+    prediction has to be the model's logits on ``x``, the loss the token-level
+    cross entropy (targets built exactly like Language Model Train reads the
+    Sliding Window pair) and the metric the accuracy over all positions.  Then
+    the PARAMS path is re-run against a hand-built MLP, including 'none' for
+    the metric and the model-wins-over-params precedence.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    loss, metric, prediction = _as_tuple(result)
+    model, x, y = args["model"], args["x"], args["y"]
+    assert tuple(prediction.shape) == (x.shape[0], x.shape[1], model.vocab_size), (
+        "the prediction is not the model's logits"
+    )
+    was_training = model.training
+    model.eval()
+    try:
+        with torch.no_grad():
+            logits = model(x)
+    finally:
+        model.train(was_training)
+    targets = torch.cat([x[:, 1:], y.reshape(-1, 1).long()], dim=1)
+    expected_loss = F.cross_entropy(
+        logits.reshape(-1, model.vocab_size), targets.reshape(-1)
+    )
+    assert torch.allclose(loss, expected_loss, atol=1e-6), (
+        f"token-level loss {float(loss)} != {float(expected_loss)}"
+    )
+    expected_accuracy = (logits.argmax(-1) == targets).float().mean()
+    assert torch.allclose(metric, expected_accuracy, atol=1e-6), (
+        f"auto metric {float(metric)} != accuracy {float(expected_accuracy)}"
+    )
+
+    # explicit choices instead of auto
+    _, ppl, _ = _rerun_v3(
+        "TrainingEvaluate", model=model, x=x, y=y, loss="cross_entropy", metric="perplexity"
+    )
+    assert torch.allclose(ppl, expected_loss.exp(), atol=1e-6), (
+        "perplexity is not exp(token-level cross entropy)"
+    )
+
+    # PARAMS path: a hand-built two-layer MLP, checked against manual math
+    with torch.inference_mode(False):
+        params = {
+            "layer0.weight": torch.nn.Parameter(torch.randn(3, 2)),
+            "layer0.bias": torch.nn.Parameter(torch.randn(3)),
+            "layer1.weight": torch.nn.Parameter(torch.randn(1, 3)),
+            "layer1.bias": torch.nn.Parameter(torch.randn(1)),
+        }
+    xx = torch.randn(6, 2)
+    yy = torch.randn(6, 1)
+    p_loss, p_metric, p_pred = _rerun_v3(
+        "TrainingEvaluate", model=None, params=params, x=xx, y=yy, activation="relu"
+    )
+    hidden = F.relu(xx @ params["layer0.weight"].T + params["layer0.bias"])
+    ref = hidden @ params["layer1.weight"].T + params["layer1.bias"]
+    assert torch.allclose(p_pred, ref, atol=1e-6), (
+        "the rebuilt MLP does not apply relu between the hidden layers"
+    )
+    assert torch.allclose(p_loss, F.mse_loss(ref, yy), atol=1e-6)
+    assert torch.allclose(p_metric, (ref - yy).abs().mean(), atol=1e-6)
+    for value in params.values():
+        assert not value.requires_grad or value.grad is None
+
+    # metric 'none' reports nan
+    n_loss, n_metric, _ = _rerun_v3(
+        "TrainingEvaluate", model=None, params=params, x=xx, y=yy, metric="none"
+    )
+    assert torch.isnan(n_metric) and torch.allclose(n_loss, F.mse_loss(ref, yy), atol=1e-6)
+
+    # a wired model wins over a wired params set
+    m_loss, _, m_pred = _rerun_v3(
+        "TrainingEvaluate", model=model, params=params, x=x, y=y
+    )
+    assert tuple(m_pred.shape) == prediction.shape, "params must not override the model"
+
+    # neither slot wired -> readable error
+    try:
+        _rerun_v3("TrainingEvaluate", model=None, params=None, x=x, y=y)
+    except ValueError as exc:
+        assert "wire either" in str(exc).lower(), f"got: {exc}"
+    else:
+        raise AssertionError("Evaluate without a model or params must be refused")
+
+
 
 def _check_training_save_parameters(result: Any, args: dict[str, Any]) -> None:
     """The written file must round trip exactly and be readable by Load Parameters."""
@@ -2273,6 +2657,38 @@ def _check_lm_train(result: Any, args: dict[str, Any]) -> None:
     else:
         raise AssertionError("a mismatched y must be refused")
 
+    # --- step9: scheduler wiring, clipping and early stopping on the LM trainer ---
+    from comfy import training_protocol as protocol
+
+    (cosine,) = _rerun_v3("TrainingLRScheduler", scheduler="CosineAnnealingLR")
+    clipped_lm = dict(
+        rerun, optimizer=protocol.optimizer_config("AdamW", grad_clip_value=1e-4)
+    )
+    _, _, sched_curve = _rerun_v3("LanguageModelTrain", **clipped_lm, scheduler=cosine)
+    assert tuple(sched_curve.shape) == (10,), "a scheduled run must still report every step"
+    _, _, sched_curve_b = _rerun_v3("LanguageModelTrain", **clipped_lm, scheduler=cosine)
+    assert torch.equal(sched_curve, sched_curve_b), (
+        "the same seed did not reproduce the scheduled run"
+    )
+    # early stopping with a coarse min_delta ends a 40-step run early
+    _, stopped_lm_loss, stopped_lm = _rerun_v3(
+        "LanguageModelTrain",
+        model=args["model"],
+        x=args["x"],
+        y=args["y"],
+        optimizer=args["optimizer"],
+        steps=40,
+        seed=3,
+        early_stop_patience=3,
+        early_stop_min_delta=1.0,
+    )
+    assert 1 <= stopped_lm.numel() < 40, (
+        f"early stopping must fire before 40 steps with min_delta 1.0, got {stopped_lm.numel()}"
+    )
+    assert stopped_lm_loss == float(stopped_lm[-1]), (
+        "the loss output must stay the last entry of the truncated history"
+    )
+
 
 def _check_lm_forward(result: Any, args: dict[str, Any]) -> None:
     """The forward must map a 1-D stream to (1, L, vocab) finite logits."""
@@ -2411,7 +2827,11 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "TrainingParametersMerge": [_check_training_parameters_merge],
     "TrainingParametersExtract": [_check_training_parameters_extract],
     "TrainingOptimizer": [_check_training_optimizer],
+    "TrainingLRScheduler": [_check_training_scheduler],
     "TrainingLoop": [_check_training_loop],
+    "TrainingLoss": [_check_training_loss],
+    "TrainingMetrics": [_check_training_metrics],
+    "TrainingEvaluate": [_check_training_evaluate],
     "TrainingSaveParameters": [_check_training_save_parameters],
     "TrainingLoadParameters": [_check_training_load_parameters],
     "TrainingParametersToText": [_check_training_parameters_to_text],
