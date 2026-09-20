@@ -391,6 +391,53 @@ reform 第八步（含 Save / Load Language Model 持久化对）后实测：`IM
 `279 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 196 个节点、
 34 个分类（109 个 ComfyDL + 87 个核心节点）。
 
+## Live Progress Reporting (实时进度报告)
+
+The long-running nodes report progress to the UI through `comfy.utils.ProgressBar`. The global
+hook installed by `main.py` resolves the *executing* node from
+`comfy_execution.utils.get_executing_context`, so a node that never knows its own id still lands
+on the right bar — and the same call performs
+`model_management.throw_exception_if_processing_interrupted()`, which means any reported loop
+becomes cancellable as a side effect.
+
+| Node | Loop | Reported unit |
+|---|---|---|
+| Training Loop | optimizer steps | one step |
+| Language Model Train | optimizer steps | one step |
+| Language Model Generate | generated tokens | one token |
+| Sliding Window | stream positions | one sample |
+
+`comfy/lm_protocol.generate_tokens` gained an optional `progress(done, total)` callback instead
+of importing UI machinery, so the protocol module keeps its `torch`-only imports; the node
+supplies a lambda that forwards to the bar. With no hook installed (a bare interpreter, the
+smoke tester) `ProgressBar` is a no-op, so the same code still runs headless.
+
+**Measured:** the registry is unchanged at 302 nodes across 46 categories and the smoke tester
+still reports `279 PASS / 23 SKIP / 0 FAIL`; a new dedicated script
+`cdl_smoke_tests/test_progress_reporting.py` pins the contract (`11 PASS`) — the advertised
+totals and update counts per node, the protocol-level callback, and a real hook receiving the
+final `value == total`.
+
+长耗时节点现在通过 `comfy.utils.ProgressBar` 向 UI 报告进度。`main.py` 安装的全局 hook 借助
+`comfy_execution.utils.get_executing_context` 解析**正在执行**的节点，因此节点本身无需知道自己的
+id 就能落在正确的进度条上——且同一调用会执行
+`model_management.throw_exception_if_processing_interrupted()`，所以"报了进度的循环"顺带变成可中断。
+
+| 节点 | 循环 | 上报单位 |
+|---|---|---|
+| Training Loop | 优化器步 | 每步 |
+| Language Model Train | 优化器步 | 每步 |
+| Language Model Generate | 生成 token | 每 token |
+| Sliding Window | 流位置 | 每样本 |
+
+`comfy/lm_protocol.generate_tokens` 改为接受可选的 `progress(done, total)` 回调，而不是 import 任何
+UI 机制，从而保持该协议模块只依赖 `torch`；节点传入一个转发到进度条的 lambda。未安装 hook 时
+（裸解释器、冒烟测试器）`ProgressBar` 是空操作，同一份代码仍可无头运行。
+
+**实测**：注册表不变，仍为 302 个节点 / 46 个分类；冒烟测试器仍给出 `279 PASS / 23 SKIP / 0 FAIL`；
+新增专项脚本 `cdl_smoke_tests/test_progress_reporting.py` 固化该契约（`11 PASS`）——逐节点校验声明的
+总量与更新次数、协议层回调，以及真实 hook 收到的最终 `value == total`。
+
 ## Rollback (回退)
 
 The migration was developed on `experiment/embed-comfydl` and merged into `master` with

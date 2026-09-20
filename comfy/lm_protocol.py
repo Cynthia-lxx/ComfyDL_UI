@@ -56,7 +56,7 @@ import dataclasses
 import json
 import math
 from collections import Counter
-from typing import Iterator, Mapping, Sequence
+from typing import Callable, Iterator, Mapping, Sequence
 
 import torch
 import torch.nn as nn
@@ -464,6 +464,7 @@ def generate_tokens(
     num_tokens: int,
     temperature: float = 1.0,
     seed: int = 0,
+    progress: Callable[[int, int], None] | None = None,
 ) -> torch.Tensor:
     """Autoregressive next-token loop on a local ``torch.Generator``.
 
@@ -478,6 +479,9 @@ def generate_tokens(
           unchanged, ``< 1`` sharpens, ``> 1`` flattens.
           seed - seed of the local generator; the same seed and inputs always
           reproduce the same continuation.
+          progress - optional ``progress(done, total)`` callback invoked once
+          per generated token. Injected rather than imported so this protocol
+          module stays free of any UI/ComfyUI machinery.
     Out:  a 1-D long tensor: the prefix followed by the generated tokens.
     """
     ids = [int(index) for index in prefix_ids]
@@ -491,7 +495,7 @@ def generate_tokens(
         sequence = torch.tensor([ids] if ids else [[0]], dtype=torch.long)
         generator = torch.Generator()
         generator.manual_seed(int(seed))
-        for _ in range(count):
+        for step in range(count):
             logits = model.next_token_logits(sequence)
             if temperature is None or float(temperature) <= 0.0:
                 choice = int(torch.argmax(logits[0]).item())
@@ -503,6 +507,8 @@ def generate_tokens(
             sequence = torch.cat(
                 [sequence, torch.tensor([[choice]], dtype=torch.long)], dim=1
             )
+            if progress is not None:
+                progress(step + 1, count)
         return sequence.reshape(-1)
     finally:
         model.train(was_training)

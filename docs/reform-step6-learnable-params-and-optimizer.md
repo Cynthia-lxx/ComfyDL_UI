@@ -170,6 +170,10 @@ step3 的 `running_mean` 控件文本、step5 的 `prefix_strip` 是同一种「
 6. 收尾：`optimizer.zero_grad(set_to_none=True)`、逐参数 `param.grad = None`，输出张量全部
    `detach()` → 不把 autograd 图带进 ComfyUI 的输出缓存。
 7. `steps` 超过 `STEPS_WARN_THRESHOLD`（20000）时告警（循环是 Python 的，多打一个 0 很容易）。
+8. 每一步调用一次 `comfy.utils.ProgressBar(iterations).update(1)`：`main.py` 注册的全局 hook 会把它
+   绑定到**正在执行的节点**（`comfy_execution.utils.get_executing_context`），并顺带执行
+   `throw_exception_if_processing_interrupted()`——因此 100000 步的训练既可见又可取消；无 hook 的
+   环境（裸解释器、冒烟测试器）下是空操作，不影响无头运行。
 
 ### 5.4 持久化（4 个，两条通道）
 

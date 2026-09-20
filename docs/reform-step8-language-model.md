@@ -59,6 +59,13 @@ Transformer Block ×N → Build` 产出模型；`TrainingOptimizer + 模型 + (x
   恢复），文本四件套落在新文件 `nodes_nlp.py`；同理 `comfy/model_protocol.py` 与上游文件撞名，改名
   `comfy/lm_protocol.py`。新增节点文件两个（`nodes_nlp.py`、`nodes_lm.py`）均已加入 `nodes.py`
   `extras_files` 白名单。
+- **实时进度报告：用 `comfy.utils.ProgressBar`，协议层只暴露回调**。`Language Model Train` /
+  `Language Model Generate` / `Sliding Window`（以及 step6 的 `Training Loop`）在循环的每一步调用一次
+  进度条；`main.py` 注册的全局 hook 会自动把更新绑定到**正在执行的节点**
+  （`comfy_execution.utils.get_executing_context`），并顺带执行
+  `throw_exception_if_processing_interrupted()`——于是长训练 / 长生成不仅看得见进度，还能被 UI 的
+  "取消"真正打断。`comfy/lm_protocol.generate_tokens` 新增可选 `progress(done, total)` 回调，而不是
+  import 任何 UI 机制，从而保持该协议模块只依赖 `torch`（脱水规则）。无 hook 环境下进度条是空操作。
 
 ## 4. 冒烟器扩展 / Smoke Extensions
 
@@ -76,6 +83,9 @@ Transformer Block ×N → Build` 产出模型；`TrainingOptimizer + 模型 + (x
     Build：同 seed 同权重 / 异 seed 异权重 / 前向形状；Train：loss 下降、输入模型未被污染、同 seed
     复现、y 形状错配报错；Forward：`(1, L, vocab)` 有限值；Generate：前缀保留、贪心与采样确定性、
     `prefix_ids` 覆盖、无 vocab 时空文本。
+- 进度报告（后续补测）：独立脚本 `cdl_smoke_tests/test_progress_reporting.py` 用记录器替换
+  `comfy.utils.ProgressBar`，逐个校验四个长循环节点声明的总量与更新次数、`generate_tokens` 的
+  `progress` 回调序列，并临时安装真实 hook 验证末次 `value == total`（`11 PASS`）。
 
 ## 5. 实测 / Measurements
 

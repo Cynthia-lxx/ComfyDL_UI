@@ -22,6 +22,7 @@ Build / Train / Forward / Generate) consumes exactly these tensors.
 import torch
 from typing_extensions import override
 
+import comfy.utils
 from comfy import lm_protocol as mp
 from comfy_api.latest import ComfyExtension, io
 
@@ -278,9 +279,13 @@ class TextSlidingWindow(io.ComfyNode):
         size = max(1, int(window))
         contexts: list[list[int]] = []
         targets: list[int] = []
+        # One sample per stream position: report it so a long corpus shows a live
+        # bar instead of a frozen node (and the loop stays interruptible).
+        pbar = comfy.utils.ProgressBar(max(0, flat.numel() - size))
         for context, target in mp.iter_windows(flat.tolist(), size):
             contexts.append(context)
             targets.append(target)
+            pbar.update(1)
         if not contexts:
             raise ValueError(
                 f"the stream holds {flat.numel()} token(s); a window of {size} "

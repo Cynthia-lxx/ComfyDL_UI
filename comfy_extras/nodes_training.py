@@ -947,6 +947,10 @@ class TrainingLoop(io.ComfyNode):
                 )
                 notes.append(_summarize_warm_start(loaded, missing, skipped))
             trainer = tp.build_optimizer(optimizer, model.parameters())
+            # Live progress: one update per optimizer step.  The ProgressBar hook
+            # binds itself to the executing node (see comfy_execution.utils) and
+            # doubles as the interrupt check, so long runs stay cancellable.
+            pbar = comfy.utils.ProgressBar(iterations)
             for _ in range(iterations):
                 if per_step:
                     order = torch.randperm(data.samples, generator=shuffler)[:per_step].to(device)
@@ -961,6 +965,7 @@ class TrainingLoop(io.ComfyNode):
                 # Detached scalars, stacked into one tensor at the end: the loss
                 # history must not keep the graph (or the dataset) alive.
                 history.append(step_loss.detach().reshape(()))
+                pbar.update(1)
             trainer.zero_grad(set_to_none=True)
             for parameter in model.parameters():
                 parameter.grad = None

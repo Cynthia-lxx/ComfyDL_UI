@@ -555,6 +555,10 @@ class LanguageModelTrain(io.ComfyNode):
             with tp.seeded_rng(int(seed)):
                 trainer = tp.build_optimizer(config, trainee.parameters())
                 trainee.train()
+                # Live progress: one update per optimizer step.  The ProgressBar
+                # hook binds itself to the executing node and doubles as the
+                # interrupt check, so a long run stays cancellable from the UI.
+                pbar = comfy.utils.ProgressBar(iterations)
                 for _ in range(iterations):
                     if per_step:
                         order = torch.randperm(samples, generator=shuffler)[:per_step]
@@ -570,6 +574,7 @@ class LanguageModelTrain(io.ComfyNode):
                     step_loss.backward()
                     trainer.step()
                     history.append(step_loss.detach().reshape(()))
+                    pbar.update(1)
                 trainer.zero_grad(set_to_none=True)
             trainee.eval()
             for parameter in trainee.parameters():
@@ -760,12 +765,19 @@ class LanguageModelGenerate(io.ComfyNode):
                 f"({head}); the vocab and the model's embedding link do not match."
             )
 
+        count = max(1, int(num_tokens))
+        # Live progress: one update per generated token.  The ProgressBar hook
+        # binds itself to the executing node and doubles as the interrupt check
+        # (model_management.throw_exception_if_processing_interrupted), so a
+        # long generation stays cancellable from the UI.
+        pbar = comfy.utils.ProgressBar(count)
         ids = mp.generate_tokens(
             trainee,
             start,
-            num_tokens=max(1, int(num_tokens)),
+            num_tokens=count,
             temperature=float(temperature),
             seed=int(seed),
+            progress=lambda done, total: pbar.update_absolute(done, total),
         )
         text = table.decode(ids.tolist()) if table is not None else ""
         return io.NodeOutput(ids, text)
