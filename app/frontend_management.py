@@ -433,16 +433,17 @@ comfyui-workflow-templates is not installed.
             check_comfy_packages_versions()
             return cls.default_frontend_path()
     @classmethod
-    def template_asset_handler(cls):
-        assets = cls.template_asset_map()
-        if not assets:
-            return None
+    def template_asset_handler(cls, legacy_dir=None):
+        """Build the ``/templates/{path}`` request handler.
 
-        async def serve_template(request: web.Request) -> web.StreamResponse:
-            rel_path = request.match_info.get("path", "")
-            target = assets.get(rel_path)
-            if target is None:
-                raise web.HTTPNotFound()
-            return web.FileResponse(target)
+        The handler layers the ComfyDL template-catalog overlay (curated index
+        rewrite + repository-owned example workflows; see
+        ``app/template_catalog.py``) on top of the packaged template assets.
+        When ``legacy_dir`` is given (the static templates directory shipped
+        inside the meta package) it is used as a traversal-guarded file
+        fallback for assets the new-pack API cannot resolve.
+        """
+        from app import template_catalog
 
-        return serve_template
+        assets = cls.template_asset_map() if legacy_dir is None else None
+        return template_catalog.build_handler(assets=assets, legacy_dir=legacy_dir)

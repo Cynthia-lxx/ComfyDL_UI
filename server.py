@@ -1263,10 +1263,20 @@ class PromptServer():
 
         if use_legacy_templates:
             workflow_templates_path = FrontendManager.legacy_templates_path()
-            if workflow_templates_path:
+            if workflow_templates_path and os.path.isdir(workflow_templates_path):
                 self.app.add_routes([
                     web.static('/templates', workflow_templates_path)
                 ])
+            else:
+                # The templates meta package ships no static templates
+                # directory (e.g. comfyui-workflow-templates 0.1.x), so the
+                # legacy static route would 404 every request.  Fall back to
+                # the asset-map handler, which also applies the ComfyDL
+                # template-catalog overlay (curated index + example
+                # workflows; see app/template_catalog.py).
+                handler = FrontendManager.template_asset_handler()
+                if handler:
+                    self.app.router.add_get("/templates/{path:.*}", handler)
         else:
             handler = FrontendManager.template_asset_handler()
             if handler:

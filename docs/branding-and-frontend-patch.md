@@ -100,3 +100,85 @@ systemStats store 等）是**从被改文件里用正则抓出来的**，因此�
 - 语言包：删除仓库根 `locales/` 即回到「只有英文」；`/i18n` 只是少一个来源，不影响其它功能。
 - 版本与版权：`comfyui_version.py` / `pyproject.toml` 是可单独回退的文本改动，
   与前端补丁层互不依赖。
+
+## 7. 模板目录补丁层（Templates 面板）
+
+> 新增于 v0.3.1：`app/template_catalog.py`。与第 3 节的启动期 JS 补丁不同，这一层是
+> **请求期的服务端改写**——不改 `site-packages` 里的任何文件（`comfyui-workflow-templates`
+> 系列包同受第 3 节"绝不直改包"约束保护），包升级后逻辑自动对 newIndex 重算，幂等。
+
+### 7.1 背景
+
+- 前端 Templates 面板的数据来自 `/templates/index.json`（及本地化 `index.<locale>.json`、
+  机器侧 `index.mcp.json`），文件在 PyPI 包 `comfyui-workflow-templates`（数据实体为
+  `comfyui_workflow_templates_json`，当前 0.1.61）。
+- 本仓库是脱水构建：后端注册表只保留 302 个节点。**对 521 个官方模板逐一核对（含内嵌
+  subgraph 定义与前端内置类型 Note/MarkdownNote/PrimitiveNode/Reroute 的白名单）后，519 个
+  模板引用了已删除节点**；仅 `basic_mask_operations_and_compositing` 与
+  `utility_image_stitch` 两个 Node Basics 模板幸存。
+- 另一个实情：`server.py` 按 `use_legacy_templates`（安装版本 < 0.3.0 时为真）走
+  `web.static('/templates', legacy_templates_path())`，但**元包内根本没有 `templates/`
+  目录**——即在此修复之前，面板对所有 `/templates/*` 请求都是 404（面板完全空白）。
+
+### 7.2 实现与调用链
+
+```
+server.py  PromptServer.__init__
+  ├─ use_legacy_templates 且元包 templates/ 目录真实存在 → 原版 web.static（不动）
+  └─ 否则（本仓库现状）→ FrontendManager.template_asset_handler()
+       └─ app/template_catalog.build_handler(assets, legacy_dir)
+            1. resolve_overlay_asset()      仓库自有资产（ComfyDL 示例工作流 + 封面）
+            2. curated_index_payload()      index*.json 请求期改写（缓存）
+            3. packaged asset map           官方包逐文件服务（template_asset_map()，1254 项）
+            4. legacy 目录兜底（带路径穿越防护）
+```
+
+- **死模板过滤**：懒加载扫描全部打包工作流 JSON，对照 `nodes.NODE_CLASS_MAPPINGS`；
+  引用缺失节点类型即剔除，结果进程内缓存。注册表未初始化时 fail-open（不改写）。
+- **分类重组**：剔除死模板后清空的全部分类一并移除；在首位注入
+  `ComfyDL Examples` 分类（`moduleName: ComfyDL`，`isEssential: true`，zh 标题
+  「ComfyDL 示例」），侧边栏最终形态：`All Templates / Popular`（前端硬编码）+
+  `ComfyDL Examples` + `Node Basics`。
+- **本地化**：`index.<locale>.json` 同样过滤，注入分类应用 `_CATEGORY_TITLE_OVERRIDES` /
+  `_CATEGORY_DESCRIPTION_OVERRIDES`（目前只有 zh）；`index.mcp.json` 只过滤不注入；
+  `index_logo.json` / `index.schema.json` 原样透传。
+- **命名规范（硬约束）**：模板 `name`（=文件名主干）必须匹配官方 schema 模式
+  `^[a-zA-Z0-9._-]+$`，**禁止空格与非 ASCII**。这不是仅 CI 洁癖——2026-09-20 实测故障：
+  早期版本用带空格文件名（`Language Model - Train and Chat.json`），前端
+  `fetchTemplateJson` 直接拼 `/templates/${name}.json` 不做编码，浏览器把空格转义为
+  `%20` 发出；而 aiohttp 动态路由 `{path:.*}` 的 match info 只解码 `%2F`/`%25`
+  （`web_urldispatcher._unquote_path_safe`），handler 拿到带字面 `%20` 的字符串 →
+  白名单匹配失败 → 404 → 前端 `.json()` 解析失败静默 return false，**点击卡片无任何反应**。
+  修复双管齐下：文件重命名为官方风格（`language_model_train_and_chat.json`，封面直接命名
+  `<name>-1.jpg` 命中前端缩略图 URL 模式），handler 入口对 rel_path 做
+  `urllib.parse.unquote` 兜底（防未来任何非 ASCII 名）。
+
+### 7.3 如何新增示例工作流
+
+1. 把工作流 JSON 放进 `comfydl/example_workflows/`，**文件名主干必须匹配
+   `^[a-zA-Z0-9._-]+$`**（小写下划线风格，参照官方如 `basic_mask_operations_and_compositing`）；
+2. 封面命名为 `<name>-1.<mediaSubtype>`（直接命中前端缩略图 URL 模式）；若复用其他
+   模板的封面，在 `_THUMBNAIL_FILENAMES` 指过去；
+3. 在 `app/template_catalog.py` 的 `_COMFYDL_CATEGORY["templates"]` 加一条元数据
+   （`name` = 文件名主干；`mediaType` ∈ image/video/audio/3d，`mediaSubtype`
+   为封面扩展名）；
+4. 需要中文标题/描述时补 `_CATEGORY_TITLE_OVERRIDES` / `_CATEGORY_DESCRIPTION_OVERRIDES`；
+5. `penv\Scripts\python.exe cdl_smoke_tests\test_templates_catalog.py` 全绿即可
+   （T3c/T5/T8 会自动覆盖新条目）。
+
+### 7.4 验证判据
+
+1. 启动后打开 Templates 面板：侧边栏为 `All Templates / Popular / ComfyDL Examples /
+   Node Basics`；`ComfyDL Examples` 下两张工作流（Train and Chat / Load and Chat）带封面；
+2. 任一官方死模板不再出现；`Node Basics` 下恰为两个幸存模板且可正常加载；
+3. 界面语言切中文后，`ComfyDL 示例` 分类与中文描述生效；
+4. `penv\Scripts\python.exe cdl_smoke_tests\test_templates_catalog.py` 全绿（42 项，
+   含 T9 路由层集成：真实 aiohttp 服务验证编码 URL / 穿越拒绝 / 官方资产对照）；
+   全量 `run_smoke_test.py` 0 FAIL。
+
+### 7.5 回退
+
+- 删除 `server.py` legacy 分支中的 handler 回退调用即恢复原版 `web.static` 行为
+  （即回到「面板 404」的现状）；新分支（包版本 ≥ 0.3.0）中 `template_asset_handler`
+  的 overlay 行为同样在 `app/template_catalog.py` 内可整体旁路——
+  把 `build_handler` 换回纯 `assets.get()` 查表即回到原版逐文件服务。
