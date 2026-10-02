@@ -1,4 +1,4 @@
-"""Core attention nodes (reform step 7 + step 8 utilities).
+"""Core attention nodes (reform step 7 + step 8 utilities + step 10 decoder).
 
 Provides 4 attention nodes that operate on the generic ``TENSOR`` slot type:
 
@@ -11,6 +11,12 @@ plus 3 mask / position utilities (reform step 8) that feed them:
 * ``AttentionCausalMask``      - the lower-triangular boolean mask of a decoder
 * ``AttentionPaddingMask``     - a per-sample validity mask from sequence lengths
 * ``AttentionPositionalEncoding`` - the fixed sinusoidal position table
+
+and the decoder counterpart of the encoder block (reform step 10):
+
+* ``TransformerDecoderBlock`` - self-attention -> Add -> LN -> cross-attention
+  (k/v from ``context``) -> Add -> LN -> FFN -> Add -> LN, post-LN like the
+  encoder block, with a separate wired weight set per sub-block
 
 Every node is stateless: the learnable parameters (the four projection
 weight/bias sets, the two FFN matrices, the two LayerNorm affines) are wired in
@@ -745,6 +751,224 @@ class TransformerEncoderBlock(io.ComfyNode):
         return io.NodeOutput(_block_layer_norm(hidden + ffn, ln2_weight, ln2_bias, "ln2"))
 
 
+class TransformerDecoderBlock(io.ComfyNode):
+    """One post-LN Transformer decoder block: self-attention, then cross.
+
+    What: the decoder half of the original Transformer - a self-attention
+          sub-block over ``tensor`` (typically with a causal ``self_mask`` so
+          the decoder stays autoregressive), a cross-attention sub-block whose
+          keys/values come from ``context`` (the encoder output, or any other
+          modality to condition on), and the FFN sub-block:
+          ``Self-Attn -> Add -> LN -> Cross-Attn -> Add -> LN -> FFN -> Add ->
+          LN`` - the same post-LN shape as ``TransformerEncoderBlock``, one
+          sub-block more. Both attention weight sets, the FFN matrices and the
+          three LayerNorm affines arrive through slots, so the block is
+          stateless and runs any checkpoint. Stacking works by feeding this
+          node's output into the next node's ``tensor``; every stacked block
+          usually attends to the same ``context``.
+    In:   tensor (TENSOR) - ``(..., L, E_in)``; the decoder sequence and the
+          residual of all three sub-blocks.
+          context (TENSOR) - ``(..., S, E_kv)``; provides the cross-attention
+          keys/values (the encoder output); shares the leading batch dims with
+          ``tensor``.
+          q_weight, k_weight, v_weight, out_weight (TENSOR) - the
+          **self-attention** projections, ``(E, E_in)`` / ``(E, E_in)`` /
+          ``(E, E_in)`` / ``(E, E)`` (square: the residual needs the same
+          width); ``E`` must be divisible by ``num_heads``.
+          cross_q_weight, cross_k_weight, cross_v_weight, cross_out_weight
+          (TENSOR) - the **cross-attention** projections, ``(E, E)`` /
+          ``(E, E_kv)`` / ``(E, E_kv)`` / ``(E, E)``.
+          ffn1_weight (TENSOR) - ``(ffn_dim, E)``; ``ffn2_weight`` -
+          ``(E, ffn_dim)``.
+          q_bias, k_bias, v_bias, out_bias, cross_q_bias, cross_k_bias,
+          cross_v_bias, cross_out_bias, ffn1_bias, ffn2_bias (TENSOR,
+          optional) - ``(E,)`` / ``(E,)`` / ``(E,)`` / ``(E,)`` / ``(E,)`` /
+          ``(E,)`` / ``(E,)`` / ``(E,)`` / ``(ffn_dim,)`` / ``(E,)``.
+          ln1_weight, ln1_bias, ln2_weight, ln2_bias, ln3_weight, ln3_bias
+          (TENSOR, optional) - ``(E,)`` each; unconnected = non-affine
+          LayerNorm (after the self-attention, cross-attention and FFN
+          residuals respectively).
+          self_mask (TENSOR, optional) - attention mask of the self-attention
+          sub-block, as in ``Multi-Head Attention``; wire a Causal Mask here
+          for an autoregressive decoder.
+          cross_mask (TENSOR, optional) - attention mask of the cross-attention
+          sub-block (over the context positions), same convention.
+          num_heads (INT) - attention heads (default 4).
+          dropout_p (FLOAT) - attention-weight dropout probability (both
+          sub-blocks); train mode only, 0 disables.
+          ffn_activation (COMBO) - activation between the FFN linear layers,
+          ``relu`` (default) or ``gelu``.
+          seed (INT) - seed of the dropout draws.
+          mode (STRING, optional) - link the ``mode`` output of a Training Mode
+          node; unconnected means ``train``.
+    Out:  output (TENSOR) - ``(..., L, E)``; dtype promotion as in
+          ``BasicLinear``.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _attention_schema(
+            "TransformerDecoderBlock",
+            "Transformer Decoder Block",
+            "Post-LN Transformer decoder block: Self-Attn -> Add -> LN -> Cross-Attn (k/v from context) -> Add -> LN -> FFN -> Add -> LN, all weights wired in.",
+            inputs=[
+                io.Tensor.Input(
+                    "tensor",
+                    tooltip="Decoder sequence of shape (..., seq_len, width); it is the query source of the self-attention and the residual of every sub-block.",
+                ),
+                io.Tensor.Input(
+                    "context",
+                    tooltip="Context of shape (..., context_len, context_width) providing the cross-attention keys/values (the encoder output); same leading batch dims as tensor.",
+                ),
+                _weight_input("q_weight", "width"),
+                _weight_input("k_weight", "width"),
+                _weight_input("v_weight", "width"),
+                _weight_input("out_weight", "width"),
+                _weight_input("cross_q_weight", "width"),
+                _weight_input("cross_k_weight", "context_width"),
+                _weight_input("cross_v_weight", "context_width"),
+                _weight_input("cross_out_weight", "width"),
+                _weight_input("ffn1_weight", "ffn_dim"),
+                _weight_input("ffn2_weight", "width"),
+                _bias_input("q_bias", "width"),
+                _bias_input("k_bias", "width"),
+                _bias_input("v_bias", "width"),
+                _bias_input("out_bias", "width"),
+                _bias_input("cross_q_bias", "width"),
+                _bias_input("cross_k_bias", "context_width"),
+                _bias_input("cross_v_bias", "context_width"),
+                _bias_input("cross_out_bias", "width"),
+                _bias_input("ffn1_bias", "ffn_dim"),
+                _bias_input("ffn2_bias", "width"),
+                io.Tensor.Input(
+                    "ln1_weight",
+                    optional=True,
+                    tooltip="Optional LayerNorm scale of shape (width,) after the self-attention residual; unconnected = non-affine LayerNorm.",
+                ),
+                io.Tensor.Input(
+                    "ln1_bias",
+                    optional=True,
+                    tooltip="Optional LayerNorm shift of shape (width,) after the self-attention residual; unconnected = none.",
+                ),
+                io.Tensor.Input(
+                    "ln2_weight",
+                    optional=True,
+                    tooltip="Optional LayerNorm scale of shape (width,) after the cross-attention residual; unconnected = non-affine LayerNorm.",
+                ),
+                io.Tensor.Input(
+                    "ln2_bias",
+                    optional=True,
+                    tooltip="Optional LayerNorm shift of shape (width,) after the cross-attention residual; unconnected = none.",
+                ),
+                io.Tensor.Input(
+                    "ln3_weight",
+                    optional=True,
+                    tooltip="Optional LayerNorm scale of shape (width,) after the FFN residual; unconnected = non-affine LayerNorm.",
+                ),
+                io.Tensor.Input(
+                    "ln3_bias",
+                    optional=True,
+                    tooltip="Optional LayerNorm shift of shape (width,) after the FFN residual; unconnected = none.",
+                ),
+                io.Tensor.Input(
+                    "self_mask",
+                    optional=True,
+                    tooltip="Optional mask of the self-attention sub-block, broadcastable to (batch, heads, query_len, query_len); wire a Causal Mask here for an autoregressive decoder.",
+                ),
+                io.Tensor.Input(
+                    "cross_mask",
+                    optional=True,
+                    tooltip="Optional mask of the cross-attention sub-block over the context positions, broadcastable to (batch, heads, query_len, context_len).",
+                ),
+                _num_heads_input(),
+                _dropout_p_input(),
+                io.Combo.Input(
+                    "ffn_activation",
+                    options=list(FFN_ACTIVATION_OPTIONS),
+                    default="relu",
+                    tooltip="Activation between the two FFN linear layers.",
+                ),
+                _seed_input(),
+                _attn_mode_input(),
+            ],
+            search_aliases=[
+                "transformer", "decoder block", "post ln", "residual", "self attention",
+                "cross attention", "encoder decoder", "seq2seq", "ffn", "feed forward",
+            ],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        tensor: torch.Tensor,
+        context: torch.Tensor,
+        q_weight: torch.Tensor,
+        k_weight: torch.Tensor,
+        v_weight: torch.Tensor,
+        out_weight: torch.Tensor,
+        cross_q_weight: torch.Tensor,
+        cross_k_weight: torch.Tensor,
+        cross_v_weight: torch.Tensor,
+        cross_out_weight: torch.Tensor,
+        ffn1_weight: torch.Tensor,
+        ffn2_weight: torch.Tensor,
+        q_bias: torch.Tensor | None = None,
+        k_bias: torch.Tensor | None = None,
+        v_bias: torch.Tensor | None = None,
+        out_bias: torch.Tensor | None = None,
+        cross_q_bias: torch.Tensor | None = None,
+        cross_k_bias: torch.Tensor | None = None,
+        cross_v_bias: torch.Tensor | None = None,
+        cross_out_bias: torch.Tensor | None = None,
+        ffn1_bias: torch.Tensor | None = None,
+        ffn2_bias: torch.Tensor | None = None,
+        ln1_weight: torch.Tensor | None = None,
+        ln1_bias: torch.Tensor | None = None,
+        ln2_weight: torch.Tensor | None = None,
+        ln2_bias: torch.Tensor | None = None,
+        ln3_weight: torch.Tensor | None = None,
+        ln3_bias: torch.Tensor | None = None,
+        self_mask: torch.Tensor | None = None,
+        cross_mask: torch.Tensor | None = None,
+        num_heads: int = 4,
+        dropout_p: float = 0.0,
+        ffn_activation: str = "relu",
+        seed: int = 0,
+        mode: str = MODE_TRAIN,
+    ) -> io.NodeOutput:
+        training = _normalize_mode(mode) == MODE_TRAIN
+        # Sub-block 1: self-attention over the decoder sequence (causal when
+        # self_mask is the Causal Mask), then the post-LN residual.
+        self_attn = _multi_head_attention(
+            tensor, tensor, tensor,
+            q_weight, k_weight, v_weight, out_weight,
+            q_bias=q_bias, k_bias=k_bias, v_bias=v_bias, out_bias=out_bias,
+            mask=self_mask, num_heads=num_heads, dropout_p=dropout_p,
+            training=training, seed=seed,
+        )
+        hidden = _block_layer_norm(tensor + self_attn, ln1_weight, ln1_bias, "ln1")
+        # Sub-block 2: cross-attention - queries from the decoder, keys/values
+        # from the context (the encoder output).
+        cross_attn = _multi_head_attention(
+            hidden, context, context,
+            cross_q_weight, cross_k_weight, cross_v_weight, cross_out_weight,
+            q_bias=cross_q_bias, k_bias=cross_k_bias, v_bias=cross_v_bias,
+            out_bias=cross_out_bias,
+            mask=cross_mask, num_heads=num_heads, dropout_p=dropout_p,
+            training=training, seed=seed,
+        )
+        attended = _block_layer_norm(hidden + cross_attn, ln2_weight, ln2_bias, "ln2")
+        # Sub-block 3: the position-wise FFN, then the post-LN residual.
+        ffn = F.linear(
+            _ffn_activation(F.linear(attended, ffn1_weight, ffn1_bias), ffn_activation),
+            ffn2_weight,
+            ffn2_bias,
+        )
+        return io.NodeOutput(
+            _block_layer_norm(attended + ffn, ln3_weight, ln3_bias, "ln3")
+        )
+
+
 #: Widget max for a sequence length: teaching sequences stay short, and the
 #: mask of a mistyped length would be a huge dense tensor.
 _MAX_LEN = 65536
@@ -973,6 +1197,7 @@ ATTENTION_NODES: list[type[io.ComfyNode]] = [
     AttentionSelf,
     AttentionCross,
     TransformerEncoderBlock,
+    TransformerDecoderBlock,
     AttentionCausalMask,
     AttentionPaddingMask,
     AttentionPositionalEncoding,

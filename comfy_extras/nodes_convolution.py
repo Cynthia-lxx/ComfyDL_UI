@@ -1,16 +1,26 @@
-"""Convolution nodes (reform step 4).
+"""Convolution nodes (reform step 4 + step 10 upsampling).
 
-Provides the ``Network & Layers/Convolution`` category with **two** nodes:
+Provides the ``Network & Layers/Convolution`` category with **five** nodes:
 
 * ``Conv``          - ``torch.nn.functional.conv{1,2,3}d``, i.e. the classic
                       parameter-sharing convolution.
 * ``ConvTranspose`` - ``torch.nn.functional.conv_transpose{1,2,3}d``, the
                       "deconvolution" used to grow a feature map back to a larger
                       spatial size.
+* ``Upsample``      - ``torch.nn.functional.interpolate``, the parameter-free
+                      spatial enlargement (nearest / linear / bilinear /
+                      bicubic / trilinear) of a feature map.
+* ``PixelShuffle``  - ``torch.nn.functional.pixel_shuffle``, the sub-pixel
+                      convolution's reshaping half: channels are traded for
+                      spatial resolution at no compute cost.
+* ``PixelUnshuffle`` - the exact inverse: spatial resolution is traded back
+                      for channels.
 
 Six torch layer types (``Conv1d/2d/3d`` and ``ConvTranspose1d/2d/3d``) share one
 input/output shape, so they collapse into two nodes whose ``dims`` widget picks
-the rank, exactly like the Pooling family.
+the rank, exactly like the Pooling family; ``Upsample`` follows the same
+``dims`` dispatch, while the two pixel-shuffle nodes are inherently 2-D
+(``F.pixel_shuffle`` / ``F.pixel_unshuffle`` only exist for images).
 
 Three ideas the nodes are meant to make visible:
 
@@ -26,7 +36,8 @@ Three ideas the nodes are meant to make visible:
 
 Following the ``Basic`` category convention, ``weight`` and ``bias`` are wired in
 as tensors through input slots: the nodes are stateless, create no parameters and
-initialise nothing, so one node can run any checkpoint.
+initialise nothing, so one node can run any checkpoint. The three upsampling
+nodes carry **no** weights at all - they are pure reshaping / interpolation.
 """
 
 import torch
@@ -37,7 +48,18 @@ from comfy_api.latest import ComfyExtension, io
 
 CATEGORY = "Network & Layers/Convolution"
 
-#: Supported spatial ranks.
+#: Interpolation modes exposed on ``Upsample``, named like ``nn.Upsample``.
+_INTERP_MODES = ["nearest", "linear", "bilinear", "bicubic", "trilinear"]
+
+#: Which interpolation modes are legal per spatial rank (1/2/3), mirroring
+#: ``F.interpolate``'s requirement that the mode match the tensor rank.
+_MODES_PER_RANK = {
+    1: ("nearest", "linear"),
+    2: ("nearest", "bilinear", "bicubic"),
+    3: ("nearest", "trilinear"),
+}
+
+#: Spatial ranks.
 _DIMS = [1, 2, 3]
 
 #: Padding modes exposed on ``Conv``, named like ``torch.nn.Conv*d(padding_mode=...)``.
@@ -565,9 +587,273 @@ class ConvolutionConvTranspose(io.ComfyNode):
         return io.NodeOutput(_drop_added_rank(result, added))
 
 
+class ConvolutionUpsample(io.ComfyNode):
+    """Upsample a feature map with interpolation - no weights, no learning.
+
+    What: ``torch.nn.functional.interpolate`` - every spatial position is
+          enlarged ``scale_factor`` times by copying (``nearest``) or by
+          fitting a straight line / plane / hyperplane through the neighbours
+          (``linear`` / ``bilinear`` / ``bicubic`` / ``trilinear``). It is the
+          parameter-free counterpart of ``ConvTranspose``: growing a feature
+          map costs zero weights here, while a learned enlargement needs the
+          transposed convolution. The mode must match ``dims`` - linear for
+          1-D, bilinear / bicubic for 2-D, trilinear for 3-D, nearest for any
+          rank - exactly the contract ``nn.Upsample`` imposes.
+    In:   tensor (TENSOR) - input feature map, e.g. ``(N, C, H, W)`` for
+          ``dims=2``. A bare ``(C, H, W)`` (or one more leading dim missing)
+          is accepted as well: missing leading dimensions are added internally
+          and removed from the result.
+          dims (COMBO) - 1, 2 or 3 (default 2): the spatial rank.
+          mode (COMBO) - ``nearest`` (default), ``linear``, ``bilinear``,
+          ``bicubic`` or ``trilinear``; must be legal for ``dims``.
+          scale_factor (FLOAT) - spatial multiplier per axis (default 2.0);
+          the output size is ``floor(input_size * scale_factor)``.
+          align_corners (BOOLEAN) - if ``True``, the corner pixels of the input
+          and output are aligned at the same sample point; only used by the
+          interpolating modes (default ``False``).
+    Out:  output (TENSOR) - same rank, channel count and dtype as the input,
+          spatial size scaled by ``scale_factor`` (integer inputs are only
+          legal with ``nearest``; interpolating modes cast to float32 first).
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _conv_schema(
+            "ConvolutionUpsample",
+            "Upsample",
+            "Interpolation upsampling over 1/2/3 spatial dims (nearest/linear/bilinear/bicubic/trilinear, scale_factor, align_corners); parameter-free.",
+            inputs=[
+                io.Tensor.Input(
+                    "tensor",
+                    tooltip="Input feature map, e.g. (N, C, H, W) for dims=2; unbatched inputs work too.",
+                ),
+                _dims_widget(),
+                io.Combo.Input(
+                    "mode",
+                    options=_INTERP_MODES,
+                    default="nearest",
+                    tooltip="Interpolation mode; must match dims: 1D = nearest/linear, 2D = nearest/bilinear/bicubic, 3D = nearest/trilinear.",
+                ),
+                io.Float.Input(
+                    "scale_factor",
+                    default=2.0,
+                    min=0.01,
+                    max=64.0,
+                    step=0.1,
+                    tooltip="Spatial multiplier per axis; the output size is floor(input * scale_factor).",
+                ),
+                io.Boolean.Input(
+                    "align_corners",
+                    default=False,
+                    tooltip="Align the corner pixels of input and output; only used by the interpolating (non-nearest) modes.",
+                ),
+            ],
+            search_aliases=[
+                "upsample", "interpolate", "resize", "upsampling", "nearest",
+                "bilinear", "bicubic", "trilinear", "scale", "enlarge",
+            ],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        tensor: torch.Tensor,
+        dims: int = 2,
+        mode: str = "nearest",
+        scale_factor: float = 2.0,
+        align_corners: bool = False,
+    ) -> io.NodeOutput:
+        rank = int(dims) if int(dims) in (1, 2, 3) else 2
+        if rank != int(dims):
+            _warn(f"Upsample: dims={dims} is not 1/2/3; using 2.")
+        if mode not in _INTERP_MODES:
+            _warn(f"Upsample: mode={mode!r} is not one of {_INTERP_MODES}; using 'nearest'.")
+            mode = "nearest"
+        legal = _MODES_PER_RANK[rank]
+        if mode not in legal:
+            raise ValueError(
+                f"Upsample: mode={mode!r} cannot run at dims={rank}; the legal modes are "
+                f"{list(legal)} (1D = nearest/linear, 2D = nearest/bilinear/bicubic, "
+                f"3D = nearest/trilinear), exactly like nn.Upsample."
+            )
+        scale = float(scale_factor)
+        if scale <= 0.0:
+            raise ValueError(f"Upsample: scale_factor must be > 0; got {scale}.")
+
+        # F.interpolate dispatches by the tensor rank, so a rank/dims mismatch
+        # would silently reinterpret the input instead of failing - pin it.
+        prepared, added = _ensure_min_rank(tensor, rank + 2)
+        if prepared.dim() != rank + 2:
+            raise ValueError(
+                f"Upsample: dims={rank} needs a {rank + 2}-dimensional tensor (N, C, spatial...), "
+                f"but the input has {tensor.dim()} dimension(s) with shape {tuple(tensor.shape)}."
+            )
+        if mode != "nearest" and not prepared.is_floating_point():
+            prepared = prepared.to(dtype=torch.float32)
+        try:
+            result = F.interpolate(
+                prepared,
+                scale_factor=scale,
+                mode=mode,
+                align_corners=bool(align_corners) if mode != "nearest" else None,
+            )
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"Upsample: {rank}d interpolation with mode={mode!r} failed for an input of "
+                f"shape {tuple(prepared.shape)}. Check that 'dims' matches the tensor rank "
+                f"and that the mode is legal for it. Original error: {exc}"
+            ) from exc
+        return io.NodeOutput(_drop_added_rank(result, added))
+
+
+class ConvolutionPixelShuffle(io.ComfyNode):
+    """Trade channels for spatial resolution: the sub-pixel reshuffle.
+
+    What: ``torch.nn.functional.pixel_shuffle`` - the cheap half of sub-pixel
+          convolution (ESPCN): a conv first packs ``r * r`` sub-pixel images
+          into the channel dimension, and this node then reshuffles
+          ``(N, C * r^2, H, W)`` into ``(N, C, H * r, W * r)`` by moving each
+          ``r x r`` block of channels out to its own spatial position. No
+          multiplication happens at all - it is a pure view/permute of the
+          data, which is why it is the standard way to upsample cheaply after
+          a convolution. Inherently 2-D: ``F.pixel_shuffle`` only exists for
+          images.
+    In:   tensor (TENSOR) - ``(N, C * r^2, H, W)``; the channel count must be
+          divisible by ``r^2``. A bare ``(C, r^2, ...)`` / ``(C, H, W)`` tensor
+          is accepted as well: missing leading dimensions are added internally
+          and removed from the result.
+          r (INT) - the upscale factor per axis (default 2, i.e. ``r^2 = 4``
+          channels per output pixel and a 2x2 spatial gain).
+    Out:  output (TENSOR) - ``(N, C, H * r, W * r)``, same dtype as the input.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _conv_schema(
+            "ConvolutionPixelShuffle",
+            "Pixel Shuffle",
+            "Reshuffle (N, C*r^2, H, W) into (N, C, H*r, W*r): channels become sub-pixels, the parameter-free half of sub-pixel convolution.",
+            inputs=[
+                io.Tensor.Input(
+                    "tensor",
+                    tooltip="Input of shape (N, C*r^2, H, W); the channel count must be divisible by r^2.",
+                ),
+                io.Int.Input(
+                    "r",
+                    default=2,
+                    min=1,
+                    max=64,
+                    step=1,
+                    tooltip="Upscale factor per spatial axis; channels shrink by r^2, spatial size grows by r.",
+                ),
+            ],
+            search_aliases=["pixel shuffle", "pixelshuffle", "sub pixel", "sub-pixel convolution", "espcn", "upsample", "reshuffle"],
+        )
+
+    @classmethod
+    def execute(cls, tensor: torch.Tensor, r: int = 2) -> io.NodeOutput:
+        factor = max(1, int(r))
+        prepared, added = _ensure_min_rank(tensor, 4)
+        if prepared.dim() != 4:
+            raise ValueError(
+                f"Pixel Shuffle: F.pixel_shuffle needs a 4-dimensional (N, C*r^2, H, W) "
+                f"tensor, but the input has {tensor.dim()} dimension(s) with shape "
+                f"{tuple(tensor.shape)}; it is an inherently 2-D operation."
+            )
+        channels = int(prepared.shape[1])
+        if channels % (factor * factor) != 0:
+            raise ValueError(
+                f"Pixel Shuffle: the input has {channels} channel(s), which must be divisible "
+                f"by r^2 = {factor * factor} (r={factor}); a conv should first pack r*r "
+                f"sub-pixels into the channels."
+            )
+        try:
+            result = F.pixel_shuffle(prepared, factor)
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"Pixel Shuffle: F.pixel_shuffle failed for an input of shape "
+                f"{tuple(prepared.shape)} with r={factor}. Original error: {exc}"
+            ) from exc
+        return io.NodeOutput(_drop_added_rank(result, added))
+
+
+class ConvolutionPixelUnshuffle(io.ComfyNode):
+    """The inverse of Pixel Shuffle: spatial resolution back into channels.
+
+    What: ``torch.nn.functional.pixel_unshuffle`` - the exact inverse of
+          ``Pixel Shuffle``: ``(N, C, H * r, W * r)`` becomes
+          ``(N, C * r^2, H, W)`` by folding every ``r x r`` spatial block back
+          into the channel dimension. Wiring ``Pixel Shuffle → Pixel
+          Unshuffle`` with the same ``r`` is a lossless round trip (the smoke
+          tester pins this), and the pair is how an encoder undoes what its
+          decoder did - or how two networks exchange data at two spatial
+          scales without any interpolation.
+    In:   tensor (TENSOR) - ``(N, C, H, W)``; the spatial sizes must be
+          divisible by ``r``. Unbatched ``(C, H, W)`` inputs work too: missing
+          leading dimensions are added internally and removed from the result.
+          r (INT) - the downscale factor per axis (default 2, i.e. spatial size
+          halves and channels grow by ``r^2 = 4``).
+    Out:  output (TENSOR) - ``(N, C * r^2, H / r, W / r)``, same dtype as the
+          input.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return _conv_schema(
+            "ConvolutionPixelUnshuffle",
+            "Pixel Unshuffle",
+            "Reshuffle (N, C, H*r, W*r) into (N, C*r^2, H, W): the exact inverse of Pixel Shuffle.",
+            inputs=[
+                io.Tensor.Input(
+                    "tensor",
+                    tooltip="Input of shape (N, C, H, W); the spatial sizes must be divisible by r.",
+                ),
+                io.Int.Input(
+                    "r",
+                    default=2,
+                    min=1,
+                    max=64,
+                    step=1,
+                    tooltip="Downscale factor per spatial axis; spatial size shrinks by r, channels grow by r^2.",
+                ),
+            ],
+            search_aliases=["pixel unshuffle", "pixelunshuffle", "unshuffle", "sub pixel", "downscale", "space to depth"],
+        )
+
+    @classmethod
+    def execute(cls, tensor: torch.Tensor, r: int = 2) -> io.NodeOutput:
+        factor = max(1, int(r))
+        prepared, added = _ensure_min_rank(tensor, 4)
+        if prepared.dim() != 4:
+            raise ValueError(
+                f"Pixel Unshuffle: F.pixel_unshuffle needs a 4-dimensional (N, C, H, W) "
+                f"tensor, but the input has {tensor.dim()} dimension(s) with shape "
+                f"{tuple(tensor.shape)}; it is an inherently 2-D operation."
+            )
+        spatial = tuple(prepared.shape[2:])
+        if any(size % factor != 0 for size in spatial):
+            raise ValueError(
+                f"Pixel Unshuffle: the spatial sizes {spatial} must all be divisible by "
+                f"r={factor}; the node folds every {factor}x{factor} spatial block back "
+                f"into the channels."
+            )
+        try:
+            result = F.pixel_unshuffle(prepared, factor)
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"Pixel Unshuffle: F.pixel_unshuffle failed for an input of shape "
+                f"{tuple(prepared.shape)} with r={factor}. Original error: {exc}"
+            ) from exc
+        return io.NodeOutput(_drop_added_rank(result, added))
+
+
+#: Every node this module registers, in node-library order.
 CONVOLUTION_NODES: list[type[io.ComfyNode]] = [
     ConvolutionConv,
     ConvolutionConvTranspose,
+    ConvolutionUpsample,
+    ConvolutionPixelShuffle,
+    ConvolutionPixelUnshuffle,
 ]
 
 

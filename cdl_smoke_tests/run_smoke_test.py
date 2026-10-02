@@ -542,6 +542,53 @@ def _f_ffn2_weight(cfg: dict, name: str) -> Any:
     return torch.randn(8, 32)
 
 
+#: The step10 recurrent dummies share one matched world: ``x`` is
+#: ``(B=2, T=5, I=6)`` and every node runs with the default ``hidden_size=16``,
+#: so the wired weights have to match ``(gates * 16, 6)`` / ``(gates * 16, 16)``
+#: - RNN 1 gate, GRU 3 gates, LSTM 4 gates, the torch ``nn.RNNBase`` layout.
+
+def _f_rnn_x(cfg: dict, name: str) -> Any:
+    """A ``(B, T, I)`` = (2, 5, 6) batch-first sequence for the recurrent nodes."""
+    import torch
+
+    return torch.randn(2, 5, 6)
+
+
+def _f_rnn_weight(cfg: dict, name: str, rows: int, cols: int) -> Any:
+    """A ``(rows, cols)`` recurrent weight; see the block comment above."""
+    import torch
+
+    return torch.randn(rows, cols)
+
+
+def _f_rnn_bias(cfg: dict, name: str, rows: int) -> Any:
+    """A ``(rows,)`` recurrent bias; the ih/hh biases add, as in ``nn.RNNBase``."""
+    import torch
+
+    return torch.randn(rows)
+
+
+def _f_rnn_state(cfg: dict, name: str) -> Any:
+    """An initial ``(B, H)`` = (2, 16) state for the recurrent nodes."""
+    import torch
+
+    return torch.randn(2, 16)
+
+
+def _f_pixel_shuffle_in(cfg: dict, name: str) -> Any:
+    """A ``(N, C*r^2, H, W)`` = (2, 8, 2, 2) tensor for Pixel Shuffle (r=2)."""
+    import torch
+
+    return torch.randn(2, 8, 2, 2)
+
+
+def _f_pixel_unshuffle_in(cfg: dict, name: str) -> Any:
+    """A ``(N, C, H*r, W*r)`` = (2, 2, 4, 4) tensor for Pixel Unshuffle (r=2)."""
+    import torch
+
+    return torch.randn(2, 2, 4, 4)
+
+
 #: The step8 text/LM dummies share one tiny world: a 5-token vocabulary over
 #: "abcabcabd" (chars a, b, c, d plus <unk>) and a 10-token index stream made
 #: of values 1..4, so every node sees indices that fit every model head below.
@@ -1029,6 +1076,56 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
         "ffn1_weight": _f_ffn1_weight,
         "ffn2_weight": _f_ffn2_weight,
     },
+    # Transformer Decoder Block: the same (2, 5, 8) queries and (2, 7, 8)
+    # context the cross-attention nodes use, one weight set per sub-block.
+    "TransformerDecoderBlock": {
+        "tensor": _f_attn_queries,
+        "context": _f_attn_context,
+        "q_weight": _f_attn_proj_weight,
+        "k_weight": _f_attn_proj_weight,
+        "v_weight": _f_attn_proj_weight,
+        "out_weight": _f_attn_proj_weight,
+        "cross_q_weight": _f_attn_proj_weight,
+        "cross_k_weight": _f_attn_proj_weight,
+        "cross_v_weight": _f_attn_proj_weight,
+        "cross_out_weight": _f_attn_proj_weight,
+        "ffn1_weight": _f_ffn1_weight,
+        "ffn2_weight": _f_ffn2_weight,
+    },
+    # Recurrent family: one matched weight set per cell - (gates*16, 6) /
+    # (gates*16, 16) against the (2, 5, 6) input at the default hidden_size=16.
+    # RNN and LSTM wire their initial states; GRU stays unconnected so the
+    # zero-init path is covered too.
+    "RecurrentRNN": {
+        "x": _f_rnn_x,
+        "weight_ih": partial(_f_rnn_weight, rows=16, cols=6),
+        "weight_hh": partial(_f_rnn_weight, rows=16, cols=16),
+        "bias_ih": partial(_f_rnn_bias, rows=16),
+        "bias_hh": partial(_f_rnn_bias, rows=16),
+        "h0": _f_rnn_state,
+    },
+    "RecurrentLSTM": {
+        "x": _f_rnn_x,
+        "weight_ih": partial(_f_rnn_weight, rows=64, cols=6),
+        "weight_hh": partial(_f_rnn_weight, rows=64, cols=16),
+        "bias_ih": partial(_f_rnn_bias, rows=64),
+        "bias_hh": partial(_f_rnn_bias, rows=64),
+        "h0": _f_rnn_state,
+        "c0": _f_rnn_state,
+    },
+    "RecurrentGRU": {
+        "x": _f_rnn_x,
+        "weight_ih": partial(_f_rnn_weight, rows=48, cols=6),
+        "weight_hh": partial(_f_rnn_weight, rows=48, cols=16),
+        "bias_ih": partial(_f_rnn_bias, rows=48),
+        "bias_hh": partial(_f_rnn_bias, rows=48),
+    },
+    # Upsampling family: the generic (2, 3) dummy is rank 2, but Upsample at
+    # dims=2 needs a real (N, C, H, W) map and the pixel nodes need channel /
+    # spatial sizes divisible by r^2 / r at the default r=2.
+    "ConvolutionUpsample": {"tensor": _f_tensor_4d},
+    "ConvolutionPixelShuffle": {"tensor": _f_pixel_shuffle_in},
+    "ConvolutionPixelUnshuffle": {"tensor": _f_pixel_unshuffle_in},
     # Attention mask / position utilities: the padding mask needs a lengths
     # vector; causal mask and positional encoding run on widgets alone.
     "AttentionPaddingMask": {"lengths": _f_lengths_dummy},
@@ -2446,6 +2543,203 @@ def _check_transformer_encoder_block(result: Any, args: dict[str, Any]) -> None:
     assert torch.allclose(gelu, expected_g, atol=1e-5), "ffn_activation=gelu did not reach the FFN"
 
 
+def _check_transformer_decoder_block(result: Any, args: dict[str, Any]) -> None:
+    """The decoder block must be Self-Attn -> LN -> Cross-Attn -> LN -> FFN -> LN.
+
+    The reference composes the very same pieces by hand: both attention
+    sub-blocks come from re-runs of Multi-Head Attention (pinned against torch
+    in their own checks) and LayerNorm / residual / FFN are plain
+    ``F.layer_norm`` / ``+`` / ``F.linear``. A second re-run wires a causal
+    ``self_mask`` and perturbs the *last* position of the input: with the mask
+    in place, the outputs of all earlier positions must be unchanged - the
+    autoregressive property a decoder exists for.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    tensor, context = args["tensor"], args["context"]
+    E = tensor.shape[-1]
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == tuple(tensor.shape), tuple(output.shape)
+
+    self_w = {k: args[k] for k in ("q_weight", "k_weight", "v_weight", "out_weight")}
+    cross_w = {
+        "q_weight": args["cross_q_weight"],
+        "k_weight": args["cross_k_weight"],
+        "v_weight": args["cross_v_weight"],
+        "out_weight": args["cross_out_weight"],
+    }
+    rerun = {
+        "tensor": tensor,
+        "context": context,
+        **self_w,
+        **{f"cross_{k}": v for k, v in cross_w.items()},
+        "ffn1_weight": args["ffn1_weight"],
+        "ffn2_weight": args["ffn2_weight"],
+    }
+
+    (attn1,) = _rerun_v3("AttentionMultihead", queries=tensor, keys=tensor, values=tensor, **self_w, mode="eval")
+    hidden = F.layer_norm(tensor + attn1, (E,))
+    (attn2,) = _rerun_v3("AttentionMultihead", queries=hidden, keys=context, values=context, **cross_w, mode="eval")
+    attended = F.layer_norm(hidden + attn2, (E,))
+    ffn = F.linear(F.relu(F.linear(attended, args["ffn1_weight"])), args["ffn2_weight"])
+    expected = F.layer_norm(attended + ffn, (E,))
+    assert torch.allclose(output, expected, atol=1e-5), (
+        "the decoder block is not Self-Attn -> Add -> LN -> Cross-Attn -> Add -> LN -> FFN -> Add -> LN"
+    )
+
+    # Causal self-mask branch: perturbing the last position must not change any
+    # earlier position's output once the mask blocks the future.
+    length = tensor.shape[-2]
+    mask = torch.ones(length, length, dtype=torch.bool).tril()
+    (base,) = _rerun_v3("TransformerDecoderBlock", **rerun, self_mask=mask)
+    perturbed = tensor.clone()
+    perturbed[:, -1, :] += 10.0
+    (changed,) = _rerun_v3("TransformerDecoderBlock", **{**rerun, "tensor": perturbed}, self_mask=mask)
+    assert torch.allclose(base[:, :-1], changed[:, :-1], atol=1e-5), (
+        "a causal self_mask did not make the decoder block autoregressive"
+    )
+    assert not torch.allclose(base[:, -1], changed[:, -1], atol=1e-5), (
+        "the perturbed last position must reach its own output"
+    )
+
+
+def _recurrent_reference(
+    module: Any,
+    x: Any,
+    args: dict[str, Any],
+    state_args: tuple,
+) -> tuple[Any, ...]:
+    """Run the torch-native counterpart of one recurrent node.
+
+    Copies the wired weights into a fresh ``nn.RNN`` / ``nn.LSTM`` / ``nn.GRU``
+    (``batch_first=True``, single layer, the two biases add - the same
+    convention the nodes document) and runs it on the same input and initial
+    state, so the node's explicit cell math is pinned against torch itself.
+    """
+    import torch
+
+    with torch.no_grad():
+        module.weight_ih_l0.copy_(args["weight_ih"])
+        module.weight_hh_l0.copy_(args["weight_hh"])
+        module.bias_ih_l0.copy_(args["bias_ih"])
+        module.bias_hh_l0.copy_(args["bias_hh"])
+        # nn.RNN/GRU take the state as a bare second argument, nn.LSTM takes a
+        # (h_0, c_0) tuple.
+        if len(state_args) == 1:
+            out = module(x, state_args[0])
+        elif state_args:
+            out = module(x, state_args)
+        else:
+            out = module(x)
+    if isinstance(out, tuple) and isinstance(out[1], tuple):  # LSTM: (output, (h_n, c_n))
+        return out[0], out[1][0], out[1][1]
+    return out  # RNN / GRU: (output, h_n)
+
+
+def _check_recurrent_rnn(result: Any, args: dict[str, Any]) -> None:
+    """The explicit tanh cell must reproduce ``nn.RNN`` step by step."""
+    import torch
+
+    x, hidden = args["x"], int(args.get("hidden_size", 16))
+    y, hn = _as_tuple(result)
+    assert tuple(y.shape) == (*tuple(x.shape)[:-1], hidden), tuple(y.shape)
+    assert tuple(hn.shape) == (x.shape[0], hidden), tuple(hn.shape)
+
+    rnn = torch.nn.RNN(x.shape[-1], hidden, batch_first=True)
+    out, h_n = _recurrent_reference(rnn, x, args, (args["h0"].unsqueeze(0),))
+    assert torch.allclose(y, out, atol=1e-5), "y does not match nn.RNN with the wired weights"
+    assert torch.allclose(hn, h_n[0], atol=1e-5), "hn does not match nn.RNN's final hidden state"
+
+    # Unconnected-everything branch: zero weights must give tanh(0) = 0.
+    (zero_y, zero_hn) = _rerun_v3(
+        "RecurrentRNN", x=x, weight_ih=None, weight_hh=None, bias_ih=None, bias_hh=None, h0=None
+    )
+    assert float(zero_y.abs().max()) == 0.0 and float(zero_hn.abs().max()) == 0.0, (
+        "unconnected weights/states must default to zeros (an all-zero recurrence)"
+    )
+
+
+def _check_recurrent_lstm(result: Any, args: dict[str, Any]) -> None:
+    """The explicit gate math must reproduce ``nn.LSTM`` step by step."""
+    import torch
+
+    x, hidden = args["x"], int(args.get("hidden_size", 16))
+    y, hn, cn = _as_tuple(result)
+    assert tuple(y.shape) == (*tuple(x.shape)[:-1], hidden), tuple(y.shape)
+    assert tuple(hn.shape) == (x.shape[0], hidden), tuple(hn.shape)
+    assert tuple(cn.shape) == (x.shape[0], hidden), tuple(cn.shape)
+
+    lstm = torch.nn.LSTM(x.shape[-1], hidden, batch_first=True)
+    out, h_n, c_n = _recurrent_reference(
+        lstm, x, args, (args["h0"].unsqueeze(0), args["c0"].unsqueeze(0))
+    )
+    assert torch.allclose(y, out, atol=1e-4), "y does not match nn.LSTM with the wired weights"
+    assert torch.allclose(hn, h_n[0], atol=1e-4), "hn does not match nn.LSTM's final hidden state"
+    assert torch.allclose(cn, c_n[0], atol=1e-4), "cn does not match nn.LSTM's final cell state"
+
+
+def _check_recurrent_gru(result: Any, args: dict[str, Any]) -> None:
+    """The explicit gate math must reproduce ``nn.GRU``, zero-init state included.
+
+    This dummy leaves ``h0`` unconnected, so the comparison doubles as the
+    zero-initial-state check the other two cells cover through their rerun.
+    """
+    import torch
+
+    x, hidden = args["x"], int(args.get("hidden_size", 16))
+    y, hn = _as_tuple(result)
+    assert tuple(y.shape) == (*tuple(x.shape)[:-1], hidden), tuple(y.shape)
+    assert tuple(hn.shape) == (x.shape[0], hidden), tuple(hn.shape)
+
+    gru = torch.nn.GRU(x.shape[-1], hidden, batch_first=True)
+    out, h_n = _recurrent_reference(gru, x, args, ())
+    assert torch.allclose(y, out, atol=1e-4), "y does not match nn.GRU with the wired weights"
+    assert torch.allclose(hn, h_n[0], atol=1e-4), "hn does not match nn.GRU's final hidden state"
+
+
+def _check_convolution_upsample(result: Any, args: dict[str, Any]) -> None:
+    """``Upsample`` must be a thin dispatcher over ``F.interpolate``."""
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == (2, 3, 8, 8), tuple(output.shape)
+    assert torch.equal(output, F.interpolate(tensor, scale_factor=2.0, mode="nearest")), (
+        "the default widgets are not the textbook nearest x2 upsample"
+    )
+    (bilinear,) = _rerun_v3("ConvolutionUpsample", tensor=tensor, mode="bilinear", align_corners=False)
+    expected = F.interpolate(tensor, scale_factor=2.0, mode="bilinear", align_corners=False)
+    assert torch.allclose(bilinear, expected, atol=1e-6), "mode=bilinear did not reach F.interpolate"
+
+
+def _check_convolution_pixel_shuffle(result: Any, args: dict[str, Any]) -> None:
+    """``Pixel Shuffle`` must be ``F.pixel_shuffle`` and invert cleanly."""
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == (2, 2, 4, 4), tuple(output.shape)
+    assert torch.equal(output, F.pixel_shuffle(tensor, 2)), "the output is not F.pixel_shuffle(tensor, 2)"
+    (back,) = _rerun_v3("ConvolutionPixelUnshuffle", tensor=output)
+    assert torch.equal(back, tensor), "Pixel Unshuffle did not invert Pixel Shuffle at the same r"
+
+
+def _check_convolution_pixel_unshuffle(result: Any, args: dict[str, Any]) -> None:
+    """``Pixel Unshuffle`` must be ``F.pixel_unshuffle``."""
+    import torch
+    import torch.nn.functional as F
+
+    tensor = args["tensor"]
+    (output,) = _as_tuple(result)
+    assert tuple(output.shape) == (2, 8, 2, 2), tuple(output.shape)
+    assert torch.equal(output, F.pixel_unshuffle(tensor, 2)), (
+        "the output is not F.pixel_unshuffle(tensor, 2)"
+    )
+
+
 def _check_attention_causal_mask(result: Any, args: dict[str, Any]) -> None:
     """The causal mask must be the lower-triangular bool table, True = attend."""
     import torch
@@ -2844,6 +3138,13 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "AttentionSelf": [_check_attention_self],
     "AttentionCross": [_check_attention_cross],
     "TransformerEncoderBlock": [_check_transformer_encoder_block],
+    "TransformerDecoderBlock": [_check_transformer_decoder_block],
+    "RecurrentRNN": [_check_recurrent_rnn],
+    "RecurrentLSTM": [_check_recurrent_lstm],
+    "RecurrentGRU": [_check_recurrent_gru],
+    "ConvolutionUpsample": [_check_convolution_upsample],
+    "ConvolutionPixelShuffle": [_check_convolution_pixel_shuffle],
+    "ConvolutionPixelUnshuffle": [_check_convolution_pixel_unshuffle],
     "AttentionCausalMask": [_check_attention_causal_mask],
     "AttentionPaddingMask": [_check_attention_padding_mask],
     "AttentionPositionalEncoding": [_check_attention_positional_encoding],

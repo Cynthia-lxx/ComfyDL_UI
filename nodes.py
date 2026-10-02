@@ -697,6 +697,7 @@ async def init_builtin_extra_nodes():
         "nodes_normalization.py",
         "nodes_pooling.py",
         "nodes_convolution.py",
+        "nodes_recurrent.py",
         "nodes_model_loaders.py",
         "nodes_model_merging.py",
         "nodes_model_inference.py",

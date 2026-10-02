@@ -391,6 +391,49 @@ reform 第八步（含 Save / Load Language Model 持久化对）后实测：`IM
 `279 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库总计 196 个节点、
 34 个分类（109 个 ComfyDL + 87 个核心节点）。
 
+## Reform Step 10: Recurrent / Decoder / Upsampling / reform 第十步：循环、解码器与上采样
+
+Three families, seven nodes, one soft-archive, all on the existing stateless conventions. **The
+recurrent family** lands in the new category `Network & Layers/Recurrent`
+(`comfy_extras/nodes_recurrent.py`): `RecurrentRNN` / `RecurrentLSTM` / `RecurrentGRU` with the
+cell math written out explicitly (the tanh cell, the `[i, f, g, o]` gates, the `[r, z, n]`
+gates), weights / biases / initial states on optional slots in the exact `nn.RNNBase` layout
+(unconnected = zero, so a node with only `x` wired runs), batch-first, single layer — stacking
+is `y → x`, sequences continue via `hn`/`cn` → `h0`/`c0`. **`TransformerDecoderBlock`**
+(`Network & Layers/Attention`) completes the encoder/decoder pair: Self-Attn → Add → LN →
+Cross-Attn (k/v from `context`) → Add → LN → FFN → Add → LN, post-LN, both weight sets on
+slots, `self_mask`/`cross_mask` with the SDPA boolean semantics — wire `AttentionCausalMask`
+into `self_mask` for the autoregressive property. **The upsampling family** joins
+`Network & Layers/Convolution`: `ConvolutionUpsample` (`F.interpolate`, `dims` 1/2/3, the mode
+must match the rank as in `nn.Upsample`), `ConvolutionPixelShuffle` and its exact inverse
+`ConvolutionPixelUnshuffle` — parameter-free, no weights at all. The superseded d2l builders
+(`CdlRNNScratch` / `CdlRNN` / `CdlGRU`) are soft-archived to `d2l/_Legacy/NLP Models` (ids
+unchanged, `RNNLM*` wrappers stay). See
+[reform-step10-recurrent-decoder-upsampling.md](./reform-step10-recurrent-decoder-upsampling.md).
+
+三个家族、七个节点、一次软归档，全部落在既有的无状态约定上。**循环网络族**进入新分类
+`Network & Layers/Recurrent`（`comfy_extras/nodes_recurrent.py`）：`RecurrentRNN` /
+`RecurrentLSTM` / `RecurrentGRU`，cell 数学显式手写（tanh 单元、`[i, f, g, o]` 四门、
+`[r, z, n]` 两门），权重 / 偏置 / 初始状态走可选插槽、布局与 `nn.RNNBase` 完全一致（不连 =
+零，只连 `x` 即可运行），batch-first、单层——堆叠即 `y → x`，续写序列用 `hn`/`cn` →
+`h0`/`c0`。**`TransformerDecoderBlock`**（`Network & Layers/Attention`）补齐编码器 / 解码器对：
+Self-Attn → Add → LN → Cross-Attn（k/v 来自 `context`）→ Add → LN → FFN → Add → LN，post-LN，
+两组权重全走插槽，`self_mask`/`cross_mask` 遵循 SDPA 布尔语义——给 `self_mask` 接
+`AttentionCausalMask` 即得自回归性质。**上采样族**并入 `Network & Layers/Convolution`：
+`ConvolutionUpsample`（`F.interpolate`，`dims` 1/2/3，mode 必须与秩匹配、同 `nn.Upsample`）、
+`ConvolutionPixelShuffle` 及其精确逆 `ConvolutionPixelUnshuffle`——无参数、完全不带权重。被
+取代的 d2l 构建器（`CdlRNNScratch` / `CdlRNN` / `CdlGRU`）软归档到 `d2l/_Legacy/NLP Models`
+（id 不变，`RNNLM*` 包装族保留）。
+
+Measured after reform step 10: `IMPORT_FAILED []`, `CDL 109`; the host registry holds 313 nodes
+across 47 categories; the smoke tester reports `290 PASS / 23 SKIP / 0 FAIL` across those 313
+registered nodes; the documented library totals 207 nodes across 35 categories
+(109 ComfyDL + 98 core).
+
+reform 第十步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 313 个节点、47 个分类；
+冒烟测试器在这 313 个已注册节点上给出 `290 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库
+总计 207 个节点、35 个分类（109 个 ComfyDL + 98 个核心节点）。
+
 ## Live Progress Reporting (实时进度报告)
 
 The long-running nodes report progress to the UI through `comfy.utils.ProgressBar`. The global
