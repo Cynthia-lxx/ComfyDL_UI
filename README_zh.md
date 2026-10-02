@@ -11,6 +11,21 @@
 `ComfyDL_UI` 是 [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) 的图形界面（GUI）运行时：
 它托管 ComfyDL 节点包，并运行该节点包在 ComfyUI 运行时之上新增的张量、网络层、训练节点与数据工具。
 
+## 效果预览
+
+在图内端到端训练一个小语言模型——Vocab Build → Text Encode → Sliding Window → Language Model
+流水线 → Generate → Save。`Language Model Train` 节点在训练的同时会把 cross-entropy 曲线
+**实时刷在自己节点下方**（节点下方那张预览卡片）：
+
+![ComfyDL_UI 中的语言模型训练工作流](comfydl/assets/languange_model_train_workflow.png)
+
+<p align="center">
+  <img src="comfydl/assets/language_model_train_node_focus.png" alt="Language Model Train 节点与其实时 loss 曲线预览" width="440" />
+</p>
+
+> 更多示例与完整节点参考见 [`comfydl/`](comfydl/) 子模块说明
+> （[English](comfydl/README.md)、[FUNCTIONS_zh.md](comfydl/FUNCTIONS_zh.md)）。
+
 ## 它不是什么
 
 - **它不是完整的原版 ComfyUI**：本仓库是脱水（dehydrated）分支，只保留 ComfyDL 节点所需的

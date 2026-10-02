@@ -28,6 +28,21 @@ runtime.
   [`AGENTS.md`](AGENTS.md) for how this repository is worked on, and the `comfydl/` submodule
   for the node pack (`README.md`, `FUNCTIONS.md` and their `_zh` counterparts).
 
+## What it looks like
+
+A language model trained end to end inside the graph — Vocab Build → Text Encode → Sliding
+Window → the Language Model pipeline → Generate → Save. The `Language Model Train` node streams
+its cross-entropy curve **under itself while it trains** (the preview card below the node):
+
+![Language Model training workflow in ComfyDL_UI](comfydl/assets/languange_model_train_workflow.png)
+
+<p align="center">
+  <img src="comfydl/assets/language_model_train_node_focus.png" alt="Language Model Train node with its live loss-curve preview" width="440" />
+</p>
+
+> More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule
+> README ([中文](comfydl/README_zh.md), [FUNCTIONS.md](comfydl/FUNCTIONS.md)).
+
 ## Upstream ComfyUI (original project)
 
 Everything in this section belongs to the upstream ComfyUI project, not to ComfyDL_UI.
