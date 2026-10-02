@@ -465,6 +465,7 @@ def generate_tokens(
     temperature: float = 1.0,
     seed: int = 0,
     progress: Callable[[int, int], None] | None = None,
+    on_token: Callable[[int], None] | None = None,
 ) -> torch.Tensor:
     """Autoregressive next-token loop on a local ``torch.Generator``.
 
@@ -482,6 +483,10 @@ def generate_tokens(
           progress - optional ``progress(done, total)`` callback invoked once
           per generated token. Injected rather than imported so this protocol
           module stays free of any UI/ComfyUI machinery.
+          on_token - optional ``on_token(token_id)`` callback invoked with
+          each picked token index, right after it is appended. The live
+          preview of ``Language Model Generate`` uses it to render the text
+          generated so far; errors raised inside are the caller's own.
     Out:  a 1-D long tensor: the prefix followed by the generated tokens.
     """
     ids = [int(index) for index in prefix_ids]
@@ -507,6 +512,8 @@ def generate_tokens(
             sequence = torch.cat(
                 [sequence, torch.tensor([[choice]], dtype=torch.long)], dim=1
             )
+            if on_token is not None:
+                on_token(choice)
             if progress is not None:
                 progress(step + 1, count)
         return sequence.reshape(-1)

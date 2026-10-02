@@ -61,6 +61,7 @@ from typing_extensions import override
 
 import comfy.utils
 import folder_paths
+from comfy import loss_preview
 from comfy import training_metrics as tm
 from comfy import training_protocol as tp
 from comfy_api.latest import ComfyExtension, io
@@ -828,6 +829,10 @@ class TrainingLoop(io.ComfyNode):
           ``early_stop_min_delta``, the parameters are rolled back to the best
           point and the run ends there.
           Every output is detached: no autograd graph is left in ComfyUI's cache.
+          While training, the node also drives ComfyUI's live preview channel:
+          the loss curve recorded so far is rendered (rate-limited to one
+          frame per ~0.5 s, always a final frame at the end) and shown under
+          the node - the same side channel the KSampler latent preview uses.
     In:   x (TENSOR) - inputs, ``(N, in_features)`` or any shape whose *last*
           dimension is the feature dimension (a 1-D tensor is read as a single
           feature column). Cast to float32.
@@ -1057,7 +1062,11 @@ class TrainingLoop(io.ComfyNode):
             # Live progress: one update per optimizer step.  The ProgressBar hook
             # binds itself to the executing node (see comfy_execution.utils) and
             # doubles as the interrupt check, so long runs stay cancellable.
+            # The third update_absolute argument attaches the live loss-curve
+            # preview (rate-limited inside LossCurvePreviewer); a step without
+            # a frame still reports through update(1) below.
             pbar = comfy.utils.ProgressBar(iterations)
+            curve_previewer = loss_preview.LossCurvePreviewer(title="loss")
             for step in range(iterations):
                 if per_step:
                     order = torch.randperm(data.samples, generator=shuffler)[:per_step].to(device)
@@ -1085,7 +1094,13 @@ class TrainingLoop(io.ComfyNode):
                 if stopper.improved:
                     best_state = tp.snapshot_state(model)
                     best_length = len(history)
-                pbar.update(1)
+                frame = curve_previewer.record(
+                    float(step_loss.detach()), force=(step + 1 == iterations)
+                )
+                if frame is not None:
+                    pbar.update_absolute(step + 1, iterations, frame)
+                else:
+                    pbar.update(1)
             if stopped_at is not None and best_state is not None:
                 # Roll back to the best point and cut the history there, so the
                 # outputs are what "the best model of this run" means.

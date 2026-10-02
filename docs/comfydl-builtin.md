@@ -434,6 +434,58 @@ reform 第十步后实测：`IMPORT_FAILED []`、`CDL 109`；宿主注册表共 
 冒烟测试器在这 313 个已注册节点上给出 `290 PASS / 23 SKIP / 0 FAIL`；说明文件口径的节点库
 总计 207 个节点、35 个分类（109 个 ComfyDL + 98 个核心节点）。
 
+## Reform Step 11: Live Preview / reform 第十一步：实时预览
+
+No new nodes — the long-running trainers and the generator gained *live preview images* on the
+official side channel. `comfy.utils.ProgressBar.update_absolute(value, total, preview)` accepts a
+`("JPEG", PIL.Image, max_size)` triple; the hook `main.py` installs for the progress bar forwards
+it as a binary event, and the frontend renders it under the executing node — the exact channel
+KSampler's latent preview uses, reused here with zero changes to the server or the frontend.
+
+The shared pieces live in a new pure module `comfy/loss_preview.py`: `LossCurvePreviewer` (one
+`record(loss)` call per optimizer step, internally rate-limited to ~1 frame / 0.5 s because a
+preview-bearing update bypasses the ProgressBar's own throttle; `force=True` on the final step so
+the last frame is always the complete curve) and `render_text_snapshot` (the generated-so-far
+text on a small card). Rendering prefers matplotlib (Agg, lazily imported) with a PIL
+`ImageDraw` fallback, and *every* failure path degrades to "no preview" — a preview can never
+break a training run. Three nodes are wired: **Training Loop** and **Language Model Train** push
+their live loss curves; **Language Model Generate** pushes the text generated so far —
+`comfy/lm_protocol.generate_tokens` gained an optional `on_token(token_id)` callback (the
+existing `progress` callback is untouched), the node decodes incrementally and renders the card
+(raw token indices when no `vocab` is linked). The progress contract is preserved exactly: still
+one `ProgressBar` call per step / per token — a frame is attached to the call the step was
+already making, never an extra one. See
+[reform-step11-live-preview.md](./reform-step11-live-preview.md).
+
+没有新增节点——长耗时训练器与生成器在官方旁路通道上获得了**实时预览图**。
+`comfy.utils.ProgressBar.update_absolute(value, total, preview)` 接受
+`("JPEG", PIL.Image, max_size)` 三元组；`main.py` 为进度条安装的 hook 会把它作为二进制事件
+转发，前端渲染在正在执行的节点下方——正是 KSampler latent 预览用的那条通道，此处零改动复用，
+服务器与前端一行未动。
+
+共享部件在新纯模块 `comfy/loss_preview.py`：`LossCurvePreviewer`（每优化器步一次
+`record(loss)`，内部限频约 0.5 秒一帧——因为带 preview 的更新会绕过 ProgressBar 自身的节流；
+最后一步 `force=True`，保证最后一帧必为完整曲线）与 `render_text_snapshot`（已生成文本渲染成
+小卡片）。渲染优先 matplotlib（Agg、惰性导入），PIL `ImageDraw` 兜底，且*所有*失败路径都降级为
+"无预览"——预览绝不打断训练。接入三个节点：**Training Loop** 与 **Language Model Train** 推
+实时 loss 曲线；**Language Model Generate** 推已生成文本——`comfy/lm_protocol.generate_tokens`
+新增可选 `on_token(token_id)` 回调（既有 `progress` 回调原样保留），节点增量解码并渲染卡片
+（未接 `vocab` 时显示原始 token 下标）。进度契约严格保持：仍是每步 / 每 token 恰好一次
+`ProgressBar` 调用——帧附在该步本来就发的那次调用上，绝不额外多发。
+
+Measured after reform step 11: `IMPORT_FAILED []`, `CDL 109`; the registry is unchanged at 313
+nodes across 47 categories; the smoke tester reports `290 PASS / 23 SKIP / 0 FAIL`; the dedicated
+progress-contract script `cdl_smoke_tests/test_progress_reporting.py` pins the extended contract
+(`19 PASS`: per-node totals, update counts **and preview frames**, the protocol-level callbacks,
+and a real hook receiving the final `value == total`). The documented library is unchanged at 207
+nodes across 35 categories.
+
+reform 第十一步后实测：`IMPORT_FAILED []`、`CDL 109`；注册表不变，仍为 313 个节点 / 47 个分类；
+冒烟测试器给出 `290 PASS / 23 SKIP / 0 FAIL`；专项进度契约脚本
+`cdl_smoke_tests/test_progress_reporting.py` 固化扩展后的契约（`19 PASS`：逐节点总量、更新次数
+**与预览帧数**、协议层回调，以及真实 hook 收到的最终 `value == total`）。说明文件口径不变，
+仍为 207 个节点、35 个分类。
+
 ## Live Progress Reporting (实时进度报告)
 
 The long-running nodes report progress to the UI through `comfy.utils.ProgressBar`. The global
@@ -452,14 +504,15 @@ becomes cancellable as a side effect.
 
 `comfy/lm_protocol.generate_tokens` gained an optional `progress(done, total)` callback instead
 of importing UI machinery, so the protocol module keeps its `torch`-only imports; the node
-supplies a lambda that forwards to the bar. With no hook installed (a bare interpreter, the
-smoke tester) `ProgressBar` is a no-op, so the same code still runs headless.
+supplies a lambda that forwards to the bar. Step 11 added the sibling `on_token(token_id)`
+callback for the live text preview and moved the bar driving there (still exactly one call per
+token). With no hook installed (a bare interpreter, the smoke tester) `ProgressBar` is a no-op,
+so the same code still runs headless.
 
-**Measured:** the registry is unchanged at 302 nodes across 46 categories and the smoke tester
-still reports `279 PASS / 23 SKIP / 0 FAIL`; a new dedicated script
-`cdl_smoke_tests/test_progress_reporting.py` pins the contract (`11 PASS`) — the advertised
-totals and update counts per node, the protocol-level callback, and a real hook receiving the
-final `value == total`.
+**Measured:** the dedicated script `cdl_smoke_tests/test_progress_reporting.py` pins the
+contract (now `19 PASS`) — the advertised totals and update counts per node (previews included,
+see step 11), the protocol-level callbacks, and a real hook receiving the final
+`value == total`.
 
 长耗时节点现在通过 `comfy.utils.ProgressBar` 向 UI 报告进度。`main.py` 安装的全局 hook 借助
 `comfy_execution.utils.get_executing_context` 解析**正在执行**的节点，因此节点本身无需知道自己的
@@ -474,12 +527,13 @@ id 就能落在正确的进度条上——且同一调用会执行
 | Sliding Window | 流位置 | 每样本 |
 
 `comfy/lm_protocol.generate_tokens` 改为接受可选的 `progress(done, total)` 回调，而不是 import 任何
-UI 机制，从而保持该协议模块只依赖 `torch`；节点传入一个转发到进度条的 lambda。未安装 hook 时
-（裸解释器、冒烟测试器）`ProgressBar` 是空操作，同一份代码仍可无头运行。
+UI 机制，从而保持该协议模块只依赖 `torch`；节点传入一个转发到进度条的 lambda。第十一步为其新增了
+姊妹回调 `on_token(token_id)` 用于实时文本预览，并把进度条驱动移到那里（仍是每 token 恰好一次
+调用）。未安装 hook 时（裸解释器、冒烟测试器）`ProgressBar` 是空操作，同一份代码仍可无头运行。
 
-**实测**：注册表不变，仍为 302 个节点 / 46 个分类；冒烟测试器仍给出 `279 PASS / 23 SKIP / 0 FAIL`；
-新增专项脚本 `cdl_smoke_tests/test_progress_reporting.py` 固化该契约（`11 PASS`）——逐节点校验声明的
-总量与更新次数、协议层回调，以及真实 hook 收到的最终 `value == total`。
+**实测**：专项脚本 `cdl_smoke_tests/test_progress_reporting.py` 固化该契约（现为 `19 PASS`）——
+逐节点校验声明的总量与更新次数（含预览帧，见第十一步）、协议层回调，以及真实 hook 收到的最终
+`value == total`。
 
 ## Rollback (回退)
 

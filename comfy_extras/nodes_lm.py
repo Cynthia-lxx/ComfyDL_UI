@@ -35,6 +35,7 @@ run converge.
 
 import copy
 import os
+import time
 
 import torch
 import torch.nn.functional as F
@@ -43,6 +44,7 @@ from typing_extensions import override
 import comfy
 import folder_paths
 from comfy import lm_protocol as mp
+from comfy import loss_preview
 from comfy import training_protocol as tp
 from comfy_api.latest import ComfyExtension, io
 
@@ -418,6 +420,11 @@ class LanguageModelTrain(io.ComfyNode):
           once ``early_stop_patience`` steps pass without an improvement of
           ``early_stop_min_delta``, the copy's parameters are rolled back to the
           best point and the run ends there.
+          While training, the node also drives ComfyUI's live preview channel:
+          the cross-entropy curve recorded so far is rendered (rate-limited to
+          one frame per ~0.5 s, always a final frame at the end) and shown
+          under the node - the same side channel the KSampler latent preview
+          uses.
     In:   model (NNMODEL) - link from Language Model Build (or another Train
           node, to continue training).
           x (TENSOR) - ``(samples, window)`` long contexts; link from Sliding
@@ -623,7 +630,10 @@ class LanguageModelTrain(io.ComfyNode):
                 # Live progress: one update per optimizer step.  The ProgressBar
                 # hook binds itself to the executing node and doubles as the
                 # interrupt check, so a long run stays cancellable from the UI.
+                # The third update_absolute argument attaches the live
+                # loss-curve preview (rate-limited inside LossCurvePreviewer).
                 pbar = comfy.utils.ProgressBar(iterations)
+                curve_previewer = loss_preview.LossCurvePreviewer(title="cross entropy")
                 for step in range(iterations):
                     if per_step:
                         order = torch.randperm(samples, generator=shuffler)[:per_step]
@@ -652,7 +662,13 @@ class LanguageModelTrain(io.ComfyNode):
                     if stopper.improved:
                         best_state = tp.snapshot_state(trainee)
                         best_length = len(history)
-                    pbar.update(1)
+                    frame = curve_previewer.record(
+                        float(step_loss.detach()), force=(step + 1 == iterations)
+                    )
+                    if frame is not None:
+                        pbar.update_absolute(step + 1, iterations, frame)
+                    else:
+                        pbar.update(1)
                 if stopped_at is not None and best_state is not None:
                     # Roll back to the best point and cut the history there, so
                     # the outputs are what "the best model of this run" means.
@@ -740,6 +756,12 @@ class LanguageModelGenerate(io.ComfyNode):
           above 1 flattens toward uniform. The sampling runs on a local
           ``torch.Generator`` seeded by ``seed`` - the same inputs always
           reproduce the same continuation.
+          While generating, the node also drives ComfyUI's live preview
+          channel: the text generated so far is rendered onto a small card
+          (rate-limited to one frame per ~0.5 s, always a final frame at the
+          end) and shown under the node - the same side channel the KSampler
+          latent preview uses. Needs a wired ``vocab`` to decode; without one
+          the preview shows the raw token indices instead.
     In:   model (NNMODEL) - link from Language Model Train (a trained model
           generates text; an untrained one generates noise).
           vocab (VOCAB, optional) - link from Vocab Build to read the ``prefix``
@@ -856,15 +878,45 @@ class LanguageModelGenerate(io.ComfyNode):
         # Live progress: one update per generated token.  The ProgressBar hook
         # binds itself to the executing node and doubles as the interrupt check
         # (model_management.throw_exception_if_processing_interrupted), so a
-        # long generation stays cancellable from the UI.
+        # long generation stays cancellable from the UI.  The preview triple
+        # attaches the live text card: the tokens generated so far, decoded
+        # and rendered (rate-limited; the last token always renders, so the
+        # final frame is the complete text).
         pbar = comfy.utils.ProgressBar(count)
+        prefix_text = table.decode(start) if table is not None else ""
+        generated: list[int] = []
+        last_render = 0.0
+
+        def _snapshot(done: int, force: bool = False) -> tuple | None:
+            nonlocal last_render
+            now = time.perf_counter()
+            if not force and now - last_render < loss_preview.MIN_RENDER_INTERVAL:
+                return None
+            last_render = now
+            if table is not None:
+                body = prefix_text + table.decode(generated)
+            else:
+                body = " ".join(str(index) for index in generated)
+            return loss_preview.render_text_snapshot(
+                body, title=f"generated {done}/{count}"
+            )
+
+        def _on_token(token_id: int) -> None:
+            generated.append(int(token_id))
+            done = len(generated)
+            frame = _snapshot(done, force=(done == count))
+            if frame is not None:
+                pbar.update_absolute(done, count, frame)
+            else:
+                pbar.update_absolute(done, count)
+
         ids = mp.generate_tokens(
             trainee,
             start,
             num_tokens=count,
             temperature=float(temperature),
             seed=int(seed),
-            progress=lambda done, total: pbar.update_absolute(done, total),
+            on_token=_on_token,
         )
         text = table.decode(ids.tolist()) if table is not None else ""
         return io.NodeOutput(ids, text)

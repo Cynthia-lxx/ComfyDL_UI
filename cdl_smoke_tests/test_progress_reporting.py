@@ -9,13 +9,18 @@ ComfyUI renders a per-node progress bar when a node drives
 ``comfy.utils.ProgressBar``: the global hook (installed by ``main.py``) resolves
 the *currently executing node* from ``comfy_execution.utils.get_executing_context``
 and additionally performs the interrupt check, so a reported loop is both visible
-in the UI and cancellable.  This script pins that contract for the loops that can
-run for a long time:
+in the UI and cancellable.  A ``preview`` image can be attached as the third
+argument of ``update_absolute`` - the same side channel KSampler's latent
+preview uses - and is then rendered under the node.  This script pins that
+contract for the loops that can run for a long time:
 
-* ``Training Loop``            - one update per optimizer step;
-* ``Language Model: Train``    - one update per optimizer step;
+* ``Training Loop``            - one update per optimizer step, live loss
+                                 curve preview (matplotlib or PIL fallback);
+* ``Language Model: Train``    - one update per optimizer step, live loss
+                                 curve preview;
 * ``Language Model: Generate`` - one update per generated token, driven through
-  the ``progress`` callback of ``comfy.lm_protocol.generate_tokens``;
+  the ``progress`` callback of ``comfy.lm_protocol.generate_tokens``, live
+  text-snapshot preview through its ``on_token`` callback;
 * ``Sliding Window``           - one update per sample cut from the stream.
 
 The node checks swap ``comfy.utils.ProgressBar`` for a recorder and assert the
@@ -66,6 +71,7 @@ class Recorder:
         self.node_id = node_id
         self.updates = 0
         self.value = 0
+        self.previews = 0
 
     def update(self, value):
         self.updates += 1
@@ -76,6 +82,8 @@ class Recorder:
         self.value = value
         if total is not None:
             self.total = total
+        if preview is not None:
+            self.previews += 1
 
 
 _MADE: list[Recorder] = []
@@ -143,6 +151,11 @@ try:
         bar is not None and bar.updates == 25,
         f"updates={getattr(bar, 'updates', None)} (expect 25)",
     )
+    check(
+        "T1 TrainingLoop pushes at least one preview frame",
+        bar is not None and bar.previews >= 1,
+        f"previews={getattr(bar, 'previews', None)} (expect >= 1)",
+    )
 
     # ---- T2: Language Model Train -----------------------------------------
     _install_recorder()
@@ -163,15 +176,21 @@ try:
         bar is not None and bar.total == 17 and bar.updates == 17,
         f"total={getattr(bar, 'total', None)}, updates={getattr(bar, 'updates', None)} (expect 17/17)",
     )
+    check(
+        "T2 LanguageModelTrain pushes at least one preview frame",
+        bar is not None and bar.previews >= 1,
+        f"previews={getattr(bar, 'previews', None)} (expect >= 1)",
+    )
 
     # ---- T3: Language Model Generate --------------------------------------
     _install_recorder()
     model = _build_model()
+    vocab = mp.Vocab(tokens=("<unk>", "a", "b", "c", "d"), level="char")
     nodes_lm.LanguageModelGenerate.execute(
         model=model,
-        vocab=None,
-        prefix="the ",
-        prefix_ids=torch.tensor([1, 2], dtype=torch.long),
+        vocab=vocab,
+        prefix="ab",
+        prefix_ids=None,
         num_tokens=9,
         temperature=1.0,
         seed=0,
@@ -181,6 +200,11 @@ try:
         "T3 LanguageModelGenerate drives one bar of exactly `num_tokens` units",
         bar is not None and bar.total == 9 and bar.updates == 9,
         f"total={getattr(bar, 'total', None)}, updates={getattr(bar, 'updates', None)} (expect 9/9)",
+    )
+    check(
+        "T3 LanguageModelGenerate pushes at least one text preview frame",
+        bar is not None and bar.previews >= 1,
+        f"previews={getattr(bar, 'previews', None)} (expect >= 1)",
     )
 
     # ---- T4: Sliding Window -----------------------------------------------
@@ -258,6 +282,46 @@ check(
     "T6 the hook receives the final value == total (12)",
     bool(_seen) and _seen[-1][0] == 12 and _seen[-1][1] == 12,
     str(_seen[-1] if _seen else None),
+)
+
+# ---------------------------------------------------------------------------
+# T7: the shared preview helpers themselves (comfy/loss_preview.py).
+
+from PIL import Image  # noqa: E402
+
+from comfy import loss_preview as lp  # noqa: E402
+
+previewer = lp.LossCurvePreviewer(title="loss", min_interval=0.0)
+frame = previewer.render()
+check("T7 LossCurvePreviewer renders nothing before any value", frame is None, str(frame))
+
+frames = [previewer.record(float(value)) for value in (1.0, 0.6, 0.3)]
+check(
+    "T7 LossCurvePreviewer returns a JPEG preview triple after values",
+    all(isinstance(f, tuple) and len(f) == 3 and f[0] == "JPEG" and isinstance(f[1], Image.Image) for f in frames),
+    str(type(frames[-1])),
+)
+
+throttled = lp.LossCurvePreviewer(title="loss", min_interval=60.0)
+first = throttled.record(1.0)
+second = throttled.record(0.5)
+check(
+    "T7 LossCurvePreviewer throttles the second frame",
+    first is not None and second is None,
+    f"first={first is not None}, second={second is not None}",
+)
+
+snapshot = lp.render_text_snapshot("hello generated world", title="generated 3/9")
+check(
+    "T7 render_text_snapshot returns a JPEG preview triple",
+    isinstance(snapshot, tuple) and len(snapshot) == 3 and snapshot[0] == "JPEG"
+    and isinstance(snapshot[1], Image.Image),
+    str(type(snapshot)),
+)
+check(
+    "T7 render_text_snapshot tolerates empty text",
+    lp.render_text_snapshot("", title="generated 0/9") is not None,
+    "empty body raised",
 )
 
 # ---------------------------------------------------------------------------
