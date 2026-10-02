@@ -27,10 +27,10 @@ ComfyUI 分支。
 流水线 → Generate → Save。`Language Model Train` 节点在训练的同时会把 cross-entropy 曲线
 **实时刷在自己节点下方**（节点下方那张预览卡片）：
 
-![ComfyDL_UI 中的语言模型训练工作流](comfydl/assets/languange_model_train_workflow.png)
+![ComfyDL_UI 中的语言模型训练工作流](assets/languange_model_train_workflow.png)
 
 <p align="center">
-  <img src="comfydl/assets/language_model_train_node_focus.png" alt="Language Model Train 节点与其实时 loss 曲线预览" width="440" />
+  <img src="assets/language_model_train_node_focus.png" alt="Language Model Train 节点与其实时 loss 曲线预览" width="440" />
 </p>
 
 > 更多示例与完整节点参考见 [`comfydl/`](comfydl/) 子模块说明

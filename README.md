@@ -28,10 +28,10 @@ A language model trained end to end inside the graph — Vocab Build → Text En
 Window → the Language Model pipeline → Generate → Save. The `Language Model Train` node streams
 its cross-entropy curve **under itself while it trains** (the preview card below the node):
 
-![Language Model training workflow in ComfyDL_UI](comfydl/assets/languange_model_train_workflow.png)
+![Language Model training workflow in ComfyDL_UI](assets/languange_model_train_workflow.png)
 
 <p align="center">
-  <img src="comfydl/assets/language_model_train_node_focus.png" alt="Language Model Train node with its live loss-curve preview" width="440" />
+  <img src="assets/language_model_train_node_focus.png" alt="Language Model Train node with its live loss-curve preview" width="440" />
 </p>
 
 > More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule
