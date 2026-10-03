@@ -51,26 +51,31 @@ ComfyUI 分支。
 
 ## 安装
 
-### Windows —— 自带环境（推荐）
+需要 Python 3.12+（推荐 3.13），任何有可用 PyTorch 版本的系统均可运行。
 
-仓库自带预配置的内嵌环境（`penv/`，Python 3.14）：
-
-```bash
-penv\Scripts\python.exe main.py
-```
-
-打开提示的地址即可：ComfyDL 节点已作为内置节点注册，无需再放进 `custom_nodes`。
-
-### 手动安装（任意系统）
+建议先创建虚拟环境以隔离依赖——避免与你机器上其他位置安装的包发生冲突：
 
 ```bash
 git clone https://github.com/Cynthia-lxx/ComfyDL_UI
 cd ComfyDL_UI
+python -m venv .venv
+
+.venv\Scripts\activate     # Windows
+source .venv/bin/activate  # Linux / macOS
+```
+
+然后安装依赖并启动：
+
+```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-纯 CPU 机器开箱即用。若要 GPU 加速，请先安装匹配硬件的 PyTorch 版本：
+打开提示的地址即可：ComfyDL 节点已作为内置节点注册，无需再放进 `custom_nodes`。
+
+### GPU 加速
+
+纯 CPU 机器开箱即用。若要 GPU 加速，请在同一环境中安装匹配硬件的 PyTorch 版本：
 
 - **NVIDIA**：`pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130`
 - **AMD（Linux，ROCm）**：`pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2`

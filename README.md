@@ -55,28 +55,34 @@ its cross-entropy curve **under itself while it trains** (the preview card below
 
 ## Installation
 
-### Windows — bundled environment (recommended)
+Requires Python 3.12+ (3.13 recommended). Any OS with a supported PyTorch build works.
 
-The repository ships a preconfigured embedded environment (`penv/`, Python 3.14):
+First create a virtual environment to keep the dependencies isolated — this avoids conflicts
+with packages installed elsewhere on your machine:
 
 ```bash
-penv\Scripts\python.exe main.py
+git clone https://github.com/Cynthia-lxx/ComfyDL_UI
+cd ComfyDL_UI
+python -m venv .venv
+
+.venv\Scripts\activate     # Windows
+source .venv/bin/activate  # Linux / macOS
+```
+
+Then install the dependencies and launch:
+
+```bash
+pip install -r requirements.txt
+python main.py
 ```
 
 Open the address it prints. The ComfyDL nodes are already registered as built-ins — nothing
 goes into `custom_nodes`.
 
-### Manual install (any OS)
-
-```bash
-git clone https://github.com/Cynthia-lxx/ComfyDL_UI
-cd ComfyDL_UI
-pip install -r requirements.txt
-python main.py
-```
+### GPU acceleration
 
 A CPU-only machine works out of the box. For GPU acceleration, install the PyTorch build that
-matches your hardware first:
+matches your hardware into the same environment:
 
 - **NVIDIA**: `pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130`
 - **AMD (Linux, ROCm)**: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2`
