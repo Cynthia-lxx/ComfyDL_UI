@@ -36,6 +36,39 @@ ComfyUI 分支。
 > 更多示例与完整节点参考见 [`comfydl/`](comfydl/) 子模块说明
 > （[English](comfydl/README.md)、[FUNCTIONS_zh.md](comfydl/FUNCTIONS_zh.md)）。
 
+## 内存分析
+
+深度学习图往往先在同一个地方翻车：内存。任何东西入队之前，ComfyDL_UI 会根据当前图的参数与
+数据流估算峰值内存，与设备预算比对，并给出绿 / 黄 / 红三色判定——放不下的图会在
+**执行到一半之前**就告诉你。
+
+![Profiling 侧栏：设备预算、CERTAIN OOM 判定与按节点分解](assets/profiling_memory_verdict.png)
+
+- **边改边估**：任何参数或连线变化都会在 500ms 防抖后重新估算。侧栏里是设备预算（总量/空闲/已用）、
+  估算峰值与最大的单张量，以及按节点分解的参数、激活、优化器状态，每一项都附上数字的依据。
+- **三色判定**：绿=放得下；黄=吃紧（只弹 toast，不阻断）；红=**一定 OOM**——估算超过总预算，
+  或存在单张量本身就大于空闲内存。红色图按 Run 会先弹下方的警告，但**仍可强制继续**
+  （估算本就是启发式上界）。
+- **事后分析**：万一还是分配失败，会把分配器报错里的字节数反查回是哪个张量要的，并给出可行的取值
+  建议（例如一个不再超限的 batch size）。
+- **对未知诚实**：估算器未覆盖的节点类型标为 `unknown`，而不是猜。
+- **双语**：面板、徽章、确认框与事后分析卡片都跟随界面语言（English / 中文）。
+
+按 Run 时若判定为红，会先给出警告，并允许覆盖：
+
+<p align="center">
+  <img src="assets/profiling_memory_warning.png" alt="对判定为一定 OOM 的图入队时弹出的内存警告框" width="620" />
+</p>
+
+按节点分解表会把「最大的单张量」放在每一行旁——上面的例子里，一个 `B × T × V` 的 logits
+张量自己就是 1.21 TB：
+
+<p align="center">
+  <img src="assets/profiling_memory_breakdown.png" alt="按节点分解表，每行附带最大的单张量" width="230" />
+</p>
+
+公式、阈值、降级链与验收清单见 [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md)。
+
 ## 特性
 
 - 可视化节点图，无需写代码即可搭建、复用深度学习工作流。
@@ -44,6 +77,7 @@ ComfyUI 分支。
 - 高效本地执行：异步队列 + 部分重执行——只有变化过的子图会重新运行。
 - 智能显存/内存管理；无任何 GPU 后端时自动回退 CPU。
 - 运行中节点下方的实时进度与预览卡片（loss 曲线、生成文本快照），经内置 WebSocket 通道推送。
+- 内置内存分析：峰值估算、三色判定、入队前的超限警告，以及分配失败后的事后归因。
 - 工作流以 JSON 保存与加载。
 - 完全离线运行：除非你主动要求，核心不会下载任何东西。
 - 仍可通过 `custom_nodes/` 兼容第三方自定义节点包。
@@ -146,7 +180,7 @@ macOS 用户可用 `Cmd` 代替 `Ctrl`。
 
 - [`comfydl/`](comfydl/) 子模块：节点包说明 `README.md` / `README_zh.md` 与完整节点参考
   `FUNCTIONS.md` / `FUNCTIONS_zh.md`。
-- [`docs/`](docs/)：脱水清单、品牌化与前端补丁、ComfyDL 内置化及各阶段 reform 设计文档。
+- [`docs/`](docs/)：脱水清单、品牌化与前端补丁、ComfyDL 内置化、内存分析及各阶段 reform 设计文档。
 - [`AGENTS.md`](AGENTS.md)：本仓库的工作约定。
 - [English README](README.md)
 
