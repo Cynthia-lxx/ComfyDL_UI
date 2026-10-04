@@ -42,7 +42,7 @@ from comfy_api import feature_flags
 from comfy.comfy_api_env import get_environment_overrides
 import node_helpers
 from comfyui_version import __version__
-from app import profiling_routes
+from app import profiling_routes, profiling_watchdog
 from app.frontend_management import FrontendManager, parse_version
 from app.frontend_patch import apply_frontend_patches
 from comfy_api.internal import _ComfyNodeInternal
@@ -273,7 +273,18 @@ class PromptServer():
             if isinstance(route, web.RouteDef):
                 routes.route(route.method, route.path)(route.handler, **route.kwargs)
         self.last_node_id = None
+        self.last_prompt_id = None
         self.client_id = None
+
+        # ComfyDL Profiling M2: execution-time watchdog. Sampled facts only
+        # (process/system CPU + RSS, attributed to the executing node); the
+        # burst ledger survives restarts in user/comfydl/. Started last so
+        # the route table above (including its /api twins) already exists.
+        self.profiling_watchdog = profiling_watchdog.ProfilingWatchdog(
+            self, scale_hint_fn=profiling_routes.scale_hint_for
+        )
+        profiling_routes.set_watchdog(self.profiling_watchdog)
+        self.profiling_watchdog.start()
 
         self.on_prompt_handlers = []
 

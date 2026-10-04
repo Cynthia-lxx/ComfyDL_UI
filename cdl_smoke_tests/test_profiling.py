@@ -367,6 +367,16 @@ async def _route_checks() -> None:
         check("T9g assets: profiler.css served",
               resp.status == 200 and "css" in resp.headers.get("Content-Type", ""),
               f"{resp.status} {resp.headers.get('Content-Type')}")
+        # The panel's display font lives in a subdirectory of the asset dir:
+        # the same static route must reach it, with the binary intact (a 404
+        # or an HTML error page would silently fall back to system fonts).
+        resp = await client.get("/comfydl/profiling/fonts/GmarketSansBoldYPG.ttf")
+        body = await resp.read()
+        check("T9h assets: display font served intact (TrueType magic, font MIME)",
+              resp.status == 200 and body[:4] == b"\x00\x01\x00\x00"
+              and "font" in resp.headers.get("Content-Type", "")
+              and len(body) > 9000,
+              f"{resp.status} {resp.headers.get('Content-Type')} {len(body)}B")
     finally:
         await client.close()
 

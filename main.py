@@ -628,4 +628,10 @@ if __name__ == "__main__":
         logging.info("\nStopped server")
     finally:
         asset_seeder.shutdown()
+        # ComfyDL Profiling M2: join the watchdog sampling thread so no
+        # daemon lingers behind the stopped server.
+        try:
+            server.PromptServer.instance.profiling_watchdog.stop()
+        except AttributeError:
+            pass
         cleanup_temp()

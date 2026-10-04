@@ -6,6 +6,33 @@
  * meaning never depends on the palette.
  */
 
+/* Display font (polish pass): Gmarket Sans Bold, shipped as a deliberately
+ * tiny 10 KB subset that carries digits, upper/lower Latin and the basic
+ * punctuation only. '%', '\u00b7', '\u2014', '\u2026', '_' and every CJK glyph are
+ * NOT in it and fall back per character, so the family is applied only
+ * where those characters cannot appear: metric values (verdict number,
+ * budget cells, FLOPs total, timing figures), verdict badges, table columns
+ * and buttons. Everything else keeps the system stack, whose coverage is
+ * complete and whose colour is quieter: card titles, per-node rows, tags
+ * and the topbar badge stay on it after user review (Gmarket made the node
+ * list read as shouty rather than as a dense ledger), and the live capsule
+ * stays monospace so the per-second numbers do not jitter. Gmarket Sans is
+ * a free font released by Gmarket; the subset ships with the panel because
+ * the numbers are the point.
+ */
+@font-face {
+  font-family: "Gmarket Sans";
+  src: url("/comfydl/profiling/fonts/GmarketSansBoldYPG.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Declared at the root because the topbar badge lives outside .cdlp-panel. */
+:root {
+  --cdlp-font-display: "Gmarket Sans", "Gmarket Sans Bold", "Roboto", "Noto Sans SC", sans-serif;
+}
+
 .cdlp-host { height: 100%; overflow-y: auto; }
 
 .cdlp-panel {
@@ -27,8 +54,8 @@
 
 .cdlp-card-title {
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--input-text-read-only, #9a9a9a);
   margin-bottom: 8px;
@@ -51,6 +78,7 @@
   transition: background 200ms ease, border-color 200ms ease;
 }
 .cdlp-verdict-badge {
+  font-family: var(--cdlp-font-display);
   font-size: 14px;
   font-weight: 700;
   padding: 4px 12px;
@@ -58,9 +86,10 @@
   color: #161616;
 }
 .cdlp-verdict-num {
-  font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 20px;
-  font-weight: 600;
+  font-family: var(--cdlp-font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 .cdlp-verdict-reason { color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
 .cdlp-verdict-largest { width: 100%; color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
@@ -78,9 +107,9 @@
 .cdlp-budget { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .cdlp-budget-cell .cdlp-k { color: var(--input-text-read-only, #9a9a9a); font-size: 11px; margin-bottom: 2px; }
 .cdlp-budget-cell .cdlp-v {
-  font-family: "Roboto Mono", ui-monospace, monospace;
-  font-size: 15px;
-  font-weight: 600;
+  font-family: var(--cdlp-font-display);
+  font-size: 16px;
+  font-weight: 700;
 }
 .cdlp-meter {
   height: 4px;
@@ -132,8 +161,15 @@
 }
 .cdlp-node summary::-webkit-details-marker { display: none; }
 .cdlp-node summary:hover { background: rgba(255, 255, 255, 0.04); }
-.cdlp-node-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cdlp-node-bytes { font-family: "Roboto Mono", ui-monospace, monospace; color: var(--input-text-read-only, #9a9a9a); }
+.cdlp-node-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdlp-node-bytes {
+  color: var(--input-text-read-only, #9a9a9a);
+}
 .cdlp-node-unknown { opacity: 0.6; }
 .cdlp-tag {
   font-size: 10px;
@@ -155,7 +191,7 @@
 .cdlp-table td { padding: 3px 10px; }
 .cdlp-table td:not(:first-child), .cdlp-table th:not(:first-child) {
   text-align: right;
-  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-family: var(--cdlp-font-display);
 }
 .cdlp-table i { color: var(--input-text-read-only, #9a9a9a); }
 
@@ -164,6 +200,7 @@
 .cdlp-pm-title { color: #f87171; }
 .cdlp-pm-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
 .cdlp-pm-row span { color: var(--input-text-read-only, #9a9a9a); }
+.cdlp-pm-row b { font-family: var(--cdlp-font-display); }
 .cdlp-pm-msg {
   margin: 8px 0 0;
   padding: 8px;
@@ -185,6 +222,7 @@
   border: 1px solid var(--border-color, #2a2a2a);
   background: var(--comfy-menu-bg, #1f1f1f);
   color: var(--fg-color, #e0e0e0);
+  font-family: var(--cdlp-font-display);
   font-size: 12px;
   cursor: pointer;
   transition: border-color 150ms ease, background 150ms ease;
@@ -205,11 +243,16 @@ button.cdlp-b-yellow, .cdlp-b-yellow { color: #fbbf24 !important; }
 button.cdlp-b-red, .cdlp-b-red { color: #f87171 !important; }
 button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 
+/* The topbar badge sits in the native toolbar next to ComfyUI's own buttons,
+ * so it wears the native face rather than the display face (user review). */
+.cdlp-b-green, .cdlp-b-yellow, .cdlp-b-red, .cdlp-b-gray {
+  font-weight: 600;
+}
+
 /* Topbar badge - raw DOM fallback */
 .cdlp-badge-fallback {
-  font-family: "Roboto Mono", ui-monospace, monospace;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 4px 12px;
   margin: 0 4px;
   border-radius: 999px;
@@ -223,3 +266,125 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 .cdlp-badge-fallback.cdlp-b-red { color: #f87171; border-color: rgba(248, 113, 113, 0.55); }
 .cdlp-badge-fallback.cdlp-b-gray { color: #9a9a9a; }
 .cdlp-badge-fallback:hover { filter: brightness(1.2); }
+
+/* M2: compute ledger */
+.cdlp-flops-total {
+  font-family: var(--cdlp-font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.cdlp-kindbar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0 6px;
+  background: var(--border-color, #2a2a2a);
+}
+.cdlp-kindbar div { height: 100%; transition: width 300ms ease; }
+.cdlp-k-attn { background: #60a5fa; }
+.cdlp-k-ffn { background: #4ade80; }
+.cdlp-k-logits { background: #fbbf24; }
+.cdlp-k-other { background: #9a9a9a; }
+.cdlp-flops-na { color: #6e6e6e; font-size: 10px; font-style: normal; }
+
+/* M2: measured node time */
+.cdlp-timing-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.cdlp-timing-total span { color: var(--input-text-read-only, #9a9a9a); }
+.cdlp-timing-total b {
+  font-family: var(--cdlp-font-display);
+  font-size: 16px;
+}
+.cdlp-timing-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.cdlp-timing-name {
+  flex: 0 0 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.cdlp-timing-bar {
+  flex: 1;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.cdlp-timing-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #60a5fa, #4ade80);
+  transform-origin: left center;
+  animation: cdlp-grow 300ms ease;
+}
+@keyframes cdlp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.cdlp-timing-val {
+  flex: 0 0 auto;
+  min-width: 56px;
+  text-align: right;
+  font-family: var(--cdlp-font-display);
+  font-size: 12px;
+  color: var(--input-text-read-only, #9a9a9a);
+}
+
+/* M2: execution monitor burst log */
+.cdlp-wd { border-color: rgba(248, 113, 113, 0.45); background: rgba(248, 113, 113, 0.06); }
+.cdlp-wd-title { color: #f87171; }
+.cdlp-burst {
+  border-left: 2px solid #f87171;
+  border-radius: 0 6px 6px 0;
+  background: rgba(248, 113, 113, 0.05);
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
+.cdlp-burst-head { display: flex; align-items: center; gap: 8px; }
+.cdlp-burst-time {
+  margin-left: auto;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  color: #f87171;
+}
+.cdlp-burst-meta, .cdlp-burst-scale {
+  font-size: 11px;
+  color: var(--input-text-read-only, #9a9a9a);
+  margin-top: 2px;
+}
+.cdlp-tag-sys { border-color: rgba(248, 113, 113, 0.55); color: #f87171; }
+
+/* M2: topbar live indicator (W2) */
+.cdlp-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  margin: 0 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-menu-bg, #1f1f1f);
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 12px;
+  transition: opacity 200ms ease;
+}
+.cdlp-live-hidden { display: none; }
+.cdlp-live-node {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-color, #e0e0e0);
+}
+.cdlp-live-stat { color: var(--input-text-read-only, #9a9a9a); }
+.cdlp-cpu-ok { color: #4ade80; }
+.cdlp-cpu-warn { color: #fbbf24; }
+.cdlp-cpu-hot { color: #f87171; }

@@ -200,6 +200,11 @@ server.py  PromptServer.__init__
 > 请求期改写都不同：这一层的 JS/CSS **完全由仓库提供**，前端包里只注入一个
 > `<script type="module">` 加载器。设计细节见
 > `docs/profiling-m1-memory-estimation.md`。
+>
+> M2（reform: Profiling Tools M2，计算量 + 实测耗时 + 瞬爆监控）**扩展同一资产、
+> 无新注入项**：`profiler.js`/`profiler.css` 原文件内加块，新增的两个 watchdog
+> GET 路由沿用 `self.routes` 挂载方式；设计细节见
+> `docs/profiling-m2-compute-and-watchdog.md`。
 
 ### 8.1 构成
 
@@ -207,6 +212,7 @@ server.py  PromptServer.__init__
 |---|---|
 | `app/profiling_assets/profiler.js` | 前端扩展：侧栏页、顶栏徽章、Run 红色二次确认、OOM 事后分析，zh/en 双语（内嵌字典，随 `Comfy.Locale` 切换） |
 | `app/profiling_assets/profiler.css` | 面板样式，跟随 ComfyUI 主题变量 |
+| `app/profiling_assets/fonts/GmarketSansBoldYPG.ttf` | 展示字体（Gmarket Sans Bold 子集，10 KB，仅数字/拉丁/基本标点）；仅施加于数值/状态类元素，卡片标题、节点行、顶栏徽章保持系统字体，详见 `docs/profiling-m2-compute-and-watchdog.md` §11 |
 | `server.py` | `/comfydl/profiling/{path:.*}` 静态路由直发资产目录；`app/profiling_routes.py` 的 estimate/postmortem 路由挂到 `self.routes`（自动获得 `/api` 孪生前缀，供前端 `fetchApi` 调用） |
 | `app/frontend_patch.py` | `_patch_profiling_loader()`：往前端包 `index.html` 的 `</body>` 前幂等注入 `<script type="module" src="/comfydl/profiling/profiler.js">`，标记注释 `<!--ComfyDL_UI:profiling-loader-->` |
 
@@ -217,7 +223,10 @@ index.html（被注入 loader，标记幂等）
   └─ /comfydl/profiling/profiler.js        server.py 静态路由 → 仓库资产
        ├─ window.comfyAPI.app.api           官方扩展入口，零 chunk 改写
        ├─ POST /api/comfydl/profiling/estimate     → comfy/profiling 引擎
-       └─ POST /api/comfydl/profiling/postmortem   → 报错解析 + 建议 batch_size
+       ├─ POST /api/comfydl/profiling/postmortem   → 报错解析 + 建议 batch_size
+       ├─ GET  /api/comfydl/profiling/watchdog/status（M2 实时快照）
+       ├─ GET  /api/comfydl/profiling/watchdog/log  （M2 瞬爆案底）
+       └─ GET  /comfydl/profiling/fonts/*.ttf       （展示字体，静态路由直发，非 /api）
 ```
 
 - 注入位置在 `</body>` 前、前端主入口模块之后：module 脚本按文档序执行，

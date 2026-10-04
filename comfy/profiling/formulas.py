@@ -1,9 +1,9 @@
-"""The DL memory formula library of ``comfy.profiling``.
+"""The DL memory & compute formula library of ``comfy.profiling``.
 
-Every number here is an *upper bound* of what the corresponding node keeps
-alive at its peak, derived from the explicit math the nodes execute (see
-``comfy_extras/nodes_lm.py`` / ``comfy/lm_protocol.py`` for the ground truth
-these formulas mirror):
+Every memory number here is an *upper bound* of what the corresponding node
+keeps alive at its peak, derived from the explicit math the nodes execute
+(see ``comfy_extras/nodes_lm.py`` / ``comfy/lm_protocol.py`` for the ground
+truth these formulas mirror):
 
 * training peak = parameters P + gradients G (= P) + optimizer state
   (AdamW/Adam 2P, RMSprop P, SGD 0) + an optional early-stop snapshot (P)
@@ -14,6 +14,15 @@ Each :class:`MemoryItem` also carries ``single_bytes`` - the largest single
 allocation inside the item - because "one tensor larger than free memory"
 fails even when the total would fit (the 13.3 GB k_proj output of the
 profiling golden case is exactly that situation).
+
+The M2 compute ledger (:class:`FlopsItem`) counts *matmul* FLOPs only
+(one multiply-accumulate = 2 FLOPs): embedding gathers, softmax,
+layer-norm and other elementwise work are excluded - next to the GEMMs
+they are noise, and the standard "6ND" rule (Kaplan et al. 2020) makes the
+same simplification. Training counts ``3x`` the forward FLOPs per step
+(backward of a GEMM block costs about twice its forward). These are
+*compute amounts*, not times: no throughput claim is made (that needs the
+measured calibration of a later milestone).
 """
 
 from __future__ import annotations
@@ -332,3 +341,184 @@ def mlp_training(
     )
     items.append(MemoryItem("batch targets", b * int(out_features) * 4, kind="inputs"))
     return Breakdown(items)
+
+
+# --------------------------------------------------------------------------- #
+# Compute ledger (M2): FLOPs of the same workloads the memory side covers.
+# --------------------------------------------------------------------------- #
+
+#: Training cost of one GEMM-dominant step = forward + backward, and the
+#: backward costs about twice the forward -> the standard "3x forward" rule
+#: (the 6ND estimate of Kaplan et al. 2020 uses the same factor).
+TRAINING_FLOPS_MULTIPLIER = 3
+
+#: The "6ND" empirical rule: training a dense transformer costs about
+#: 6 x parameters x tokens processed. Used as a cross-check of the
+#: per-layer sums in the tests, never as the primary source.
+SIX_ND_COEFFICIENT = 6
+
+
+@dataclasses.dataclass(frozen=True)
+class FlopsItem:
+    """One line of a node's compute breakdown.
+
+    ``flops`` counts multiply-accumulate as 2 (the GEMM convention).
+    ``kind`` is one of ``attn`` / ``ffn`` / ``logits`` / ``other`` - the
+    frontend colours the rows by it; ``approx`` marks numbers derived
+    through a rule of thumb (the 3x training factor, the no-cache
+    generation bound) rather than counted per GEMM.
+    """
+
+    label: str
+    flops: int
+    kind: str = "other"
+    approx: bool = False
+
+    def as_dict(self) -> dict:
+        return {
+            "kind": self.kind,
+            "label": self.label,
+            "flops": int(self.flops),
+            "approx": bool(self.approx),
+        }
+
+
+def lm_forward_flops(
+    batch: int,
+    seq: int,
+    vocab_size: int,
+    d_model: int,
+    blocks: Sequence[BlockInfo],
+) -> List[FlopsItem]:
+    """Matmul FLOPs of one forward pass over ``(batch, seq)`` inputs.
+
+    Per block: q/k/v/out projections are four ``E x E`` GEMMs
+    (``8*B*T*E^2``); ``QK^T`` and ``A @ V`` are two ``T x T x d_head``
+    GEMMs each (``4*B*T^2*E`` - independent of the head count, since
+    ``d_head = E / H``); the FFN is two ``E <-> F`` GEMMs (``4*B*T*E*F``).
+    The output head adds ``2*B*T*E*V``. Embedding lookups, softmax,
+    layer-norm and residuals are elementwise and excluded.
+    """
+    b, t, e = int(batch), int(seq), int(d_model)
+    items: List[FlopsItem] = []
+    for index, block in enumerate(blocks, 1):
+        if block.d_model is None or block.d_ffn is None:
+            continue
+        width, hidden = int(block.d_model), int(block.d_ffn)
+        projections = 4 * 2 * b * t * width * width
+        scores = 4 * b * t * t * width
+        ffn = 2 * 2 * b * t * width * hidden
+        items.append(
+            FlopsItem(
+                f"block {index}: attention (q/k/v/o + scores)", projections + scores, kind="attn"
+            )
+        )
+        items.append(
+            FlopsItem(f"block {index}: feed-forward (2 linears)", ffn, kind="ffn")
+        )
+    items.append(FlopsItem("output head (E -> V)", 2 * b * t * e * int(vocab_size), kind="logits"))
+    return items
+
+
+def lm_training_flops(
+    batch: int,
+    seq: int,
+    vocab_size: int,
+    d_model: int,
+    blocks: Sequence[BlockInfo],
+    steps: int,
+) -> List[FlopsItem]:
+    """Matmul FLOPs of a whole training run: (forward + backward) x steps.
+
+    Every forward item is scaled by ``3 x steps`` (the backward-pass rule
+    above); the optimizer update is elementwise and excluded. ``steps``
+    below 1 counts as 1, mirroring the nodes' clamping.
+    """
+    count = max(1, int(steps))
+    scale = TRAINING_FLOPS_MULTIPLIER * count
+    return [
+        FlopsItem(
+            f"{item.label} x {scale} ({count} steps)",
+            item.flops * scale,
+            kind=item.kind,
+            approx=True,
+        )
+        for item in lm_forward_flops(batch, seq, vocab_size, d_model, blocks)
+    ]
+
+
+def lm_generate_flops(
+    prefix_length: int,
+    num_tokens: int,
+    vocab_size: int,
+    d_model: int,
+    blocks: Sequence[BlockInfo],
+) -> List[FlopsItem]:
+    """Matmul FLOPs of the autoregressive generation loop.
+
+    ``lm_protocol.generate_tokens`` keeps no KV cache: every step re-runs
+    the whole forward over the sequence so far, so the total is the sum of
+    forwards over lengths ``L, L+1, ..., L+count-1``. For absurdly large
+    token counts the loop falls back to the max-length upper bound.
+    """
+    count = max(0, int(num_tokens))
+    start = max(1, int(prefix_length))
+    if count == 0:
+        return []
+    if count * max(1, len(blocks)) > 1_000_000:
+        return [
+            FlopsItem(
+                f"{item.label} x {count} (generation, bound)",
+                item.flops * count,
+                kind=item.kind,
+                approx=True,
+            )
+            for item in lm_forward_flops(1, start + count - 1, vocab_size, d_model, blocks)
+        ]
+    acc: dict = {}
+    for step in range(count):
+        for item in lm_forward_flops(1, start + step, vocab_size, d_model, blocks):
+            key = (item.label, item.kind)
+            acc[key] = acc.get(key, 0) + item.flops
+    return [
+        FlopsItem(label, flops, kind=kind, approx=True)
+        for (label, kind), flops in acc.items()
+    ]
+
+
+def mlp_forward_flops(
+    batch: int,
+    in_features: int,
+    hidden: Sequence[int],
+    out_features: int,
+) -> List[FlopsItem]:
+    """Matmul FLOPs of one forward pass of the Training Loop's stacked MLP."""
+    layers = [int(in_features)] + [int(w) for w in hidden] + [int(out_features)]
+    flops = sum(2 * int(batch) * layers[i] * layers[i + 1] for i in range(len(layers) - 1))
+    return [FlopsItem("stacked-MLP linears", flops, kind="ffn")]
+
+
+def mlp_training_flops(
+    batch: int,
+    in_features: int,
+    hidden: Sequence[int],
+    out_features: int,
+    steps: int,
+) -> List[FlopsItem]:
+    """Matmul FLOPs of a whole Training Loop run (3x forward x steps)."""
+    count = max(1, int(steps))
+    scale = TRAINING_FLOPS_MULTIPLIER * count
+    return [
+        FlopsItem(
+            f"{item.label} x {scale} ({count} steps)",
+            item.flops * scale,
+            kind=item.kind,
+            approx=True,
+        )
+        for item in mlp_forward_flops(batch, in_features, hidden, out_features)
+    ]
+
+
+def six_nd_estimate(params, tokens) -> int:
+    """The 6ND rule of thumb: ``6 x N x D`` for N parameters, D tokens."""
+    return SIX_ND_COEFFICIENT * int(params or 0) * int(tokens or 0)

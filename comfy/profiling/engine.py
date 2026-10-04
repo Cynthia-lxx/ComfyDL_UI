@@ -14,6 +14,13 @@ Verdict rules (upper-bound heuristics, see docs/profiling-m1-*.md):
 * green - the peak stays under 70% of the free budget;
 * yellow - everything in between ("may OOM");
 
+The M2 compute ledger is aggregated alongside: per-node ``flops_items``
+(matmul FLOPs, kind attn/ffn/logits) and a report-level ``flops`` section
+(total / by-kind / largest). Unlike memory - where nodes share the device
+and the report tracks the *peak* - compute is *additive*: the workflow
+total is the sum over the nodes that were counted. Time is deliberately
+not derived from it (that needs the measured calibration of M3).
+
 The engine never raises on a malformed graph: the report carries the error.
 """
 
@@ -32,7 +39,8 @@ GREEN_FRACTION_OF_FREE = 0.7
 RED_FRACTION_OF_TOTAL = 0.9
 
 #: Report layout version; bumped whenever the JSON shape changes.
-REPORT_VERSION = 1
+#: v2 adds the per-node flops fields and the report-level "flops" section.
+REPORT_VERSION = 2
 
 #: Trainable node classes the post-mortem batch-size search may tune.
 TUNABLE_TRAINERS = ("LanguageModelTrain", "TrainingLoop")
@@ -120,6 +128,15 @@ def estimate_workflow(
         "assumptions_used": [],
         "error": None,
         "disclaimer_key": "disclaimer",
+        # The M2 compute ledger: matmul FLOPs summed over the counted nodes.
+        # ``total`` is 0 and ``any_estimated`` False when nothing was counted
+        # (pass-through graphs, or unknown-only) - not a claim of free work.
+        "flops": {
+            "total": 0,
+            "any_estimated": False,
+            "by_kind": {"attn": 0, "ffn": 0, "logits": 0, "other": 0},
+            "largest": None,  # {"node_id", "class_type", "kind", "label", "flops"}
+        },
     }
     if not isinstance(prompt, dict) or not prompt:
         report["verdict_reason"] = "no_graph"
@@ -132,6 +149,10 @@ def estimate_workflow(
     peak = 0
     largest: Optional[dict] = None
     any_estimated = False
+    flops_total = 0
+    flops_any = False
+    flops_by_kind: Dict[str, int] = {"attn": 0, "ffn": 0, "logits": 0, "other": 0}
+    flops_largest: Optional[dict] = None
 
     for node_id in order:
         node = prompt.get(node_id) or {}
@@ -146,6 +167,10 @@ def estimate_workflow(
             "total_bytes": 0,
             "basis": None,
             "reason": "",
+            "flops_total": None,
+            "flops_status": "unknown",
+            "flops_items": [],
+            "flops_reason": "",
         }
         estimator = ESTIMATORS.get(class_type)
         if estimator is None:
@@ -167,6 +192,24 @@ def estimate_workflow(
             record["items"] = [item.as_dict() for item in estimate.items]
             record["total_bytes"] = sum(item["bytes"] for item in record["items"])
             record["basis"] = estimate.basis
+            record["flops_status"] = estimate.flops_status
+            record["flops_items"] = [item.as_dict() for item in estimate.flops_items]
+            record["flops_reason"] = estimate.flops_reason
+            if estimate.flops_status == "estimated" and estimate.flops_items:
+                node_flops = sum(item.flops for item in estimate.flops_items)
+                record["flops_total"] = node_flops
+                flops_any = True
+                flops_total += node_flops
+                for item in estimate.flops_items:
+                    flops_by_kind[item.kind] = flops_by_kind.get(item.kind, 0) + item.flops
+                    if flops_largest is None or item.flops > flops_largest["flops"]:
+                        flops_largest = {
+                            "node_id": node_id,
+                            "class_type": class_type,
+                            "kind": item.kind,
+                            "label": item.label,
+                            "flops": item.flops,
+                        }
             if estimate.status == "estimated":
                 any_estimated = True
                 peak = max(peak, record["total_bytes"])
@@ -188,12 +231,22 @@ def estimate_workflow(
                 "total_bytes": 0,
                 "basis": None,
                 "reason": "dependency cycle",
+                "flops_total": None,
+                "flops_status": "unknown",
+                "flops_items": [],
+                "flops_reason": "dependency cycle",
             }
         )
 
     report["nodes"] = node_records
     report["peak_bytes"] = peak
     report["largest"] = largest
+    report["flops"] = {
+        "total": flops_total,
+        "any_estimated": flops_any,
+        "by_kind": flops_by_kind,
+        "largest": flops_largest,
+    }
     report["assumptions_used"] = assumption_set.used_entries()
     verdict, reason = _verdict(peak, largest, budget)
     if not any_estimated:

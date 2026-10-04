@@ -65,12 +65,23 @@ class NodeEstimate:
     confidence: str = "exact"  # exact | approx
     status: str = "estimated"  # estimated | unknown
     reason: str = ""
+    # The M2 compute ledger. ``flops_status`` is one of:
+    #   "estimated" - flops_items carry the counted matmul FLOPs
+    #   "zero"      - pass-through / IO node, no meaningful compute
+    #   "unknown"   - the node does real work we cannot count statically
+    #                 (pure-Python loops: vocab build, encode, windowing)
+    flops_items: List[formulas.FlopsItem] = dataclasses.field(default_factory=list)
+    flops_status: str = "zero"
+    flops_reason: str = ""
 
     def as_unknown(self, reason: str) -> "NodeEstimate":
         self.status = "unknown"
         self.reason = reason
         self.outputs = [Unknown(reason)] * max(1, len(self.outputs))
         self.items = []
+        if self.flops_status != "unknown":
+            self.flops_status = "unknown"
+            self.flops_reason = reason
         return self
 
 
@@ -218,6 +229,8 @@ def _estimate_vocab_build(ctx: EstimationCtx) -> NodeEstimate:
     return NodeEstimate(
         outputs=[VocabVal(size, level), IntVal(size)],
         items=[],
+        flops_status="unknown",
+        flops_reason="pure-Python token loop - compute is not a matmul FLOPs model",
         basis={
             "key": "vocab_build",
             "params": {
@@ -240,6 +253,8 @@ def _estimate_text_encode(ctx: EstimationCtx) -> NodeEstimate:
     return NodeEstimate(
         outputs=[TensorVal((count,), INT64_BYTES, "long")],
         items=[formulas.MemoryItem("encoded ids tensor", size, size, kind="outputs")],
+        flops_status="unknown",
+        flops_reason="pure-Python token loop - compute is not a matmul FLOPs model",
         basis={"key": "text_encode", "params": {"tokens": count, "level": level}},
     )
 
@@ -285,6 +300,8 @@ def _estimate_sliding_window(ctx: EstimationCtx) -> NodeEstimate:
             ),
         ],
         confidence=confidence,
+        flops_status="unknown",
+        flops_reason="pure-Python windowing loop - compute is not a matmul FLOPs model",
         basis={
             "key": "sliding_window",
             "params": {"tokens": length, "window": window, "samples": samples},
@@ -418,6 +435,15 @@ def _estimate_lm_train(ctx: EstimationCtx) -> NodeEstimate:
         TensorVal((steps,), FLOAT32_BYTES),
     ]
     estimate.items = breakdown.items
+    estimate.flops_items = formulas.lm_training_flops(
+        batch=batch,
+        seq=window,
+        vocab_size=embedding.vocab_size,
+        d_model=embedding.d_model,
+        blocks=spec.blocks,
+        steps=steps,
+    )
+    estimate.flops_status = "estimated"
     estimate.basis["params"] = {
         "batch": batch,
         "samples": samples,
@@ -465,6 +491,14 @@ def _estimate_lm_forward(ctx: EstimationCtx) -> NodeEstimate:
         TensorVal((batch, length, spec.embedding.vocab_size), FLOAT32_BYTES)
     ]
     estimate.items = breakdown.items
+    estimate.flops_items = formulas.lm_forward_flops(
+        batch=batch,
+        seq=length,
+        vocab_size=spec.embedding.vocab_size,
+        d_model=spec.embedding.d_model,
+        blocks=spec.blocks,
+    )
+    estimate.flops_status = "estimated"
     estimate.confidence = confidence
     estimate.basis["params"] = {
         "batch": batch,
@@ -504,6 +538,14 @@ def _estimate_lm_generate(ctx: EstimationCtx) -> NodeEstimate:
     )
     estimate.outputs = [TensorVal((length,), INT64_BYTES, "long"), Unknown("text")]
     estimate.items = breakdown.items
+    estimate.flops_items = formulas.lm_generate_flops(
+        prefix_length=prefix_length,
+        num_tokens=num_tokens,
+        vocab_size=spec.embedding.vocab_size,
+        d_model=spec.embedding.d_model,
+        blocks=spec.blocks,
+    )
+    estimate.flops_status = "estimated"
     estimate.basis["params"] = {
         "prefix": prefix_length,
         "num_tokens": num_tokens,
@@ -596,6 +638,14 @@ def _estimate_training_loop(ctx: EstimationCtx) -> NodeEstimate:
         TensorVal((samples, out_features), FLOAT32_BYTES),
     ]
     estimate.items = breakdown.items
+    estimate.flops_items = formulas.mlp_training_flops(
+        batch=batch,
+        in_features=in_features,
+        hidden=hidden,
+        out_features=out_features,
+        steps=steps,
+    )
+    estimate.flops_status = "estimated"
     estimate.basis["params"] = {
         "batch": batch,
         "samples": samples,

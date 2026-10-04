@@ -12,7 +12,15 @@
  *  - a Run guard: monkey-patches app.graphToPrompt (the mandatory pass of
  *    every queue submit) and asks for confirmation when the estimate is red;
  *  - an OOM post-mortem: listens to execution_error, posts the message to
- *    /comfydl/profiling/postmortem and renders attribution + suggestions.
+ *    /comfydl/profiling/postmortem and renders attribution + suggestions;
+ *  - M2 compute ledger: the estimate report's flops section (per-node matmul
+ *    FLOPs with an attention/FFN/logits split) as a summary card plus a
+ *    per-node column and detail table;
+ *  - M2 measured timings: the executing/executed events of every run build
+ *    a per-node wall-time Top-N panel (cache hits are marked, not ranked);
+ *  - M2 execution monitor: a 1 s poll of the watchdog routes (only while a
+ *    run is active) drives the topbar live capsule (current node + CPU/MEM)
+ *    and the persistent CPU-burst log card.
  *
  * Everything degrades silently: no API this extension touches may break the
  * normal workflow. i18n: zh/en dictionaries, following Comfy.Locale.
@@ -23,6 +31,8 @@
   const CSS_URL = "/comfydl/profiling/profiler.css";
   const ESTIMATE_URL = "/comfydl/profiling/estimate";
   const POSTMORTEM_URL = "/comfydl/profiling/postmortem";
+  const WATCHDOG_STATUS_URL = "/comfydl/profiling/watchdog/status";
+  const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
   const TAB_ID = "comfydl-profiling";
 
   // ------------------------------------------------------------------ i18n --
@@ -111,6 +121,24 @@
       item_python_lists: "python window lists (approximate)",
       item_mlp_activations: "MLP activations (upper bound)",
       item_misc: "memory",
+      compute_title: "Compute estimate",
+      table_flops: "FLOPs",
+      flops_none: "No node of this workflow has a compute model yet (pure-Python text nodes have none by design).",
+      flops_note: "Training counts 3\u00d7 the forward pass; generation runs without a KV cache (one forward per token). Amounts, not times - throughput is measured, not guessed.",
+      flops_unmodelled: "flops n/a",
+      kind_attn: "attention",
+      kind_ffn: "feed-forward",
+      kind_logits: "output head",
+      kind_other: "other",
+      timing_title: "Measured node time",
+      timing_total: "Total",
+      timing_cached: "cache hit(s)",
+      timing_running: "Collecting timings...",
+      timing_empty: "Run a workflow - every node's real time lands here.",
+      watchdog_title: "Execution monitor",
+      watchdog_unavailable: "monitoring unavailable (psutil missing on the server)",
+      watchdog_bursts: "CPU burst log",
+      watchdog_systemwide: "system-wide",
     },
     zh: {
       sidebar_title: "性能分析",
@@ -196,6 +224,24 @@
       item_python_lists: "Python 切窗列表（近似）",
       item_mlp_activations: "MLP 激活（上界）",
       item_misc: "内存",
+      compute_title: "计算量估算",
+      table_flops: "计算量",
+      flops_none: "当前工作流尚无可估算计算量的节点（纯 Python 文本节点本就不在模型内）。",
+      flops_note: "训练按前向 3 倍计；生成无 KV cache（逐 token 完整前向）。这里只给计算量，不推算时间——吞吐要靠实测。",
+      flops_unmodelled: "计算量未建模",
+      kind_attn: "注意力",
+      kind_ffn: "前馈",
+      kind_logits: "输出投影",
+      kind_other: "其他",
+      timing_title: "节点实测耗时",
+      timing_total: "总计",
+      timing_cached: "个缓存命中",
+      timing_running: "正在采集耗时...",
+      timing_empty: "运行一次工作流——每个节点的真实耗时都会落在这里。",
+      watchdog_title: "执行监控",
+      watchdog_unavailable: "监控不可用（服务端缺少 psutil）",
+      watchdog_bursts: "瞬爆案底",
+      watchdog_systemwide: "整机",
     },
   };
 
@@ -211,6 +257,18 @@
     yellowToastAt: 0,
     panelEl: null,
     timer: null,
+    // M2: measured timings (F1)
+    timings: [],
+    timingPromptId: null,
+    timingStart: null,
+    timingEnd: null,
+    executing: false,
+    currentNodeTitle: null,
+    // M2: execution monitor (W2)
+    liveEl: null,
+    liveTimer: null,
+    bursts: null,
+    watchdogUnavailable: false,
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -234,6 +292,24 @@
     let i = 0;
     while (Math.abs(v) >= 1024 && i < units.length - 1) { v /= 1024; i++; }
     return (i === 0 ? v.toFixed(0) : v.toFixed(2)) + " " + units[i];
+  }
+
+  function fmtFlops(n) {
+    if (n === null || n === undefined || isNaN(n)) return "\u2014";
+    const units = ["FLOPs", "KFLOPs", "MFLOPs", "GFLOPs", "TFLOPs", "PFLOPs", "EFLOPs"];
+    let v = Number(n);
+    let i = 0;
+    while (Math.abs(v) >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+    return (i === 0 ? v.toFixed(0) : v.toFixed(2)) + " " + units[i];
+  }
+
+  function fmtDuration(ms) {
+    if (ms === null || ms === undefined || isNaN(ms)) return "\u2014";
+    if (ms < 1000) return Math.round(ms) + " ms";
+    const s = ms / 1000;
+    if (s < 60) return s.toFixed(s < 10 ? 2 : 1) + " s";
+    const m = Math.floor(s / 60);
+    return m + "m " + Math.round(s - m * 60) + "s";
   }
 
   function esc(s) {
@@ -442,6 +518,125 @@
     scheduleEstimate();
   }
 
+  // ------------------------------------------------------- M2: timing + monitor --
+  function nodeTitleOf(id) {
+    if (id === null || id === undefined) return "?";
+    const graph = getApp() && getApp().graph;
+    const node = graph && graph._nodes
+      ? graph._nodes.find((n) => String(n.id) === String(id)) : null;
+    return node ? (node.title || node.type || String(id)) : String(id);
+  }
+
+  function displayIdOf(detail) {
+    const d = detail || {};
+    return (d.display_node !== undefined && d.display_node !== null) ? d.display_node : d.node;
+  }
+
+  function handleExecuting(detail) {
+    const d = detail || {};
+    if (d.node === null || d.node === undefined) { handleRunEnded(); return; }
+    state.executing = true;
+    if (state.timingPromptId !== d.prompt_id) {
+      state.timingPromptId = d.prompt_id;
+      state.timings = [];
+      state.timingStart = Date.now();
+      state.timingEnd = null;
+    }
+    const id = displayIdOf(d);
+    state.currentNodeTitle = nodeTitleOf(id);
+    state.timings.push({ id: id, title: state.currentNodeTitle, start: Date.now(), end: null });
+    startLivePolling();
+  }
+
+  function handleExecuted(detail) {
+    const id = displayIdOf(detail);
+    for (let i = state.timings.length - 1; i >= 0; i--) {
+      if (String(state.timings[i].id) === String(id) && state.timings[i].end === null) {
+        state.timings[i].end = Date.now();
+        break;
+      }
+    }
+  }
+
+  function handleRunEnded() {
+    state.executing = false;
+    state.currentNodeTitle = null;
+    state.timingEnd = Date.now();
+    stopLivePolling();
+    fetchBursts();
+    renderPanel();
+  }
+
+  async function pollWatchdog() {
+    const api = getApi();
+    if (!api) return;
+    try {
+      const resp = await api.fetchApi(WATCHDOG_STATUS_URL);
+      if (resp.ok) {
+        const snap = await resp.json();
+        state.watchdogUnavailable = snap.available === false;
+        updateLiveIndicator(snap);
+      }
+    } catch (e) { /* silent: the monitor is best-effort */ }
+  }
+
+  function startLivePolling() {
+    if (state.liveTimer || !state.executing) return;
+    pollWatchdog();
+    state.liveTimer = setInterval(pollWatchdog, 1000);
+  }
+
+  function stopLivePolling() {
+    if (state.liveTimer) { clearInterval(state.liveTimer); state.liveTimer = null; }
+    const el = state.liveEl;
+    if (el) el.classList.add("cdlp-live-hidden");
+  }
+
+  function updateLiveIndicator(snap) {
+    const el = state.liveEl;
+    if (!el) return;
+    if (!snap || !snap.available || !state.executing || !state.currentNodeTitle) {
+      el.classList.add("cdlp-live-hidden");
+      return;
+    }
+    const cpu = Number(snap.process_cpu_percent);
+    const cpuClass = isNaN(cpu) ? "cdlp-cpu-ok"
+      : cpu >= 90 ? "cdlp-cpu-hot" : cpu >= 60 ? "cdlp-cpu-warn" : "cdlp-cpu-ok";
+    const name = String(state.currentNodeTitle);
+    el.innerHTML =
+      '<span class="cdlp-live-node">' + esc(name.length > 18 ? name.slice(0, 17) + "\u2026" : name) + "</span>"
+      + '<span class="cdlp-live-stat ' + cpuClass + '">CPU ' + esc(String(snap.process_cpu_percent)) + "%</span>"
+      + '<span class="cdlp-live-stat">MEM ' + esc(String(snap.process_rss_mb)) + "MB</span>";
+    el.classList.remove("cdlp-live-hidden");
+  }
+
+  function mountLiveIndicator(anchor) {
+    try {
+      const el = document.createElement("div");
+      el.className = "cdlp-live cdlp-live-hidden";
+      anchor.before(el);
+      state.liveEl = el;
+    } catch (e) { state.liveEl = null; }
+  }
+
+  async function fetchBursts() {
+    const api = getApi();
+    if (!api) return;
+    try {
+      const resp = await api.fetchApi(WATCHDOG_LOG_URL + "?limit=20");
+      if (resp.ok) {
+        const body = await resp.json();
+        state.bursts = body.events || [];
+        renderPanel();
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  function flopsKindLabel(kind) {
+    const key = "kind_" + kind;
+    return t(key) === key ? (kind || "other") : t(key);
+  }
+
   // ---------------------------------------------------------------- badge --
   function badgeText(report) {
     if (!report) return "\u2026";
@@ -500,6 +695,7 @@
         const group = new ComfyButtonGroup(button.element);
         anchor.before(group.element || group);
         state.badge = { button };
+        mountLiveIndicator(anchor);
         updateBadge();
         return;
       } catch (e) { /* fall through to raw DOM */ }
@@ -511,6 +707,7 @@
       el.addEventListener("click", () => openSidebar());
       anchor.before(el);
       state.badge = { element: el };
+      mountLiveIndicator(anchor);
       updateBadge();
     } catch (e) { /* no badge then - the sidebar stays */ }
   }
@@ -579,6 +776,29 @@
       html.push("</div>");
     }
 
+    // Compute ledger (M2)
+    const flops = (r && r.flops) || null;
+    if (flops && flops.any_estimated) {
+      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>");
+      html.push('<div class="cdlp-flops-total">' + esc(fmtFlops(flops.total)) + "</div>");
+      const byKind = flops.by_kind || {};
+      const flopsTotal = Math.max(1, Number(flops.total) || 0);
+      html.push('<div class="cdlp-kindbar">');
+      ["attn", "ffn", "logits", "other"].forEach((k) => {
+        const share = ((Number(byKind[k]) || 0) / flopsTotal) * 100;
+        if (share > 0) html.push('<div class="cdlp-k-' + k + '" style="width:' + share.toFixed(1) + '%"></div>');
+      });
+      html.push("</div>");
+      const parts = ["attn", "ffn", "logits"].filter((k) => byKind[k])
+        .map((k) => flopsKindLabel(k) + " " + ((Number(byKind[k]) / flopsTotal) * 100).toFixed(0) + "%");
+      if (parts.length) html.push('<div class="cdlp-hint">' + esc(parts.join(" \u00b7 ")) + "</div>");
+      html.push('<div class="cdlp-hint">' + esc(t("flops_note")) + "</div>");
+      html.push("</div>");
+    } else if (r && r.nodes && r.nodes.length) {
+      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("flops_none")) + "</div></div>");
+    }
+
     // Assumptions
     const usedAssumptions = (r && r.assumptions_used) || [];
     if (usedAssumptions.length) {
@@ -619,6 +839,59 @@
       html.push("</div>");
     }
 
+    // Measured node time (M2 / F1)
+    if (state.timingStart) {
+      const closed = (state.timings || []).filter((x) => x.end !== null);
+      const totalMs = (state.timingEnd || Date.now()) - state.timingStart;
+      const active = closed.filter((x) => x.end - x.start >= 5)
+        .sort((a, b) => (b.end - b.start) - (a.end - a.start));
+      const cachedCount = closed.length - active.length;
+      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>");
+      html.push('<div class="cdlp-timing-total"><span>' + esc(t("timing_total")) + "</span><b>"
+        + esc(fmtDuration(totalMs)) + "</b></div>");
+      if (active.length) {
+        const maxD = Math.max.apply(null, active.map((x) => x.end - x.start));
+        active.slice(0, 12).forEach((x) => {
+          const d = x.end - x.start;
+          const width = Math.max(3, Math.round((Math.log(Math.max(2, d)) / Math.log(maxD || 2)) * 100));
+          html.push('<div class="cdlp-timing-row">'
+            + '<span class="cdlp-timing-name">' + esc(x.title || x.id) + "</span>"
+            + '<span class="cdlp-timing-bar"><i style="width:' + width + '%"></i></span>'
+            + '<span class="cdlp-timing-val">' + esc(fmtDuration(d)) + "</span></div>");
+        });
+      }
+      if (cachedCount) html.push('<div class="cdlp-hint">' + cachedCount + " \u00d7 " + esc(t("timing_cached")) + "</div>");
+      if (!closed.length) html.push('<div class="cdlp-hint">' + esc(t("timing_running")) + "</div>");
+      html.push("</div>");
+    } else if (state.executing) {
+      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("timing_running")) + "</div></div>");
+    }
+
+    // Execution monitor burst log (M2 / W2)
+    if (state.watchdogUnavailable) {
+      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("watchdog_unavailable")) + "</div></div>");
+    } else if (state.bursts && state.bursts.length) {
+      html.push('<div class="cdlp-card cdlp-wd"><div class="cdlp-card-title cdlp-wd-title">'
+        + esc(t("watchdog_bursts")) + "</div>");
+      state.bursts.slice().reverse().forEach((ev) => {
+        html.push('<div class="cdlp-burst">');
+        html.push('<div class="cdlp-burst-head"><b>' + esc(ev.node_id ? nodeTitleOf(ev.node_id) : "?") + "</b>"
+          + (ev.system_wide ? ' <span class="cdlp-tag cdlp-tag-sys">' + esc(t("watchdog_systemwide")) + "</span>" : "")
+          + '<span class="cdlp-burst-time">' + esc(fmtDuration((Number(ev.duration_s) || 0) * 1000)) + "</span></div>");
+        html.push('<div class="cdlp-burst-meta">CPU ' + esc(String(ev.cpu_percent_peak)) + "% peak \u00b7 "
+          + esc(String(ev.cpu_percent_avg)) + "% avg \u00b7 MEM " + esc(String(ev.process_rss_mb)) + "MB \u00b7 "
+          + esc(String(ev.ts || "")) + "</div>");
+        if (ev.data_scale && ev.data_scale.class_type) {
+          html.push('<div class="cdlp-burst-scale">' + esc(String(ev.data_scale.class_type))
+            + (ev.data_scale.flops_total ? " \u00b7 " + esc(fmtFlops(ev.data_scale.flops_total)) : "") + "</div>");
+        }
+        html.push("</div>");
+      });
+      html.push("</div>");
+    }
+
     // Per-node breakdown
     html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("table_title"))
       + ' <button class="cdlp-button cdlp-refresh" id="cdlp-refresh">' + esc(t("refresh")) + "</button></div>");
@@ -628,7 +901,15 @@
       html.push('<details class="cdlp-node' + (unknown ? " cdlp-node-unknown" : "") + '">');
       html.push('<summary><span class="cdlp-node-title">' + esc(n.title || n.id) + "</span>");
       if (unknown) html.push('<span class="cdlp-tag">' + esc(t("unknown_node")) + "</span>");
-      else html.push('<span class="cdlp-node-bytes">' + esc(fmtBytes(n.total_bytes)) + "</span>");
+      else {
+        html.push('<span class="cdlp-node-bytes">' + esc(fmtBytes(n.total_bytes)));
+        if (n.flops_total !== null && n.flops_total !== undefined) {
+          html.push(" \u00b7 " + esc(fmtFlops(n.flops_total)));
+        } else if (n.flops_status === "unknown") {
+          html.push(' <i class="cdlp-flops-na">(' + esc(t("flops_unmodelled")) + ")</i>");
+        }
+        html.push("</span>");
+      }
       html.push("</summary>");
       const basis = basisText(n);
       if (basis) html.push('<div class="cdlp-basis">' + esc(basis) + "</div>");
@@ -639,6 +920,15 @@
         n.items.forEach((it) => {
           html.push("<tr><td>" + esc(itemLabel(it)) + (it.approx ? ' <i>(' + esc(t("approx_tag")) + ")</i>" : "")
             + "</td><td>" + esc(fmtBytes(it.bytes)) + "</td><td>" + esc(fmtBytes(it.single_bytes)) + "</td></tr>");
+        });
+        html.push("</table>");
+      }
+      if (n.flops_items && n.flops_items.length) {
+        html.push('<table class="cdlp-table"><tr><th>' + esc(t("table_node"))
+          + "</th><th>" + esc(t("table_flops")) + "</th></tr>");
+        n.flops_items.forEach((it) => {
+          html.push("<tr><td>" + esc(flopsKindLabel(it.kind)) + (it.approx ? ' <i>(' + esc(t("approx_tag")) + ")</i>" : "")
+            + "</td><td>" + esc(fmtFlops(it.flops)) + "</td></tr>");
         });
         html.push("</table>");
       }
@@ -684,6 +974,7 @@
         state.panelEl = el;
         renderPanel();
         requestEstimate(true);
+        if (state.bursts === null) fetchBursts();
         return () => { state.panelEl = null; };
       },
     });
@@ -709,8 +1000,15 @@
     const api = getApi();
     if (api && typeof api.addEventListener === "function") {
       api.addEventListener("graphChanged", scheduleEstimate);
+      api.addEventListener("executing", (event) => {
+        try { handleExecuting(event && event.detail); } catch (e) { /* silent */ }
+      });
+      api.addEventListener("executed", (event) => {
+        try { handleExecuted(event && event.detail); } catch (e) { /* silent */ }
+      });
       api.addEventListener("execution_error", (event) => {
         try { handleExecutionError(event && event.detail); } catch (e) { /* silent */ }
+        try { handleRunEnded(); } catch (e) { /* silent */ }
       });
     }
     await waitFor(() => getApp() && getApp().extensionManager);

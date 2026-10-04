@@ -493,6 +493,7 @@ async def execute(server, dynprompt, caches, current_item, extra_data, executed,
             input_data_all, missing_keys, v3_data = get_input_data(inputs, class_def, unique_id, execution_list, dynprompt, extra_data)
             if server.client_id is not None:
                 server.last_node_id = display_node_id
+                server.last_prompt_id = prompt_id
                 server.send_sync("executing", { "node": unique_id, "display_node": display_node_id, "prompt_id": prompt_id }, server.client_id)
 
             obj = await caches.objects.get(unique_id)
