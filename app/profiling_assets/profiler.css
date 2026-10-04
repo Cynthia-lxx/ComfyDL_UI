@@ -1,0 +1,225 @@
+/* ComfyDL Profiling panel styles (reform: Profiling Tools M1).
+ *
+ * Served from /comfydl/profiling/profiler.css; loaded by profiler.js.
+ * Colours follow the ComfyUI theme via CSS variables with dark fallbacks;
+ * the verdict colours are fixed traffic-light greens/ambers/reds so the
+ * meaning never depends on the palette.
+ */
+
+.cdlp-host { height: 100%; overflow-y: auto; }
+
+.cdlp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  color: var(--fg-color, #e0e0e0);
+  font-family: "Roboto", "Noto Sans SC", sans-serif;
+  font-size: 13px;
+}
+
+.cdlp-panel .cdlp-card {
+  background: var(--comfy-input-bg, rgba(31, 31, 31, 0.85));
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.cdlp-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--input-text-read-only, #9a9a9a);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cdlp-hint { color: var(--input-text-read-only, #9a9a9a); font-size: 12px; line-height: 1.5; }
+
+/* Verdict header */
+.cdlp-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.cdlp-verdict-badge {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: #161616;
+}
+.cdlp-verdict-num {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 600;
+}
+.cdlp-verdict-reason { color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
+.cdlp-verdict-largest { width: 100%; color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
+
+.cdlp-v-green  { background: rgba(74, 222, 128, 0.10); border-color: rgba(74, 222, 128, 0.35); }
+.cdlp-v-green .cdlp-verdict-badge  { background: #4ade80; }
+.cdlp-v-yellow { background: rgba(251, 191, 36, 0.10); border-color: rgba(251, 191, 36, 0.35); }
+.cdlp-v-yellow .cdlp-verdict-badge { background: #fbbf24; }
+.cdlp-v-red    { background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.45); }
+.cdlp-v-red .cdlp-verdict-badge    { background: #f87171; }
+.cdlp-v-unknown { background: rgba(154, 154, 154, 0.08); border-color: rgba(154, 154, 154, 0.25); }
+.cdlp-v-unknown .cdlp-verdict-badge { background: #9a9a9a; }
+
+/* Budget card */
+.cdlp-budget { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.cdlp-budget-cell .cdlp-k { color: var(--input-text-read-only, #9a9a9a); font-size: 11px; margin-bottom: 2px; }
+.cdlp-budget-cell .cdlp-v {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cdlp-meter {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-color, #2a2a2a);
+  margin-top: 10px;
+  overflow: hidden;
+}
+.cdlp-meter-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4ade80, #fbbf24 70%, #f87171);
+  transition: width 300ms ease;
+}
+
+/* Assumptions */
+.cdlp-assumption { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.cdlp-assumption-key {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 12px;
+  flex: 1;
+}
+.cdlp-assumption input {
+  width: 90px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-menu-bg, #1f1f1f);
+  color: var(--fg-color, #e0e0e0);
+}
+.cdlp-assumption-src { font-size: 11px; color: var(--input-text-read-only, #9a9a9a); }
+
+/* Per-node breakdown */
+.cdlp-node {
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: rgba(22, 22, 22, 0.4);
+}
+.cdlp-node summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.cdlp-node summary::-webkit-details-marker { display: none; }
+.cdlp-node summary:hover { background: rgba(255, 255, 255, 0.04); }
+.cdlp-node-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cdlp-node-bytes { font-family: "Roboto Mono", ui-monospace, monospace; color: var(--input-text-read-only, #9a9a9a); }
+.cdlp-node-unknown { opacity: 0.6; }
+.cdlp-tag {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  color: var(--input-text-read-only, #9a9a9a);
+}
+.cdlp-basis { padding: 4px 10px 6px; color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
+
+.cdlp-table { width: 100%; border-collapse: collapse; margin: 0 0 8px; font-size: 12px; }
+.cdlp-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--input-text-read-only, #9a9a9a);
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--border-color, #2a2a2a);
+}
+.cdlp-table td { padding: 3px 10px; }
+.cdlp-table td:not(:first-child), .cdlp-table th:not(:first-child) {
+  text-align: right;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+}
+.cdlp-table i { color: var(--input-text-read-only, #9a9a9a); }
+
+/* Post-mortem */
+.cdlp-pm { border-color: rgba(248, 113, 113, 0.45); background: rgba(248, 113, 113, 0.08); }
+.cdlp-pm-title { color: #f87171; }
+.cdlp-pm-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.cdlp-pm-row span { color: var(--input-text-read-only, #9a9a9a); }
+.cdlp-pm-msg {
+  margin: 8px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+/* Buttons */
+.cdlp-button {
+  margin-top: 8px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-menu-bg, #1f1f1f);
+  color: var(--fg-color, #e0e0e0);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.cdlp-button:hover { border-color: var(--p-primary-color, #c6ff00); }
+.cdlp-refresh { margin: 0; padding: 2px 10px; }
+
+.cdlp-disclaimer {
+  color: var(--input-text-read-only, #6e6e6e);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 0 4px 8px;
+}
+
+/* Topbar badge - ComfyButton flavour */
+button.cdlp-b-green, .cdlp-b-green { color: #4ade80 !important; }
+button.cdlp-b-yellow, .cdlp-b-yellow { color: #fbbf24 !important; }
+button.cdlp-b-red, .cdlp-b-red { color: #f87171 !important; }
+button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
+
+/* Topbar badge - raw DOM fallback */
+.cdlp-badge-fallback {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  margin: 0 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-menu-bg, #1f1f1f);
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+.cdlp-badge-fallback.cdlp-b-green { color: #4ade80; border-color: rgba(74, 222, 128, 0.5); }
+.cdlp-badge-fallback.cdlp-b-yellow { color: #fbbf24; border-color: rgba(251, 191, 36, 0.5); }
+.cdlp-badge-fallback.cdlp-b-red { color: #f87171; border-color: rgba(248, 113, 113, 0.55); }
+.cdlp-badge-fallback.cdlp-b-gray { color: #9a9a9a; }
+.cdlp-badge-fallback:hover { filter: brightness(1.2); }

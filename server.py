@@ -42,6 +42,7 @@ from comfy_api import feature_flags
 from comfy.comfy_api_env import get_environment_overrides
 import node_helpers
 from comfyui_version import __version__
+from app import profiling_routes
 from app.frontend_management import FrontendManager, parse_version
 from app.frontend_patch import apply_frontend_patches
 from comfy_api.internal import _ComfyNodeInternal
@@ -264,6 +265,13 @@ class PromptServer():
             asset_seeder.disable()
         routes = web.RouteTableDef()
         self.routes = routes
+        # ComfyDL Profiling panel (estimate / post-mortem): registered on
+        # self.routes so they also get the automatic /api twin that the
+        # frontend's fetchApi helper calls (RouteTableDef is a Sequence -
+        # merge by re-declaring each route, same idiom as the /api loop below).
+        for route in profiling_routes.routes:
+            if isinstance(route, web.RouteDef):
+                routes.route(route.method, route.path)(route.handler, **route.kwargs)
         self.last_node_id = None
         self.client_id = None
 
@@ -1245,6 +1253,16 @@ class PromptServer():
         # Add routes from web extensions.
         for name, dir in nodes.EXTENSION_WEB_DIRS.items():
             self.app.add_routes([web.static('/extensions/' + name, dir)])
+
+        # ComfyDL Profiling panel assets: repo-owned JS/CSS served like the
+        # template catalog's workflows (never a hand edit of the frontend
+        # package). The <script> loader that references them is injected into
+        # index.html by app/frontend_patch.py at startup.
+        profiling_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "profiling_assets"
+        )
+        if os.path.isdir(profiling_assets):
+            self.app.add_routes([web.static('/comfydl/profiling', profiling_assets)])
 
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True

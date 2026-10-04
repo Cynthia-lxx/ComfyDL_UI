@@ -193,3 +193,44 @@ server.py  PromptServer.__init__
   （即回到「面板 404」的现状）；新分支（包版本 ≥ 0.3.0）中 `template_asset_handler`
   的 overlay 行为同样在 `app/template_catalog.py` 内可整体旁路——
   把 `build_handler` 换回纯 `assets.get()` 查表即回到原版逐文件服务。
+
+## 8. Profiling 面板资产与 loader 注入
+
+> 新增于 v0.3.2（reform: Profiling Tools M1）。与第 3 节的 chunk 内容改写和第 7 节的
+> 请求期改写都不同：这一层的 JS/CSS **完全由仓库提供**，前端包里只注入一个
+> `<script type="module">` 加载器。设计细节见
+> `docs/profiling-m1-memory-estimation.md`。
+
+### 8.1 构成
+
+| 位置 | 角色 |
+|---|---|
+| `app/profiling_assets/profiler.js` | 前端扩展：侧栏页、顶栏徽章、Run 红色二次确认、OOM 事后分析，zh/en 双语（内嵌字典，随 `Comfy.Locale` 切换） |
+| `app/profiling_assets/profiler.css` | 面板样式，跟随 ComfyUI 主题变量 |
+| `server.py` | `/comfydl/profiling/{path:.*}` 静态路由直发资产目录；`app/profiling_routes.py` 的 estimate/postmortem 路由挂到 `self.routes`（自动获得 `/api` 孪生前缀，供前端 `fetchApi` 调用） |
+| `app/frontend_patch.py` | `_patch_profiling_loader()`：往前端包 `index.html` 的 `</body>` 前幂等注入 `<script type="module" src="/comfydl/profiling/profiler.js">`，标记注释 `<!--ComfyDL_UI:profiling-loader-->` |
+
+### 8.2 链路与铁律
+
+```
+index.html（被注入 loader，标记幂等）
+  └─ /comfydl/profiling/profiler.js        server.py 静态路由 → 仓库资产
+       ├─ window.comfyAPI.app.api           官方扩展入口，零 chunk 改写
+       ├─ POST /api/comfydl/profiling/estimate     → comfy/profiling 引擎
+       └─ POST /api/comfydl/profiling/postmortem   → 报错解析 + 建议 batch_size
+```
+
+- 注入位置在 `</body>` 前、前端主入口模块之后：module 脚本按文档序执行，
+  `window.comfyAPI` 已就绪（扩展内部仍有 30s 轮询兜底）。
+- 铁律不变：**绝不直改 site-packages 之外无权限的位置**；本层对前端包的唯一写入
+  就是这一个 script 标签，回退 = 删标签（或撤 `_patch_profiling_loader` 调用）+ 删
+  `server.py` 两条路由。
+- 专属测试：`cdl_smoke_tests/test_profiling.py` 37 项（T9f/T9g 资产经真实路由可达、
+  T10 loader 幂等注入）。
+
+### 8.3 验证判据
+
+1. 启动日志无 `profiling loader not applied` 告警，且二次启动不重复注入；
+2. 浏览器 DevTools Network 可见 `profiler.js` / `profiler.css` 200；
+3. 面板 / 徽章 / 二次确认 / 事后分析的人工验收清单见
+   `docs/profiling-m1-memory-estimation.md` 第 9 节。

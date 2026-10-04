@@ -14,6 +14,10 @@ asset file name) and rewrites that file in place:
   * the Settings -> About panel gets a ComfyDL_UI section plus a separate
     upstream section that keeps the original ComfyUI links
   * the ``TENSOR`` slot colour (lemon green) in the six theme palettes
+  * the ``<script>`` loader for the ComfyDL Profiling panel (the JS/CSS
+    themselves live in this repository under ``app/profiling_assets/`` and
+    are served by the ``/comfydl/profiling`` route in ``server.py``; only
+    the loader tag is injected into the frontend's ``index.html``)
 
 Patches are idempotent: one whose marker is already present does nothing. They
 are also non-fatal: if a future frontend renames or rewrites a target, the patch
@@ -31,6 +35,13 @@ PROJECT_REPO = "https://github.com/Cynthia-lxx/ComfyDL_UI"
 UPSTREAM_REPO = "https://github.com/Comfy-Org/ComfyUI"
 
 TENSOR_SLOT_COLOUR = "#C6FF00"
+
+# The Profiling panel loader: one <script type="module"> tag before </body>.
+PROFILING_LOADER_TAG = (
+    '<!--ComfyDL_UI:profiling-loader-->'
+    '<script type="module" src="/comfydl/profiling/profiler.js"></script>'
+)
+PROFILING_LOADER_MARK = "<!--ComfyDL_UI:profiling-loader-->"
 
 # Marker comments written into the patched assets: they document who changed the
 # file and double as the idempotency check.
@@ -68,6 +79,13 @@ def apply_frontend_patches(web_root: str) -> None:
                 applied.append(name)
         except Exception as exc:
             logging.warning(f"{TAG} {name} not applied: {exc}")
+
+    # The Profiling loader lives in index.html (the web root), not in assets/.
+    try:
+        if _patch_profiling_loader(Path(web_root)):
+            applied.append("profiling loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} profiling loader not applied: {exc}")
 
     # One summary line per startup, so an operator can tell a fresh install (some
     # patches just applied) from a warm one (everything was already in place).
@@ -207,6 +225,30 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
         raise ValueError(f"expected 6 theme palettes, found {tables}")
     _write(path, "".join(out))
     logging.info(f"{TAG} TENSOR slot colour added to {tables} palettes in {path.name}")
+    return True
+
+
+def _patch_profiling_loader(web_root: Path) -> bool:
+    """Inject the Profiling panel's module loader into ``index.html``.
+
+    The panel's JS/CSS are repository assets served by ``server.py`` from
+    ``/comfydl/profiling/``; this patch only adds the one ``<script>`` tag
+    that pulls the JS in, right before ``</body>`` (after the frontend's own
+    module entry, so ``window.comfyAPI`` is already populated).  The marker
+    comment doubles as the idempotency check, like every other patch here.
+
+    Returns ``True`` when the file was rewritten.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if PROFILING_LOADER_MARK in text:
+        logging.debug(f"{TAG} profiling loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", PROFILING_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} profiling panel loader injected into {path.name}")
     return True
 
 
