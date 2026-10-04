@@ -25,4 +25,7 @@ filtered-openapi.yaml
 uv.lock
 .comfy_environment
 /penv/
+/penv_new/
 /.codebuddy/
+# CUDA wheel drops staged for the GPU-side venv rebuild (dual-env rule); never track binaries.
+*.whl
