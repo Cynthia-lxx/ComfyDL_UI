@@ -1269,6 +1269,10 @@ class PromptServer():
         # template catalog's workflows (never a hand edit of the frontend
         # package). The <script> loader that references them is injected into
         # index.html by app/frontend_patch.py at startup.
+        # The panel ships a .ttf subset: Python 3.14's mimetypes knows
+        # font/ttf, 3.12's does not (falls back to octet-stream, which some
+        # browsers then refuse to load as a font) - register it explicitly.
+        mimetypes.add_type("font/ttf", ".ttf")
         profiling_assets = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "app", "profiling_assets"
         )
