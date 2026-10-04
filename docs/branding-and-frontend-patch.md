@@ -136,9 +136,9 @@ server.py  PromptServer.__init__
 - **死模板过滤**：懒加载扫描全部打包工作流 JSON，对照 `nodes.NODE_CLASS_MAPPINGS`；
   引用缺失节点类型即剔除，结果进程内缓存。注册表未初始化时 fail-open（不改写）。
 - **分类重组**：剔除死模板后清空的全部分类一并移除；在首位注入
-  `ComfyDL Examples` 分类（`moduleName: ComfyDL`，`isEssential: true`，zh 标题
-  「ComfyDL 示例」），侧边栏最终形态：`All Templates / Popular`（前端硬编码）+
-  `ComfyDL Examples` + `Node Basics`。
+  `ComfyDL Examples` 分类（`moduleName: default`——**必须**是 `"default"`，见下条
+  「moduleName 硬约束」；`isEssential: true`，zh 标题「ComfyDL 示例」），侧边栏最终形态：
+  `All Templates / Popular`（前端硬编码）+ `ComfyDL Examples` + `Node Basics`。
 - **本地化**：`index.<locale>.json` 同样过滤，注入分类应用 `_CATEGORY_TITLE_OVERRIDES` /
   `_CATEGORY_DESCRIPTION_OVERRIDES`（目前只有 zh）；`index.mcp.json` 只过滤不注入；
   `index_logo.json` / `index.schema.json` 原样透传。
@@ -152,6 +152,17 @@ server.py  PromptServer.__init__
   修复双管齐下：文件重命名为官方风格（`language_model_train_and_chat.json`，封面直接命名
   `<name>-1.jpg` 命中前端缩略图 URL 模式），handler 入口对 rel_path 做
   `urllib.parse.unquote` 兜底（防未来任何非 ASCII 名）。
+- **moduleName 硬约束（2026-10-04 修复「点击卡片无反应」）**：前端把分类的
+  `moduleName` 原样拷进每张卡片的 `sourceModule`，且
+  `fetchTemplateJson` / `getTemplateThumbnailUrl` **只认 `moduleName === "default"`**
+  走核心通道 `/templates/<name>.json`（缩略图 `/templates/<name>-1.jpg`）；任何其他值
+  都被路由到自定义节点通道 `/api/workflow_templates/<moduleName>/<name>.json`——该通道
+  只扫 `custom_nodes/` 目录，内置 overlay 不在其中 → 404 → 前端 `.json()` 抛异常后
+  **静默 return false，点击毫无反应**（缩略图同因失效）。这正是 2026-10-02 在案的
+  「Train and Chat / Load and Chat 入口坏了」的根因：注入分类当时用了
+  `moduleName: "ComfyDL"`。修复 = 改回 `"default"`（与全部官方分类一致），
+  JSON 与缩略图两条 URL 一并回到已验证的 `/templates/` overlay 通道。
+  回归测试：`test_templates_catalog.py` T3b2。
 
 ### 7.3 如何新增示例工作流
 

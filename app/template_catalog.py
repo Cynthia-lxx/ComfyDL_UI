@@ -84,8 +84,20 @@ _THUMBNAIL_FILENAMES: Dict[str, str] = {
 # (``web_urldispatcher._unquote_path_safe``) - a literal ``%20`` then fails
 # every lookup and the template silently fails to load (see the handler,
 # which additionally unquotes defensively).
+#
+# ``moduleName`` MUST stay exactly ``"default"``.  The frontend copies the
+# category's ``moduleName`` into every template's ``sourceModule`` and its
+# ``fetchTemplateJson`` / ``getTemplateThumbnailUrl`` treat ``"default"`` as
+# the only value that routes through the core ``/templates/<name>.json``
+# channel; ANY other value is routed to the custom-node channel
+# ``/api/workflow_templates/<moduleName>/<name>.json``, which this
+# dehydrated host does not serve for the builtin overlay -> 404 ->
+# ``.json()`` throws -> ``loadWorkflowTemplate`` silently returns false and
+# clicking the card does nothing (the 2026-10-02 "broken entry" bug).
+# ``"default"`` is also what every packaged category uses, so it is not
+# renamed away from anything meaningful.
 _COMFYDL_CATEGORY: Dict[str, Any] = {
-    "moduleName": "ComfyDL",
+    "moduleName": "default",
     "title": "ComfyDL Examples",
     "isEssential": True,
     "icon": "icon-[lucide--graduation-cap]",

@@ -106,9 +106,16 @@ check("T3a curated: non-empty", len(curated) > 0)
 check(
     "T3b curated: ComfyDL category injected first",
     curated
-    and curated[0].get("moduleName") == "ComfyDL"
+    and curated[0].get("title") == "ComfyDL Examples"
     and curated[0].get("isEssential") is True,
     str(curated[0].get("title") if curated else None),
+)
+check(
+    "T3b2 curated: injected category keeps the default module "
+    "(frontend fetch contract)",
+    curated and curated[0].get("moduleName") == "default",
+    "moduleName != 'default' routes card clicks to the custom-node "
+    "/workflow_templates channel and silently 404s (2026-10-02 bug)",
 )
 comfydl_names = {t["name"] for t in curated[0]["templates"]}
 check(
@@ -209,7 +216,8 @@ if payload:
     served = json.loads(payload)
     check(
         "T6b payload: served index starts with ComfyDL category",
-        served and served[0].get("moduleName") == "ComfyDL",
+        served and served[0].get("title") == "ComfyDL Examples"
+        and served[0].get("moduleName") == "default",
     )
 
 zh_path = templates_dir / "index.zh.json"
@@ -230,7 +238,7 @@ if mcp_payload:
     mcp_served = json.loads(mcp_payload)
     check(
         "T6e payload: MCP index filtered without ComfyDL injection",
-        all(c.get("moduleName") != "ComfyDL" for c in mcp_served)
+        all(c.get("title") != "ComfyDL Examples" for c in mcp_served)
         and all(
             t.get("name") not in dead for c in mcp_served for t in c.get("templates", [])
         ),
@@ -310,7 +318,8 @@ async def _route_checks() -> None:
         if ok:
             served = json.loads(body)
             check("T9e2 route: index starts with ComfyDL category",
-                  served and served[0].get("moduleName") == "ComfyDL")
+                  served and served[0].get("title") == "ComfyDL Examples"
+                  and served[0].get("moduleName") == "default")
 
         ok, info, _ = await hit(
             "/templates/basic_mask_operations_and_compositing.json", 200)
