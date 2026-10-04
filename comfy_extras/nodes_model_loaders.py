@@ -39,6 +39,7 @@ import torch
 from typing_extensions import override
 
 import comfy.model_protocol as protocol
+import comfy.sd
 import comfy.utils
 import folder_paths
 from comfy_api.latest import ComfyExtension, io
@@ -212,16 +213,21 @@ class CheckpointLoaderSimple(io.ComfyNode):
     def execute(
         cls, ckpt_name: str, prefix_strip: str = "auto"
     ) -> io.NodeOutput:
-        sd = _load(ckpt_name, "checkpoints")
-        model_sd, clip_sd, vae_sd, prefixes = protocol.split_checkpoint(sd, prefix_strip)
-        model = protocol.make_model_patcher(model_sd, _subset_prefixes(prefixes, model_sd))
-        clip = protocol.make_container(clip_sd, _subset_prefixes(prefixes, clip_sd))
-        vae = protocol.make_container(vae_sd, _subset_prefixes(prefixes, vae_sd))
-        print(
-            f"[model/loaders] Load Checkpoint {ckpt_name!r}: MODEL {len(model_sd)} key(s), "
-            f"CLIP {len(clip_sd)} key(s), VAE {len(vae_sd)} key(s)."
+        # Rehydrated: the real ComfyUI path - detect the architecture from the
+        # state dict and build runnable MODEL / CLIP / VAE objects. The
+        # container-level split below stays available for the protocol tests.
+        ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
+        out = comfy.sd.load_checkpoint_guess_config(
+            ckpt_path,
+            output_vae=True,
+            output_clip=True,
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
         )
-        return io.NodeOutput(model, clip, vae)
+        print(
+            f"[model/loaders] Load Checkpoint {ckpt_name!r}: "
+            f"{type(out[0]).__name__} / {type(out[1]).__name__} / {type(out[2]).__name__}."
+        )
+        return io.NodeOutput(out[0], out[1], out[2])
 
 
 class UNETLoader(io.ComfyNode):
@@ -256,10 +262,10 @@ class UNETLoader(io.ComfyNode):
 
     @classmethod
     def execute(cls, unet_name: str, prefix_strip: str = "auto") -> io.NodeOutput:
-        sd = _load(unet_name, "diffusion_models")
-        stripped, prefixes = protocol.strip_outer_prefix(sd, prefix_strip)
-        model = protocol.make_model_patcher(stripped, prefixes)
-        print(f"[model/loaders] Load UNET {unet_name!r}: {len(stripped)} key(s).")
+        # Rehydrated: detect the architecture and build a runnable MODEL.
+        unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
+        model = comfy.sd.load_diffusion_model(unet_path, model_options={})
+        print(f"[model/loaders] Load UNET {unet_name!r}: {type(model).__name__}.")
         return io.NodeOutput(model)
 
 
@@ -293,10 +299,13 @@ class VAELoader(io.ComfyNode):
 
     @classmethod
     def execute(cls, vae_name: str, prefix_strip: str = "auto") -> io.NodeOutput:
-        sd = _load(vae_name, "vae")
-        stripped, prefixes = protocol.strip_outer_prefix(sd, prefix_strip)
-        vae = protocol.make_container(stripped, prefixes)
-        print(f"[model/loaders] Load VAE {vae_name!r}: {len(stripped)} key(s).")
+        # Rehydrated: build the real autoencoder (comfy.sd.VAE). The
+        # "pixel_space" / TAESD shorthands of upstream are not part of this
+        # build's schema, so they are simply not offered.
+        vae_path = folder_paths.get_full_path_or_raise("vae", vae_name)
+        sd = comfy.utils.load_torch_file(vae_path)
+        vae = comfy.sd.VAE(sd=sd)
+        print(f"[model/loaders] Load VAE {vae_name!r}: {len(sd)} key(s).")
         return io.NodeOutput(vae)
 
 
@@ -331,10 +340,15 @@ class CLIPLoader(io.ComfyNode):
 
     @classmethod
     def execute(cls, clip_name: str, prefix_strip: str = "auto") -> io.NodeOutput:
-        sd = _load(clip_name, "text_encoders")
-        stripped, prefixes = protocol.strip_outer_prefix(sd, prefix_strip)
-        clip = protocol.make_container(stripped, prefixes)
-        print(f"[model/loaders] Load CLIP {clip_name!r}: {len(stripped)} key(s).")
+        # Rehydrated: build a runnable text encoder (default: SD1.x/SDXL clip-l).
+        clip_type = getattr(comfy.sd.CLIPType, "STABLE_DIFFUSION")
+        clip_path = folder_paths.get_full_path_or_raise("text_encoders", clip_name)
+        clip = comfy.sd.load_clip(
+            ckpt_paths=[clip_path],
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+            clip_type=clip_type,
+        )
+        print(f"[model/loaders] Load CLIP {clip_name!r}: {type(clip).__name__}.")
         return io.NodeOutput(clip)
 
 
@@ -375,24 +389,20 @@ class DualCLIPLoader(io.ComfyNode):
     def execute(
         cls, clip_name1: str, clip_name2: str, prefix_strip: str = "auto"
     ) -> io.NodeOutput:
-        first, first_prefixes = protocol.strip_outer_prefix(
-            _load(clip_name1, "text_encoders"), prefix_strip
+        # Rehydrated: let comfy.sd build the combined text encoder. The type
+        # defaults to SDXL (clip-l + clip-g), which is what two encoders are
+        # usually combined for in this build.
+        clip_type = getattr(comfy.sd.CLIPType, "SDXL", comfy.sd.CLIPType.STABLE_DIFFUSION)
+        clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", clip_name1)
+        clip_path2 = folder_paths.get_full_path_or_raise("text_encoders", clip_name2)
+        clip = comfy.sd.load_clip(
+            ckpt_paths=[clip_path1, clip_path2],
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+            clip_type=clip_type,
         )
-        second, second_prefixes = protocol.strip_outer_prefix(
-            _load(clip_name2, "text_encoders"), prefix_strip
-        )
-        collisions = sorted(set(first) & set(second))
-        if collisions:
-            _warn(
-                f"Load Dual CLIP: {len(collisions)} key(s) exist in both files "
-                f"(first: {collisions[0]!r}); the second file wins."
-            )
-        merged = {**first, **second}
-        prefixes = {**first_prefixes, **second_prefixes}
-        clip = protocol.make_container(merged, prefixes)
         print(
             f"[model/loaders] Load Dual CLIP {clip_name1!r} + {clip_name2!r}: "
-            f"{len(first)} + {len(second)} key(s) -> {len(merged)}."
+            f"{type(clip).__name__}."
         )
         return io.NodeOutput(clip)
 

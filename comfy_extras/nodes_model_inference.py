@@ -1,21 +1,17 @@
-"""Placeholder inference nodes (reform step 5: MODEL protocol layer).
+"""Inference nodes for the diffusion pipeline (rehydrated from the original build).
 
-These four nodes exist so that a workflow can be *wired up* end to end - the
-``MODEL`` / ``CLIP`` / ``VAE`` types and the sockets all match the native nodes,
-so the graph validates and the node library looks complete - but they cannot do
-any work in this build, because that work is exactly what the dehydration pass
-removed:
+These nodes close the gap the dehydration pass opened in the generation
+pipeline. The ``comfy/ldm`` autoencoder, the ``text_encoders`` and the sampler
+stack (``comfy.sample`` / ``comfy.samplers`` / ``comfy.k_diffusion``) have been
+restored, so these nodes now call the native code path:
 
-* ``VAE Decode`` / ``VAE Encode`` need the autoencoder architecture
-  (``comfy/ldm/models/autoencoder.py``) to turn latents into pixels,
-* ``CLIP Text Encode`` needs a text-encoder architecture,
-* ``CLIP Set Last Layer`` needs the same encoder to know how many layers it has.
+* ``VAE Decode`` / ``VAE Encode`` use the restored autoencoder architecture to
+  turn latents into pixels and back,
+* ``CLIP Text Encode`` runs the restored text-encoder stack,
+* ``CLIP Set Last Layer`` reads the encoder's layer count.
 
-Rather than let the user hit a bare ``ModuleNotFoundError`` from deep inside the
-engine, ``execute`` raises a ``RuntimeError`` that names the missing module and
-how to restore it. Everything they need to be *registered and connectable* is
-already correct, so when ``ldm`` / ``text_encoders`` are restored these nodes
-become functional in place.
+They need the optional dependencies ``torchsde`` (sampler stack) and
+``transformers`` (text encoders); see ``docs/dehydrate_manifest.md``.
 """
 
 from __future__ import annotations
@@ -76,10 +72,14 @@ class VAEDecode(io.ComfyNode):
 
     @classmethod
     def execute(cls, samples, vae) -> io.NodeOutput:
-        raise _unsupported(
-            "VAEDecode", "decoding latents into an image",
-            "comfy/ldm (the autoencoder architecture)",
-        )
+        # Rehydrated: the native decode (comfy/ldm autoencoder is restored).
+        latent = samples["samples"]
+        if latent.is_nested:
+            latent = latent.unbind()[0]
+        images = vae.decode(latent)
+        if len(images.shape) == 5:  # combine batches
+            images = images.reshape(-1, images.shape[-3], images.shape[-2], images.shape[-1])
+        return io.NodeOutput(images)
 
 
 class VAEEncode(io.ComfyNode):
@@ -108,10 +108,9 @@ class VAEEncode(io.ComfyNode):
 
     @classmethod
     def execute(cls, pixels, vae) -> io.NodeOutput:
-        raise _unsupported(
-            "VAEEncode", "encoding an image into latents",
-            "comfy/ldm (the autoencoder architecture)",
-        )
+        # Rehydrated: the native encode (comfy/ldm autoencoder is restored).
+        t = vae.encode(pixels)
+        return io.NodeOutput({"samples": t})
 
 
 class CLIPTextEncode(io.ComfyNode):
@@ -145,10 +144,15 @@ class CLIPTextEncode(io.ComfyNode):
 
     @classmethod
     def execute(cls, text: str, clip) -> io.NodeOutput:
-        raise _unsupported(
-            "CLIPTextEncode", "encoding text into conditioning",
-            "comfy/text_encoders (a text-encoder architecture)",
-        )
+        # Rehydrated: the native prompt encoding (comfy/text_encoders restored).
+        if clip is None:
+            raise RuntimeError(
+                "ERROR: clip input is invalid: None\n\nIf the clip is from a "
+                "checkpoint loader node your checkpoint does not contain a valid "
+                "clip or text encoder model."
+            )
+        tokens = clip.tokenize(text)
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens))
 
 
 class CLIPSetLastLayer(io.ComfyNode):
@@ -184,10 +188,10 @@ class CLIPSetLastLayer(io.ComfyNode):
 
     @classmethod
     def execute(cls, clip, stop_at_clip_layer: int = -1) -> io.NodeOutput:
-        raise _unsupported(
-            "CLIPSetLastLayer", "truncating a text encoder",
-            "comfy/text_encoders (a text-encoder architecture)",
-        )
+        # Rehydrated: the native "clip skip" truncation.
+        clip = clip.clone()
+        clip.clip_layer(stop_at_clip_layer)
+        return io.NodeOutput(clip)
 
 
 INFERENCE_NODES: list[type[io.ComfyNode]] = [

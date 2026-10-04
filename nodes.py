@@ -701,6 +701,9 @@ async def init_builtin_extra_nodes():
         "nodes_model_loaders.py",
         "nodes_model_merging.py",
         "nodes_model_inference.py",
+        # Rehydrated generation nodes: Empty Latent Image + KSampler (real sampling
+        # stack restored under comfy.sample / comfy.samplers / comfy.k_diffusion).
+        "nodes_generation.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",

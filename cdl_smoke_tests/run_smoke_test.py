@@ -967,17 +967,28 @@ _SKIPPED_NODES: dict[str, str] = {
 }
 
 #: node id -> substring its raised error must contain.  These nodes are part of the
-#: MODEL protocol layer: they are registered with a correct IO contract but cannot do
-#: any work in a dehydrated build.  They are still executed here so that the "clear,
-#: actionable error instead of a bare ModuleNotFoundError" promise is *verified*
-#: rather than assumed, and so a regression that makes them crash differently shows up.
+#: MODEL protocol layer that is *still* dehydrated: registered with a correct IO
+#: contract but its implementation was removed.  They must raise a ``RuntimeError``
+#: naming the missing module, so a bare ``ModuleNotFoundError`` (or a silent success)
+#: is a failure of the design, not of the test.
 _EXPECTED_ERRORS: dict[str, str] = {
     "LoraLoader": "comfy/lora.py",
     "LoraLoaderModelOnly": "comfy/lora.py",
-    "VAEDecode": "comfy/ldm",
-    "VAEEncode": "comfy/ldm",
-    "CLIPTextEncode": "comfy/text_encoders",
-    "CLIPSetLastLayer": "comfy/text_encoders",
+}
+
+#: Nodes that the rehydration pass wired back to the *real* ComfyUI generation
+#: stack.  A CPU smoke test has no real checkpoint, so they still raise - but the
+#: error must come from the real code (model detection, or a missing method on the
+#: ``StateDictModule`` stub the harness feeds them), never from the old dehydration
+#: placeholder that named a module to restore.  Reaching real code is the PASS; the
+#: value is the substring that, if seen, proves the node regressed to the placeholder.
+_EXPECTED_REHYDRATED: dict[str, str] = {
+    "CheckpointLoaderSimple": "dehydrat",
+    "UNETLoader": "dehydrat",
+    "VAEDecode": "dehydrat",
+    "VAEEncode": "dehydrat",
+    "CLIPTextEncode": "dehydrat",
+    "CLIPSetLastLayer": "dehydrat",
 }
 
 #: node id -> {input name -> factory}.  Some inputs are semantically narrower
@@ -3420,6 +3431,30 @@ def _check_expected_error(node_id: str, node_cls: type, timeout: float) -> tuple
     return "FAIL", "ran successfully although its implementation is missing", ""
 
 
+def _check_rehydrated(node_id: str, node_cls: type, timeout: float) -> tuple[str, str, str]:
+    """Run a rehydrated node; it must reach the real code path, not the placeholder.
+
+    These nodes are wired to the real ComfyUI generation stack.  A CPU smoke test has
+    no real checkpoint, so they still raise - but the error must come from the real
+    code (model detection, or a missing method on the ``StateDictModule`` stub the
+    harness feeds them), never from the old dehydration placeholder that named a module
+    to restore.  Reaching real code is the PASS; a placeholder regression is the FAIL.
+    """
+    forbidden = _EXPECTED_REHYDRATED[node_id]
+    try:
+        args, _, _, _ = _v3_inputs(node_id, node_cls)
+        _execute(node_id, node_cls, args, timeout)
+    except TimeoutError as exc:
+        return "FAIL", f"timed out - real code path may be hanging: {exc}", ""
+    except BaseException as exc:  # noqa: BLE001 - any real-code error is acceptable
+        msg = str(exc)
+        if forbidden.lower() in msg.lower():
+            return "FAIL", f"node regressed to the dehydrated placeholder: {exc}", traceback.format_exc()
+        # Any other error means the node reached the real implementation.
+        return "PASS", "", ""
+    return "FAIL", "ran to completion on a synthetic fixture (unexpected)", ""
+
+
 def _count_outputs(result: Any) -> int:
     """Number of values a node returned, tolerating UI-only dict returns."""
     if result is None:
@@ -3524,6 +3559,12 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if node_id in _EXPECTED_ERRORS:
                 status, detail, tb = _check_expected_error(node_id, node_cls, opts.timeout)
+                results.append((node_id, status, detail, tb))
+                if opts.verbose:
+                    print(f"{status}  {node_id}: {detail}")
+                continue
+            if node_id in _EXPECTED_REHYDRATED:
+                status, detail, tb = _check_rehydrated(node_id, node_cls, opts.timeout)
                 results.append((node_id, status, detail, tb))
                 if opts.verbose:
                     print(f"{status}  {node_id}: {detail}")

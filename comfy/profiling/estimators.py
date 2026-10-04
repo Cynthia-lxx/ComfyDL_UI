@@ -2599,6 +2599,53 @@ def _estimate_vae_encode(ctx: EstimationCtx) -> NodeEstimate:
     return result
 
 
+@register("EmptyLatentImage")
+def _estimate_empty_latent_image(ctx: EstimationCtx) -> NodeEstimate:
+    """Empty latent: (B, latent_channels, H/scale, W/scale) float32.
+
+    Same assumptions as the VAE pair, so the two agree by construction.
+    """
+    batch = max(1, ctx.int_widget("batch_size", 1) or 1)
+    h = ctx.int_widget("height", 512)
+    w = ctx.int_widget("width", 512)
+    estimate = NodeEstimate(basis={"key": "vae_encode", "params": {}})
+    if h is None or w is None:
+        return estimate.as_unknown("latent size is not statically known")
+    scale, _ = ctx.assumption("vae_scale")
+    channels, _ = ctx.assumption("latent_channels")
+    value = TensorVal((batch, channels, h // scale, w // scale), FLOAT32_BYTES)
+    result = NodeEstimate(
+        outputs=[value],
+        items=[formulas.tensor_item("empty latent (B, C, /s, /s)", value.nbytes() or 0,
+                                    kind="outputs")],
+        basis={"key": "vae_encode", "params": {"batch": batch, "latent": list(value.shape),
+                                               "channels": channels, "scale": scale}},
+    )
+    result.confidence = "approx"
+    result.reason = "channel count and downscale follow the SD AutoencoderKL assumptions"
+    return result
+
+
+@register("KSampler")
+def _estimate_ksampler(ctx: EstimationCtx) -> NodeEstimate:
+    """Sampling: the peak depends on the model's own workspace, not on the graph.
+
+    The latent passes through unchanged, so the shape is known - the memory
+    the sampler needs (model resident + per-step buffers) is not.
+    """
+    latent = ctx.tensor("latent_image")
+    estimate = NodeEstimate(basis={"key": "pass_through", "params": {}}).as_unknown(
+        "sampling memory depends on the model workspace and sampler, not on the graph"
+    )
+    # The latent itself passes through unchanged: keep the shape so a
+    # downstream VAE Decode can still be priced.
+    estimate.outputs = [
+        TensorVal(latent.shape if isinstance(latent, TensorVal) else (None, None, None, None),
+                  FLOAT32_BYTES)
+    ]
+    return estimate
+
+
 @register("CLIPTextEncode")
 def _estimate_clip_text_encode(ctx: EstimationCtx) -> NodeEstimate:
     """Text -> CONDITIONING: token x hidden, both from the assumption set.
