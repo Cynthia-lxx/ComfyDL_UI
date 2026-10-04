@@ -1268,11 +1268,9 @@ class PromptServer():
         # ComfyDL Profiling panel assets: repo-owned JS/CSS served like the
         # template catalog's workflows (never a hand edit of the frontend
         # package). The <script> loader that references them is injected into
-        # index.html by app/frontend_patch.py at startup.
-        # The panel ships a .ttf subset: Python 3.14's mimetypes knows
-        # font/ttf, 3.12's does not (falls back to octet-stream, which some
-        # browsers then refuse to load as a font) - register it explicitly.
-        mimetypes.add_type("font/ttf", ".ttf")
+        # index.html by app/frontend_patch.py at startup. The font/ttf MIME
+        # for the panel's .ttf subset is registered by app/profiling_routes
+        # (imported above), which the standalone smoke-test app also shares.
         profiling_assets = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "app", "profiling_assets"
         )

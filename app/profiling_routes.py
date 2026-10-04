@@ -25,6 +25,7 @@ by ``app/frontend_patch.py``. Nothing here touches the frontend package.
 
 from __future__ import annotations
 
+import mimetypes
 from typing import Any, Dict, Optional
 
 from aiohttp import web
@@ -33,6 +34,14 @@ from comfy.profiling import analyse_oom, estimate_workflow
 from comfy.profiling.engine import DeviceBudget, budget_from_environment
 
 routes = web.RouteTableDef()
+
+#: The panel ships a .ttf font subset under app/profiling_assets/, served by
+#: the static route. Python 3.14 maps .ttf to font/ttf out of the box, 3.12
+#: does not - without this registration aiohttp answers octet-stream, which
+#: browsers may refuse to load as a font (caught by T9h on the F drive).
+#: Registered here (not in server.py) so the smoke tests' standalone app,
+#: which mounts the same static directory, gets the identical mapping.
+mimetypes.add_type("font/ttf", ".ttf")
 
 #: The M2 execution watchdog, injected by server.py after construction.
 #: Kept as a module global because the route table is declared before the
