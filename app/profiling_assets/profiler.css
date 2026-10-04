@@ -285,6 +285,7 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 .cdlp-kindbar div { height: 100%; transition: width 300ms ease; }
 .cdlp-k-attn { background: #60a5fa; }
 .cdlp-k-ffn { background: #4ade80; }
+.cdlp-k-conv { background: #a78bfa; }
 .cdlp-k-logits { background: #fbbf24; }
 .cdlp-k-other { background: #9a9a9a; }
 .cdlp-flops-na { color: #6e6e6e; font-size: 10px; font-style: normal; }

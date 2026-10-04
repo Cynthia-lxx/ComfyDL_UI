@@ -15,7 +15,8 @@ Verdict rules (upper-bound heuristics, see docs/profiling-m1-*.md):
 * yellow - everything in between ("may OOM");
 
 The M2 compute ledger is aggregated alongside: per-node ``flops_items``
-(matmul FLOPs, kind attn/ffn/logits) and a report-level ``flops`` section
+(matmul + convolution FLOPs, kind attn/ffn/conv/logits) and a report-level
+``flops`` section
 (total / by-kind / largest). Unlike memory - where nodes share the device
 and the report tracks the *peak* - compute is *additive*: the workflow
 total is the sum over the nodes that were counted. Time is deliberately
@@ -134,7 +135,7 @@ def estimate_workflow(
         "flops": {
             "total": 0,
             "any_estimated": False,
-            "by_kind": {"attn": 0, "ffn": 0, "logits": 0, "other": 0},
+            "by_kind": {"attn": 0, "ffn": 0, "conv": 0, "logits": 0, "other": 0},
             "largest": None,  # {"node_id", "class_type", "kind", "label", "flops"}
         },
     }
@@ -151,7 +152,7 @@ def estimate_workflow(
     any_estimated = False
     flops_total = 0
     flops_any = False
-    flops_by_kind: Dict[str, int] = {"attn": 0, "ffn": 0, "logits": 0, "other": 0}
+    flops_by_kind: Dict[str, int] = {"attn": 0, "ffn": 0, "conv": 0, "logits": 0, "other": 0}
     flops_largest: Optional[dict] = None
 
     for node_id in order:

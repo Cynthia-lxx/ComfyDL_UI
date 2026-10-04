@@ -18,9 +18,18 @@ from typing import Dict, Optional, Tuple
 #: Default tiers for the quantities the engine may have to assume.
 #: ``samples``: dataset size when the input stream is not statically known.
 #: ``sequence_length``: stream/window length under the same conditions.
+#: ``latent_channels`` / ``vae_scale``: the SD AutoencoderKL defaults kept in
+#: ``comfy/sd.py`` (VAE.__init__); other architectures override them, which is
+#: why they live here as overridable assumptions rather than constants.
+#: ``clip_tokens`` / ``clip_hidden``: the conditioning size of a CLIP text
+#: encoder - this build keeps no implementation, so both are assumptions.
 DEFAULT_ASSUMPTIONS: Dict[str, int] = {
     "samples": 10000,
     "sequence_length": 64,
+    "latent_channels": 4,
+    "vae_scale": 8,
+    "clip_tokens": 77,
+    "clip_hidden": 768,
 }
 
 

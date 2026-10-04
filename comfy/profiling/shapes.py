@@ -170,3 +170,45 @@ class ModelVal(EstValue):
 
     def describe(self) -> str:
         return self.spec.describe() if self.spec else "model (unknown structure)"
+
+
+@dataclasses.dataclass(frozen=True)
+class ModuleVal(EstValue):
+    """A ``cdlModel`` payload for the non-LM modules (M3).
+
+    RNNs, attention modules, conv nets and seq2seq encoders are opaque to
+    the estimator except for one number it can derive from the widgets:
+    the trainable parameter count. ``kind_hint`` ("rnn" / "rnn_scratch" /
+    "attention" / "conv" / "seq2seq" / "transformer") tells downstream
+    estimators which family applies, and ``num_hiddens`` carries the
+    module's declared width so a head built on top of it can be sized.
+    """
+
+    param_count: Optional[int] = None
+    kind_hint: str = ""
+    num_hiddens: Optional[int] = None
+
+    def describe(self) -> str:
+        if self.param_count is None:
+            return "module (unknown size)"
+        hint = f", {self.kind_hint}" if self.kind_hint else ""
+        return f"module[{self.param_count:,} params{hint}]"
+
+
+@dataclasses.dataclass(frozen=True)
+class WeightsVal(EstValue):
+    """A loaded-weights payload (M3): checkpoint / VAE / CLIP / LoRA file.
+
+    ``file_bytes`` is the on-disk size (``os.stat`` best effort). ``-1``
+    marks "file not found / not on this machine", in which case the
+    consumer must treat the estimate as approx and record an assumption
+    instead of guessing a size.
+    """
+
+    file_bytes: int = -1
+    source_path: str = ""
+
+    def describe(self) -> str:
+        if self.file_bytes < 0:
+            return "weights (file not found)"
+        return f"weights {self.file_bytes:,}B"

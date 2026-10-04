@@ -260,7 +260,7 @@ check("F5a unknown: nothing estimated -> zero total, no any_estimated",
 rep_empty = estimate_workflow(None, GOLDEN_BUDGET)
 check("F5b empty: report still carries the flops section",
       rep_empty["flops"] == {"total": 0, "any_estimated": False,
-                             "by_kind": {"attn": 0, "ffn": 0, "logits": 0, "other": 0},
+                             "by_kind": {"attn": 0, "ffn": 0, "conv": 0, "logits": 0, "other": 0},
                              "largest": None},
       str(rep_empty["flops"]))
 

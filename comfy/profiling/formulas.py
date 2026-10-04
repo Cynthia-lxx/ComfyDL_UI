@@ -19,7 +19,9 @@ The M2 compute ledger (:class:`FlopsItem`) counts *matmul* FLOPs only
 (one multiply-accumulate = 2 FLOPs): embedding gathers, softmax,
 layer-norm and other elementwise work are excluded - next to the GEMMs
 they are noise, and the standard "6ND" rule (Kaplan et al. 2020) makes the
-same simplification. Training counts ``3x`` the forward FLOPs per step
+same simplification. The M3 extension adds the convolution ledger
+(:func:`conv2d_flops`, kind ``conv``) with the same MAC-counting convention.
+Training counts ``3x`` the forward FLOPs per step
 (backward of a GEMM block costs about twice its forward). These are
 *compute amounts*, not times: no throughput claim is made (that needs the
 measured calibration of a later milestone).
@@ -344,6 +346,182 @@ def mlp_training(
 
 
 # --------------------------------------------------------------------------- #
+# Convolutional / visual family helpers (M3): the static algebra the tensor,
+# detection, segmentation and image nodes execute.
+# --------------------------------------------------------------------------- #
+
+
+def conv2d_out_dim(size: int, kernel: int, stride: int = 1, padding: int = 0) -> int:
+    """Spatial output size of one ``nn.Conv2d`` axis (torch convention).
+
+    ``floor((size + 2*padding - kernel) / stride) + 1`` - the exact rule
+    ``torch.nn`` uses for a stride>1 / padded convolution without dilation.
+    """
+    return (int(size) + 2 * int(padding) - int(kernel)) // max(1, int(stride)) + 1
+
+
+def conv_param_count(
+    in_channels: int,
+    out_channels: int,
+    kernel_h: int,
+    kernel_w: int,
+    bias: bool = True,
+    groups: int = 1,
+) -> int:
+    """Exact trainable parameter count of one ``nn.Conv2d``."""
+    group = max(1, int(groups))
+    weight = int(out_channels) * (int(in_channels) // group) * int(kernel_h) * int(kernel_w)
+    return weight + (int(out_channels) if bias else 0)
+
+
+def image_bytes(
+    batch: Optional[int],
+    height: Optional[int],
+    width: Optional[int],
+    channels: Optional[int] = 3,
+    itemsize: int = FLOAT32_BYTES,
+) -> Optional[int]:
+    """Bytes of a ComfyUI ``IMAGE`` / ``MASK`` tensor (NHWC layout).
+
+    Any unknown dimension propagates as ``None`` - the caller decides
+    whether an assumption fills it in.
+    """
+    if batch is None or height is None or width is None or channels is None:
+        return None
+    return int(batch) * int(height) * int(width) * int(channels) * int(itemsize)
+
+
+def tensor_item(
+    label: str,
+    nbytes: Optional[int],
+    kind: str = "misc",
+    approx: bool = False,
+) -> MemoryItem:
+    """A one-tensor memory line (``single_bytes`` equals ``bytes``).
+
+    The factory every tensor-shaped estimator uses, so an unknown size
+    degrades to a 0-byte line instead of raising.
+    """
+    return MemoryItem(label, int(nbytes or 0), kind=kind, approx=approx)
+
+
+def rnn_param_count(
+    num_inputs: int,
+    num_hiddens: int,
+    gates: int = 1,
+    bias: bool = True,
+    num_layers: int = 1,
+) -> int:
+    """Exact parameter count of a torch RNN/GRU *stack*.
+
+    Layer 0 maps ``I -> H``; every further layer maps ``H -> H`` (torch's
+    own layout, so a stacked GRU is not simply L times layer 0). One layer
+    holds ``gates x (W_ih: In x H + W_hh: H x H)`` plus, with bias,
+    ``2 x gates x H`` (``b_ih`` + ``b_hh`` - torch keeps both even when
+    only one is used). ``gates``: vanilla RNN 1, GRU 3, LSTM 4.
+    """
+    i, h = int(num_inputs), int(num_hiddens)
+    bias_count = 2 * int(gates) * h if bias else 0
+    first = int(gates) * (i * h + h * h) + bias_count
+    deeper = int(gates) * (h * h + h * h) + bias_count
+    return first + (max(1, int(num_layers)) - 1) * deeper
+
+
+def gru_param_count(num_inputs: int, num_hiddens: int, num_layers: int = 1) -> int:
+    """Exact parameter count of a torch GRU stack (3 gates, both biases)."""
+    return rnn_param_count(num_inputs, num_hiddens, gates=3, bias=True, num_layers=num_layers)
+
+
+def dense_param_count(
+    in_features: Optional[int], out_features: Optional[int], bias: bool = True
+) -> Optional[int]:
+    """Parameter count of one ``nn.Linear``; ``None`` while a dim is unknown.
+
+    A ``nn.LazyLinear`` has no weights until its first forward, which is
+    why the width may legitimately be missing here.
+    """
+    if in_features is None or out_features is None:
+        return None
+    return int(in_features) * int(out_features) + (int(out_features) if bias else 0)
+
+
+def mha_param_count(in_features: int, num_hiddens: int, bias: bool = False) -> int:
+    """The four projections (q/k/v/output) of d2l's multi-head attention.
+
+    The head count does not change the parameter count: every head gets a
+    slice of the same matrices (d2l builds no per-head weights).
+    """
+    return 4 * (int(in_features) * int(num_hiddens) + (int(num_hiddens) if bias else 0))
+
+
+def lenet_param_count(
+    num_classes: int, in_channels: int = 1, spatial: int = 28
+) -> int:
+    """d2l LeNet-5 with its Lazy layers resolved for one input size.
+
+    conv1 (5x5, padding 2) keeps the size, conv2 does not, and both pools
+    halve it, so the flatten width is ``16 * (((spatial // 2) - 4) // 2)^2``.
+    The default (1 x 28 x 28) is the MNIST shape d2l uses.
+    """
+    side = ((int(spatial) // 2) - 4) // 2
+    if side <= 0:
+        return 0
+    flat = 16 * side * side
+    conv1 = int(in_channels) * 6 * 25 + 6
+    conv2 = 6 * 16 * 25 + 16
+    dense1 = flat * 120 + 120
+    dense2 = 120 * 84 + 84
+    head = 84 * int(num_classes) + int(num_classes)
+    return conv1 + conv2 + dense1 + dense2 + head
+
+
+def resnet18_param_count(in_channels: int, num_classes: int) -> int:
+    """d2l's ResNet-18 (small stem, no max-pool) parameter count.
+
+    One residual block is conv1 (3x3) + conv2 (3x3) + two batch-norms, plus
+    an optional 1x1 shortcut; the stride changes shapes, never the counts.
+    """
+    def conv(cin: int, cout: int, kernel: int) -> int:
+        return cin * cout * kernel * kernel + cout
+
+    def residual(cin: int, cout: int, shortcut: bool) -> int:
+        params = conv(cin, cout, 3) + conv(cout, cout, 3) + 4 * cout
+        return params + conv(cin, cout, 1) if shortcut else params
+
+    params = conv(int(in_channels), 64, 3) + 2 * 64  # stem conv + batch norm
+    for cin, cout, first in ((64, 64, True), (64, 128, False),
+                             (128, 256, False), (256, 512, False)):
+        params += residual(cin, cout, not first) + residual(cout, cout, False)
+    return params + 512 * int(num_classes) + int(num_classes)
+
+
+def positional_encoding_bytes(
+    max_len: int, num_hiddens: int, itemsize: int = FLOAT32_BYTES
+) -> int:
+    """Bytes of d2l's sine/cosine table ``(1, max_len, num_hiddens)``.
+
+    It is a plain tensor attribute, not a registered buffer: zero trainable
+    parameters, but very real memory.
+    """
+    return int(max_len) * int(num_hiddens) * int(itemsize)
+
+
+def transformer_block_param_count(
+    num_hiddens: int, ffn_num_hiddens: int, bias: bool = False
+) -> int:
+    """One transformer-encoder block of d2l's layout.
+
+    Four attention projections + ReLU-FFN in/out + the two layer-norms of
+    addnorm1/addnorm2, all derived exactly from the widgets.
+    """
+    h, f = int(num_hiddens), int(ffn_num_hiddens)
+    attention = mha_param_count(h, h, bias)
+    ffn = 2 * h * f + f + h  # dense1 + dense2, both biased
+    norms = 2 * 2 * h  # weight + bias of each layer-norm
+    return attention + ffn + norms
+
+
+# --------------------------------------------------------------------------- #
 # Compute ledger (M2): FLOPs of the same workloads the memory side covers.
 # --------------------------------------------------------------------------- #
 
@@ -517,6 +695,36 @@ def mlp_training_flops(
         )
         for item in mlp_forward_flops(batch, in_features, hidden, out_features)
     ]
+
+
+def conv2d_flops(
+    batch: int,
+    out_h: int,
+    out_w: int,
+    out_channels: int,
+    in_channels: int,
+    kernel_h: int,
+    kernel_w: int,
+    groups: int = 1,
+) -> int:
+    """FLOPs of one 2D convolution (one multiply-accumulate = 2, the GEMM
+    convention the rest of the ledger uses).
+
+    ``2 x B x Hout x Wout x Cout x (Cin / groups) x Kh x Kw``; the bias add
+    and the elementwise activation around the conv are excluded, exactly the
+    simplification the matmul ledger makes. Kind: ``conv``.
+    """
+    group = max(1, int(groups))
+    return (
+        2
+        * int(batch)
+        * int(out_h)
+        * int(out_w)
+        * int(out_channels)
+        * (int(in_channels) // group)
+        * int(kernel_h)
+        * int(kernel_w)
+    )
 
 
 def six_nd_estimate(params, tokens) -> int:
