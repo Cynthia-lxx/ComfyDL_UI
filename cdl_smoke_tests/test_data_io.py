@@ -145,6 +145,57 @@ def main() -> int:
     except ImportError:
         check("ReadAccDB (pyodbc)", True, "pyodbc absent - skipped (matches _SKIPPED_NODES)")
 
+    # Writers (require a DATASET input -> build one) -----------------------
+    import torch as _torch
+
+    ds_in = REG["CdlTensorsToDataset"]().execute(
+        _torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+        _torch.tensor([0.5, 1.0]),
+    )[0]
+    # CSV round-trip (to_dataframe names the label column "label")
+    try:
+        csv_out = sandbox / "out.csv"
+        REG["CdlWriteCSV"]().execute(ds_in, str(csv_out))
+        ds_csv = REG["CdlReadCSV"]().execute(str(csv_out), "label")[0]
+        check("WriteCSV round-trip features", ds_csv.features.shape == (2, 3))
+        check("WriteCSV round-trip labels", ds_csv.labels is not None and ds_csv.labels.shape == (2,))
+    except Exception as e:  # pragma: no cover
+        check("WriteCSV", False, f"{type(e).__name__}: {e}")
+    # JSON round-trip
+    try:
+        json_out = sandbox / "out.json"
+        REG["CdlWriteJSON"]().execute(ds_in, str(json_out))
+        ds_j = REG["CdlReadJSON"]().execute(str(json_out), "label")[0]
+        check("WriteJSON round-trip features", ds_j.features.shape == (2, 3))
+    except Exception as e:  # pragma: no cover
+        check("WriteJSON", False, f"{type(e).__name__}: {e}")
+    # DB round-trip
+    try:
+        db_out = sandbox / "out.db"
+        REG["CdlWriteDB"]().execute(ds_in, str(db_out), "data")
+        ds_db = REG["CdlReadDB"]().execute(str(db_out), "SELECT * FROM data", "label")[0]
+        check("WriteDB round-trip features", ds_db.features.shape == (2, 3))
+    except Exception as e:  # pragma: no cover
+        check("WriteDB", False, f"{type(e).__name__}: {e}")
+    # XLSX round-trip (optional openpyxl)
+    try:
+        from openpyxl import Workbook  # noqa: F401
+
+        xlsx_out = sandbox / "out.xlsx"
+        REG["CdlWriteXLSX"]().execute(ds_in, str(xlsx_out))
+        ds_x = REG["CdlReadXLSX"]().execute(str(xlsx_out), "label")[0]
+        check("WriteXLSX round-trip features", ds_x.features.shape == (2, 3))
+    except ImportError:
+        check("WriteXLSX (openpyxl)", True, "openpyxl absent - skipped")
+    except Exception as e:  # pragma: no cover
+        check("WriteXLSX", False, f"{type(e).__name__}: {e}")
+    # Preview
+    try:
+        prev = REG["CdlDatasetPreview"]().execute(ds_in, 2)[0]
+        check("DatasetPreview non-empty", isinstance(prev, str) and len(prev) > 0)
+    except Exception as e:  # pragma: no cover
+        check("DatasetPreview", False, f"{type(e).__name__}: {e}")
+
     failed = [r for r in _RESULTS if not r[1]]
     for name, ok, detail in _RESULTS:
         print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" -- {detail}" if detail else ""))
