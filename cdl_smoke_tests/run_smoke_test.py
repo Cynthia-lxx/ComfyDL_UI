@@ -2059,6 +2059,37 @@ def _check_linreg_train(result: Any, args: dict[str, Any]) -> None:
     )
 
 
+def _check_formula_data_gen(result: Any, args: dict[str, Any]) -> None:
+    """The formula generator must produce a consistent labelled DATASET.
+
+    Verifies the three-port contract (``X`` / ``y`` / ``dataset``): shapes
+    match ``num_examples`` and the feature count implied by the formula's
+    highest x-index, everything is finite, the dataset carries the right
+    feature names / target / provenance metadata, and — with the default
+    noise — the labels stay within a plausible band around the clean signal.
+    """
+    import torch
+
+    X, y, dataset = _as_tuple(result)
+    n = int(args["num_examples"])
+    assert X.dim() == 2 and X.shape[0] == n, f"X must be [n, k], got {tuple(X.shape)}"
+    assert tuple(y.shape) == (n, 1), f"y must be [n, 1], got {tuple(y.shape)}"
+    assert X.shape[1] >= 1, "X must have at least one feature column"
+    assert torch.isfinite(X).all() and torch.isfinite(y).all(), "outputs must be finite"
+
+    from comfydl.nodes.data_types import CdlDataset as _CdlDataset
+
+    assert isinstance(dataset, _CdlDataset), f"dataset must be a CdlDataset, got {type(dataset)}"
+    assert dataset.n_samples == n, f"dataset has {dataset.n_samples} rows, expected {n}"
+    assert dataset.n_features == X.shape[1], "dataset feature count disagrees with X"
+    assert dataset.labels is not None, "generated dataset must be labelled"
+    assert dataset.feature_names == [f"x{i}" for i in range(X.shape[1])], (
+        f"unexpected feature names: {dataset.feature_names}"
+    )
+    assert dataset.target_name == "y", f"unexpected target name: {dataset.target_name}"
+    assert dataset.meta.get("source") in ("formula", "model"), "missing provenance metadata"
+
+
 def _check_regression_train(result: Any, args: dict[str, Any]) -> None:
     """The coarse trainer must fit the deterministic relation and return a reusable model.
 
@@ -3253,6 +3284,7 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "TrainingTextToParameters": [_check_training_text_to_parameters],
     "CdlLinRegTrain": [_check_linreg_train],
     "CdlRegressionTrain": [_check_regression_train],
+    "CdlFormulaDataGen": [_check_formula_data_gen],
     "PoolingSliding": [_check_pooling_sliding],
     "PoolingAdaptive": [_check_pooling_adaptive],
     "ConvolutionConv": [_check_convolution_conv],

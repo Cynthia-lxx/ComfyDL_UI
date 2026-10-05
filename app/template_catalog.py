@@ -130,6 +130,37 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-09-20",
             "openSource": True,
         },
+        {
+            "name": "linear_regression_from_scratch",
+            "title": "Linear Regression: From Scratch",
+            "description": (
+                "The d2l textbook loop in one graph: generate synthetic data, "
+                "train y = X.w + b with mini-batch SGD from scratch, plot the "
+                "loss curve, then verify the learned w / b with the stateless "
+                "Linear Regression + Squared Loss nodes."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "jpg",
+            "tags": ["regression", "training", "from scratch", "verification"],
+            "date": "2026-10-05",
+            "openSource": True,
+        },
+        {
+            "name": "tabular_regression_production",
+            "title": "Tabular Regression: Production",
+            "description": (
+                "A production regression pipeline on data generated in-graph: "
+                "formula data generator, table preview, one-box Regression "
+                "Train with live loss preview and early stopping, and the "
+                "predictions exported back to CSV. Swap the generator for a "
+                "CSV / XLSX / DB reader to run your own data."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "jpg",
+            "tags": ["regression", "dataset", "production", "csv"],
+            "date": "2026-10-05",
+            "openSource": True,
+        },
     ],
 }
 
@@ -146,6 +177,15 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
         ),
         "language_model_load_and_chat": (
             "加载训练好的 ComfyDL 语言模型权重并生成文本——训练工作流的轻量配套。"
+        ),
+        "linear_regression_from_scratch": (
+            "一张图跑通 d2l 教科书闭环：生成合成数据、从零小批量 SGD 训练 y = X·w + b、"
+            "绘制 loss 曲线，再用无状态的 Linear Regression + Squared Loss 节点验证学到的 w / b。"
+        ),
+        "tabular_regression_production": (
+            "图内生成数据的生产级回归管线：公式数据生成器、表格预览、带实时 loss 预览与早停的"
+            "一盒式 Regression Train，预测结果回写 CSV。把生成器换成 CSV / XLSX / DB 读取节点"
+            "即可跑你自己的数据。"
         ),
     },
 }

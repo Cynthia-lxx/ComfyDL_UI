@@ -119,9 +119,14 @@ check(
 )
 comfydl_names = {t["name"] for t in curated[0]["templates"]}
 check(
-    "T3c curated: both example workflows listed",
+    "T3c curated: every example workflow listed",
     comfydl_names
-    == {"language_model_train_and_chat", "language_model_load_and_chat"},
+    == {
+        "language_model_train_and_chat",
+        "language_model_load_and_chat",
+        "linear_regression_from_scratch",
+        "tabular_regression_production",
+    },
     str(sorted(comfydl_names)),
 )
 check(
@@ -130,9 +135,14 @@ check(
     "official schema requires ^[a-zA-Z0-9._-]+$",
 )
 other_titles = [c.get("title") for c in curated[1:]]
+# 2026-10-05: the diffusion rehydration registered KSampler / VAE / CLIP /
+# EmptyLatentImage, reviving the official text2img-style templates -> the
+# upstream "Image" category now survives the dead-template scan alongside
+# "Node Basics". Assert the documented allowlist instead of a single value;
+# new survivor categories mean the registry grew and MUST be reviewed here.
 check(
-    "T3d curated: only expected upstream category survives (Node Basics)",
-    other_titles == ["Node Basics"],
+    "T3d curated: upstream survivors limited to documented categories",
+    "Node Basics" in other_titles and set(other_titles) <= {"Node Basics", "Image"},
     str(other_titles),
 )
 check(
@@ -312,6 +322,26 @@ async def _route_checks() -> None:
         ok, info, _ = await hit(
             "/templates/language_model_train_and_chat-1.jpg", 200)
         check("T9d route: train-and-chat thumbnail 200", ok, info)
+
+        # Regression templates (2026-10-05): JSON + mapped thumbnail art.
+        ok, info, body = await hit(
+            "/templates/linear_regression_from_scratch.json", 200)
+        check("T9j route: linear-regression workflow JSON 200", ok, info)
+        if ok:
+            check("T9j2 route: linear-regression body is a UI-format workflow",
+                  b'"nodes"' in body and b'"links"' in body)
+        ok, info, body = await hit(
+            "/templates/tabular_regression_production.json", 200)
+        check("T9k route: tabular-regression workflow JSON 200", ok, info)
+        if ok:
+            check("T9k2 route: tabular-regression body is a UI-format workflow",
+                  b'"nodes"' in body and b'"links"' in body)
+        ok, info, _ = await hit(
+            "/templates/linear_regression_from_scratch-1.jpg", 200)
+        check("T9l route: linear-regression thumbnail 200 (mapped art)", ok, info)
+        ok, info, _ = await hit(
+            "/templates/tabular_regression_production-1.jpg", 200)
+        check("T9m route: tabular-regression thumbnail 200 (mapped art)", ok, info)
 
         ok, info, body = await hit("/templates/index.json", 200)
         check("T9e route: rewritten index.json 200", ok, info)

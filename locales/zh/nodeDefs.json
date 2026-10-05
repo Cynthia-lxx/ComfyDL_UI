@@ -61,6 +61,17 @@
   "CdlDataLoaderStats": {
     "description": "遍历 cdlDataloader，统计标签分布。自动识别标签类型：整数且落在 [0, num_classes) 内的离散类别标签渲染为分类柱状图；连续数值标签（如回归目标，含 (n,1) 二维标签）自动按 num_classes 个区间分桶为直方图。"
   },
+  "CdlDatasetPreview": {
+    "display_name": "Dataset → Preview（数据集 → 预览）"
+  },
+  "CdlDatasetToLoader": {
+    "display_name": "Dataset → DataLoader（数据集 → 数据加载器）",
+    "description": "将一个 DATASET 转换为 cdlDataloader（复用 CdlLoadArray 机制），产出的批次结构与统计 / 预览节点期望的一致。"
+  },
+  "CdlDatasetToTensors": {
+    "display_name": "Dataset → Tensors（数据集 → 张量）",
+    "description": "将一个 DATASET 拆回 X / y 两个 TENSOR。无标签时 y 返回空张量。"
+  },
   "CdlDeviceInfo": {
     "description": "查询当前环境的 GPU 数量和 CUDA 可用性。"
   },
@@ -76,6 +87,10 @@
   },
   "CdlFashionMNIST": {
     "description": "加载 Fashion-MNIST 图像分类数据集（训练集 6 万张 / 测试集 1 万张，10 个类别）。首次使用时自动下载（约 30 MB）。"
+  },
+  "CdlFormulaDataGen": {
+    "display_name": "Formula Data Generator（公式数据生成器）",
+    "description": "从数学公式或已训练模型生成带标签的表格数据集——回归实验的开箱即用数据源。"
   },
   "CdlGRU": {
     "description": "使用 PyTorch 高层 nn.GRU 构建多层 GRU。前向输入 (num_steps, batch_size, num_inputs)，返回 (output, h_n)。"
@@ -121,6 +136,10 @@
   },
   "CdlLinReg": {
     "description": "线性回归前向计算：\\( \\hat{y} = X w + b \\)"
+  },
+  "CdlLinRegTrain": {
+    "display_name": "线性回归训练",
+    "description": "从零用均方损失上的小批量 SGD 训练 y = X @ w + b。输出学到的 w / b、逐步的 loss_history 与训练集上的 y_hat。"
   },
   "CdlLoadArray": {
     "description": "将一个或多个张量封装为 PyTorch DataLoader。将 TENSOR 特征和/或标签连接到可选输入槽；节点输出 cdlDataloader。"
@@ -232,6 +251,32 @@
     "display_name": "Random Tensor（随机张量）",
     "description": "按所选分布（normal、uniform、randint）生成随机张量。seed >= 0 固定随机种子以保证结果可复现；-1 表示不固定。"
   },
+  "CdlReadAccDB": {
+    "display_name": "Read AccDB → Dataset（读取 Access → 数据集）"
+  },
+  "CdlReadCSV": {
+    "display_name": "Read CSV → Dataset（读取 CSV → 数据集）",
+    "description": "将 CSV 文件读取为 DATASET。"
+  },
+  "CdlReadDB": {
+    "display_name": "Read DB → Dataset（读取数据库 → 数据集）"
+  },
+  "CdlReadJSON": {
+    "display_name": "Read JSON → Dataset（读取 JSON → 数据集）"
+  },
+  "CdlReadString": {
+    "display_name": "Read String → Dataset（读取字符串 → 数据集）"
+  },
+  "CdlReadText": {
+    "display_name": "Read Text → Dataset（读取文本 → 数据集）"
+  },
+  "CdlReadXLSX": {
+    "display_name": "Read XLSX → Dataset（读取 XLSX → 数据集）"
+  },
+  "CdlRegressionTrain": {
+    "display_name": "回归训练",
+    "description": "一盒式生产级回归管线——可选训练/验证拆分、折入模型的 z-score 标准化、小批量 Adam"
+  },
   "CdlResNeXtBlock": {
     "description": "创建单个 ResNeXt 块，使用分组卷积实现多分支结构。包含瓶颈结构（1×1 降维 → 3×3 分组卷积 → 1×1 升维）+ 可选快捷连接。"
   },
@@ -292,6 +337,10 @@
   },
   "CdlTensorToValue": {
     "description": "把通用 TENSOR 暴露到每种类型一个的具体输出槽上。连你需要的那根线即可；未使用的槽返回 None 且不产生开销。从 Value → Tensor 接回的元数据会被折回重建的 LATENT / AUDIO 字典。"
+  },
+  "CdlTensorsToDataset": {
+    "display_name": "Tensors → Dataset（张量 → 数据集）",
+    "description": "将 TENSOR 特征（及可选标签）打包为单个 DATASET 对象，使数据能在数据集 I/O 与回归节点间流动。"
   },
   "CdlTimer": {
     "display_name": "Timer（计时基准）",
@@ -355,5 +404,18 @@
   },
   "CdlWhat": {
     "description": "试一试就知道了~"
+  },
+  "CdlWriteCSV": {
+    "display_name": "Dataset → Write CSV（数据集 → 写 CSV）",
+    "description": "将 DATASET 写入 CSV 文件并返回路径以便串联。"
+  },
+  "CdlWriteDB": {
+    "display_name": "Dataset → Write DB（数据集 → 写数据库）"
+  },
+  "CdlWriteJSON": {
+    "display_name": "Dataset → Write JSON（数据集 → 写 JSON）"
+  },
+  "CdlWriteXLSX": {
+    "display_name": "Dataset → Write XLSX（数据集 → 写 XLSX）"
   }
 }
