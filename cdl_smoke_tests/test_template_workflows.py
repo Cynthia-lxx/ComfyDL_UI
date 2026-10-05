@@ -116,16 +116,22 @@ def main() -> int:
 
     workflows_dir = REPO_ROOT / "comfydl" / "example_workflows"
 
-    for name in ("linear_regression_from_scratch", "tabular_regression_production"):
+    for name in (
+        "linear_regression_from_scratch",
+        "tabular_regression_production",
+        "regression_model_reuse",
+    ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
-        linked = {i.get("link") for n in wf["nodes"] for i in n.get("inputs", [])}
         has_wired_preview = any(
             n["type"] == "PreviewImage" and n.get("inputs") and n["inputs"][0].get("link") is not None
             for n in wf["nodes"]
         )
-        check(f"{name}: PreviewImage output node present and wired",
-              has_wired_preview,
+        # SaveText is the OUTPUT_NODE of the inference template; the other two
+        # templates end in a wired PreviewImage.
+        has_output_node = "SaveText" in types or has_wired_preview
+        check(f"{name}: output node present (PreviewImage wired / SaveText)",
+              has_output_node,
               "a template without an OUTPUT_NODE fails to queue ('workflow has no outputs')")
 
     # --- Template A: linear_regression_from_scratch -------------------------- #
@@ -155,6 +161,18 @@ def main() -> int:
     check("B: CSV exported",
           csv_path.exists() and csv_path.stat().st_size > 1000, str(csv_path))
     check("B: plot produced IMAGE", out[6][0].dim() == 4)
+
+    # --- Template C: regression_model_reuse ----------------------------------- #
+    out = _run_workflow(workflows_dir / "regression_model_reuse.json")
+    check("C: model file created", Path("output/regression_model.pt").exists(),
+          "Model Save must persist the trained weights for later sessions")
+    preds, truth = out[7][0], out[6][1]
+    err = float((preds - truth).abs().mean())
+    check("C: reloaded model tracks fresh data", err < 0.15, f"mae={err:.4f}")
+    csv_path = Path(out[9][0])
+    check("C: predictions CSV exported",
+          csv_path.exists() and csv_path.stat().st_size > 1000, str(csv_path))
+    check("C: preview text written", isinstance(out[10][0], str) and "x0" in out[10][0])
 
     return _report()
 

@@ -72,6 +72,7 @@ _UUID_RE = re.compile(
 # until a dedicated one is captured.
 _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "language_model_load_and_chat": "language_model_train_and_chat-1.jpg",
+    "regression_model_reuse": "tabular_regression_production-1.jpg",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -161,6 +162,21 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-10-05",
             "openSource": True,
         },
+        {
+            "name": "regression_model_reuse",
+            "title": "Regression Model: Save & Reuse",
+            "description": (
+                "Persistence round-trip in one graph: train a regression "
+                "model, save it with Model Save, rebuild it from the file "
+                "alone with Regression Model Load, run inference on fresh "
+                "data and export predictions vs. ground truth to CSV."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "jpg",
+            "tags": ["regression", "save", "load", "inference"],
+            "date": "2026-10-05",
+            "openSource": True,
+        },
     ],
 }
 
@@ -186,6 +202,10 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "图内生成数据的生产级回归管线：公式数据生成器、表格预览、带实时 loss 预览与早停的"
             "一盒式 Regression Train，预测结果回写 CSV。把生成器换成 CSV / XLSX / DB 读取节点"
             "即可跑你自己的数据。"
+        ),
+        "regression_model_reuse": (
+            "一张图跑通模型持久化闭环：训练回归模型 → Model Save 存盘 → Regression Model Load "
+            "仅凭文件重建架构 → 对新数据推理 → 预测与真值导出 CSV。之后任何会话只需加载部分即可复用模型。"
         ),
     },
 }

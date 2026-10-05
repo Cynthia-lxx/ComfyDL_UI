@@ -140,6 +140,38 @@ def main() -> int:
         reloaded.load_state_dict(torch.load(sp, weights_only=True))
         check("reload reproduces", torch.allclose(reloaded(Xr), preds_s, atol=1e-4))
 
+        # Skeleton-free restore: CdlModelSave + CdlRegressionModelLoad must
+        # rebuild the architecture from the file alone and reproduce the
+        # model's predictions (the workflow-template persistence path).
+        if "CdlRegressionModelLoad" in REG:
+            sp2 = str(sandbox / "reg2.pt")
+            REG["CdlModelSave"]().execute(nn_s, sp2)
+            model_r, info = REG["CdlRegressionModelLoad"]().execute(sp2, "relu")
+            check("skeleton-free load returns nn.Module",
+                  isinstance(model_r, torch.nn.Module))
+            check("skeleton-free load info string", "restored regressor" in info, info)
+            check("skeleton-free load reproduces predictions",
+                  torch.allclose(model_r(Xr), nn_s(Xr), atol=1e-5))
+            # Host-inference-mode safety: the loader must work when the whole
+            # prompt runs under torch.inference_mode().
+            with torch.inference_mode():
+                model_r2, _ = REG["CdlRegressionModelLoad"]().execute(sp2, "relu")
+            check("skeleton-free load works under inference_mode",
+                  torch.allclose(model_r2(Xr), nn_s(Xr), atol=1e-5))
+            # A state_dict without 'core.0.weight' must be rejected readably.
+            junk = str(sandbox / "junk.pt")
+            torch.save({"weight": torch.zeros(1)}, junk)
+            try:
+                REG["CdlRegressionModelLoad"]().execute(junk, "relu")
+                check("rejects non-regressor state_dict", False, "no ValueError")
+            except ValueError:
+                check("rejects non-regressor state_dict", True)
+            try:
+                REG["CdlRegressionModelLoad"]().execute(str(sandbox / "missing.pt"), "relu")
+                check("rejects missing file", False, "no ValueError")
+            except ValueError:
+                check("rejects missing file", True)
+
     return _report()
 
 

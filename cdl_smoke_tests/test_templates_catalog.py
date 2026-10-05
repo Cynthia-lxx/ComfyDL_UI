@@ -126,6 +126,7 @@ check(
         "language_model_load_and_chat",
         "linear_regression_from_scratch",
         "tabular_regression_production",
+        "regression_model_reuse",
     },
     str(sorted(comfydl_names)),
 )

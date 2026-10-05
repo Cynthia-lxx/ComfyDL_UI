@@ -273,6 +273,10 @@
   "CdlReadXLSX": {
     "display_name": "Read XLSX → Dataset（读取 XLSX → 数据集）"
   },
+  "CdlRegressionModelLoad": {
+    "display_name": "Regression Model Load（回归模型加载）",
+    "description": "Regression Train 的免骨架持久化对应节点——仅凭保存的 state_dict 重建"
+  },
   "CdlRegressionTrain": {
     "display_name": "回归训练",
     "description": "一盒式生产级回归管线——可选训练/验证拆分、折入模型的 z-score 标准化、小批量 Adam"

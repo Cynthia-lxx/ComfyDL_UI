@@ -119,6 +119,23 @@ def _seed_fixtures(sandbox: Path) -> None:
 
     torch.save(_f_model({}, "model").state_dict(), sandbox / "model.pt")
 
+    # Regression model fixture: CdlRegressionModelLoad defaults its path to
+    # "output/regression_model.pt", so a _Regressor-shaped state_dict (linear
+    # core + standardisation buffers) must exist there for the harness dummy
+    # run to exercise the architecture reconstruction instead of failing on a
+    # missing file.  Built by hand: importing the comfydl package here would
+    # shadow the host `nodes` module before bootstrap finishes.
+    (sandbox / "output").mkdir(exist_ok=True)
+    torch.save(
+        {
+            "core.0.weight": torch.zeros(1, 3),
+            "core.0.bias": torch.zeros(1),
+            "mean": torch.zeros(3),
+            "std": torch.ones(3),
+        },
+        sandbox / "output" / "regression_model.pt",
+    )
+
     # --- dataset reader fixtures (csv / txt / json / sqlite) ---
     import csv as _csv, json as _json, sqlite3 as _sqlite3
 
