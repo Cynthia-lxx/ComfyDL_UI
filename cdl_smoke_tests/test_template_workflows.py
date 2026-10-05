@@ -26,6 +26,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import torch
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -58,6 +60,11 @@ def _widget_order(node_cls):
                 type_name = spec
             if type_name in _WIDGET_TYPES:
                 order.append(name)
+                # The frontend appends a `control_after_generate` widget after
+                # INT widgets named exactly `seed` / `noise_seed` — its value
+                # occupies a slot in the serialized widgets_values array.
+                if type_name == "INT" and name in ("seed", "noise_seed"):
+                    order.append("control_after_generate")
     return order
 
 
@@ -90,9 +97,14 @@ def _run_workflow(path: Path):
             f"node {node['id']} ({node['type']}): {len(wvals)} widget values "
             f"but {len(order_names)} widgets declared {order_names}"
         )
-        args.update(zip(order_names, wvals))
+        args.update(
+            {k: v for k, v in zip(order_names, wvals) if k != "control_after_generate"}
+        )
         instance = cls()
-        out = getattr(instance, cls.FUNCTION)(**args)
+        # Mirror the host: execution.py runs the whole prompt inside
+        # torch.inference_mode(), so every node here must survive that too.
+        with torch.inference_mode():
+            out = getattr(instance, cls.FUNCTION)(**args)
         node_out[node["id"]] = out if isinstance(out, tuple) else (out,)
     return node_out
 
