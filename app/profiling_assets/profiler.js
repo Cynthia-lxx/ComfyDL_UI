@@ -327,6 +327,10 @@
     liveTimer: null,
     bursts: null,
     watchdogUnavailable: false,
+    // UI: collapse state for the two long sections (CPU burst log / per-node
+    // breakdown). Kept in state because renderPanel() rebuilds the DOM on every
+    // update and would otherwise reset any DOM-only collapsed flag.
+    collapsed: { bursts: false, nodes: false },
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -931,8 +935,11 @@
       html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
         + '<div class="cdlp-hint">' + esc(t("watchdog_unavailable")) + "</div></div>");
     } else if (state.bursts && state.bursts.length) {
-      html.push('<div class="cdlp-card cdlp-wd"><div class="cdlp-card-title cdlp-wd-title">'
-        + esc(t("watchdog_bursts")) + "</div>");
+      html.push('<div class="cdlp-card cdlp-wd' + (state.collapsed.bursts ? " cdlp-collapsed" : "") + '">'
+        + '<div class="cdlp-card-title cdlp-wd-title cdlp-collapsible" data-collapse="bursts">'
+        + '<span class="cdlp-collapse-label">' + esc(t("watchdog_bursts")) + "</span>"
+        + '<i class="cdlp-chevron"></i></div>'
+        + '<div class="cdlp-card-body">');
       state.bursts.slice().reverse().forEach((ev) => {
         html.push('<div class="cdlp-burst">');
         html.push('<div class="cdlp-burst-head"><b>' + esc(ev.node_id ? nodeTitleOf(ev.node_id) : "?") + "</b>"
@@ -947,12 +954,17 @@
         }
         html.push("</div>");
       });
-      html.push("</div>");
+      html.push("</div></div>");
     }
 
     // Per-node breakdown
-    html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("table_title"))
-      + ' <button class="cdlp-button cdlp-refresh" id="cdlp-refresh">' + esc(t("refresh")) + "</button></div>");
+    html.push('<div class="cdlp-card' + (state.collapsed.nodes ? " cdlp-collapsed" : "") + '">'
+      + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="nodes">'
+      + '<span class="cdlp-collapse-label">' + esc(t("table_title")) + "</span>"
+      + '<span class="cdlp-title-right">'
+      + '<button class="cdlp-button cdlp-refresh" id="cdlp-refresh">' + esc(t("refresh")) + "</button>"
+      + '<i class="cdlp-chevron"></i></span></div>'
+      + '<div class="cdlp-card-body">');
     const nodes = (r && r.nodes) || [];
     nodes.forEach((n) => {
       const unknown = n.status !== "estimated";
@@ -993,7 +1005,7 @@
       html.push("</details>");
     });
     if (!nodes.length) html.push('<div class="cdlp-hint">' + esc(t("loading")) + "</div>");
-    html.push("</div>");
+    html.push("</div></div>");
 
     html.push('<div class="cdlp-disclaimer">' + esc(t("disclaimer")) + "</div>");
     html.push("</div>");
@@ -1009,6 +1021,17 @@
           state.assumptions[key] = value;
           requestEstimate(true);
         }
+      });
+    });
+    // Collapsible section titles: click the title to fold / unfold the card.
+    el.querySelectorAll(".cdlp-collapsible").forEach((titleEl) => {
+      titleEl.addEventListener("click", (ev) => {
+        // Let the embedded Refresh button act without folding the card.
+        if (ev.target.closest("button")) return;
+        const key = titleEl.getAttribute("data-collapse");
+        const card = titleEl.closest(".cdlp-card");
+        if (!key || !card) return;
+        state.collapsed[key] = card.classList.toggle("cdlp-collapsed");
       });
     });
     const refresh = el.querySelector("#cdlp-refresh");

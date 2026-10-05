@@ -64,6 +64,29 @@
   justify-content: space-between;
 }
 
+/* Collapsible section titles (CPU burst log / per-node breakdown): the title
+   itself is the click target; the chevron rotates and the body hides. */
+.cdlp-collapsible { cursor: pointer; user-select: none; }
+.cdlp-collapse-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cdlp-title-right { display: flex; align-items: center; gap: 8px; }
+.cdlp-chevron {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 150ms ease;
+  opacity: 0.75;
+}
+.cdlp-title-right .cdlp-chevron { margin-left: 0; }
+.cdlp-collapsible:hover .cdlp-chevron { opacity: 1; }
+.cdlp-card.cdlp-collapsed .cdlp-chevron { transform: rotate(-45deg); }
+.cdlp-card.cdlp-collapsed > .cdlp-card-body { display: none; }
+.cdlp-card.cdlp-collapsed > .cdlp-card-title { margin-bottom: 0; }
+
 .cdlp-hint { color: var(--input-text-read-only, #9a9a9a); font-size: 12px; line-height: 1.5; }
 
 /* Verdict header */

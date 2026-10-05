@@ -175,7 +175,12 @@ threshold / cores / data_scale`。`data_scale` 是与 M1 引擎的第一次握�
    vocab build → 执行中系统短暂卡顿后，侧栏"瞬爆案底"红卡出现
    TextVocabBuild 条目（峰值 CPU、持续时长、数据规模快照）；
    `user/comfydl/profiling_watchdog.jsonl` 有对应行，重启服务后仍在；
-6. **双语**：界面切中文 → 上述所有新文案为中文。
+6. **折叠长卡**（后续新增）：计算量大时"瞬爆案底"（CPU burst log）
+   与"按节点分解"（Per-node breakdown）两张卡会拖得很长——**点击卡片
+   标题**（右侧有折叠箭头）即可收起/展开，箭头随之旋转；默认展开。
+   折叠态存在 `state.collapsed` 中，面板因重估/自动刷新重建 DOM 时保持
+   不弹开；点标题里的 Refresh 按钮不会误触发折叠；
+7. **双语**：界面切中文 → 上述所有新文案为中文。
 
 ## 10. M3 候选
 
