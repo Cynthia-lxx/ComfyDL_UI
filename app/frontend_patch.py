@@ -14,6 +14,8 @@ asset file name) and rewrites that file in place:
   * the Settings -> About panel gets a ComfyDL_UI section plus a separate
     upstream section that keeps the original ComfyUI links
   * the ``TENSOR`` slot colour (lemon green) in the six theme palettes
+  * the startup ("Load Default Workflow") graph opens the Tabular Regression:
+    Production example instead of the upstream SD text-to-image demo
   * the ``<script>`` loader for the ComfyDL Profiling panel (the JS/CSS
     themselves live in this repository under ``app/profiling_assets/`` and
     are served by the ``/comfydl/profiling`` route in ``server.py``; only
@@ -64,6 +66,13 @@ TENSOR_MARK = "TENSOR:`" + TENSOR_SLOT_COLOUR + "`"
 ABOUT_BEGIN = "/*ComfyDL_UI:about:begin*/"
 ABOUT_END = "/*ComfyDL_UI:about:end*/"
 
+# The startup ("Load Default Workflow") graph: instead of the upstream
+# SD text-to-image demo, open our *Tabular Regression: Production* example,
+# fetched live from the template overlay channel (/templates/<name>.json) so
+# the served workflow always matches the shipped template.
+DEFAULT_WORKFLOW_TEMPLATE = "tabular_regression_production"
+DEFAULT_WORKFLOW_MARK = "/*ComfyDL_UI:default-workflow*/"
+
 
 def apply_frontend_patches(web_root: str) -> None:
     """Apply every ComfyDL_UI patch to the frontend under ``web_root``.
@@ -85,6 +94,7 @@ def apply_frontend_patches(web_root: str) -> None:
         ("TENSOR slot colour", _patch_tensor_slot_colour),
         ("nn_model slot colour", _patch_nn_model_slot_colour),
         ("DATASET slot colour", _patch_dataset_slot_colour),
+        ("default workflow", _patch_default_workflow),
     ):
         try:
             if patch(assets):
@@ -142,6 +152,50 @@ def _object_end(text: str, brace: int) -> int:
             if depth == 0:
                 return index + 1
     raise ValueError("unbalanced object literal")
+
+
+def _patch_default_workflow(assets: Path) -> bool:
+    """Open the Tabular Regression: Production template on startup.
+
+    Upstream's ``loadDefaultWorkflow`` loads a graph built in-bundle from the
+    SD text-to-image demo. We redirect it to fetch our
+    ``tabular_regression_production`` example through the template overlay
+    channel (``/templates/<name>.json``) instead, so the served workflow is
+    always the shipped one; any failure falls back to the upstream graph.
+
+    Returns ``True`` when the asset was rewritten, ``False`` when the marker was
+    already there.
+    """
+    path = _locate(assets, "settingStore-*.js", "loadDefaultWorkflow=async()=>{")
+    text = _text(path)
+    if DEFAULT_WORKFLOW_MARK in text:
+        logging.debug(f"{TAG} default workflow already applied")
+        return False
+
+    match = re.search(
+        r"loadDefaultWorkflow=async\(\)=>\{await "
+        r"([A-Za-z_$][\w$]*)\.loadGraphData\(([A-Za-z_$][\w$]*)\)\}",
+        text,
+    )
+    if match is None:
+        raise ValueError("loadDefaultWorkflow call signature not found")
+
+    service, stock_graph = match.group(1), match.group(2)
+    patched = (
+        f"loadDefaultWorkflow=async()=>{{"
+        f"try{{const _cdlRes=await fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`,"
+        f"{{cache:`no-store`}});"
+        f"if(_cdlRes.ok){{await {service}.loadGraphData(await _cdlRes.json());return}}}}"
+        f"catch(_cdlErr){{}}"
+        f"await {service}.loadGraphData({stock_graph}){DEFAULT_WORKFLOW_MARK}}}"
+    )
+    text = _replace_once(text, match.group(0), patched)
+    _write(path, text)
+    logging.info(
+        f"{TAG} default workflow -> /templates/{DEFAULT_WORKFLOW_TEMPLATE}.json "
+        f"in {path.name}"
+    )
+    return True
 
 
 def _patch_default_locale(assets: Path) -> bool:
