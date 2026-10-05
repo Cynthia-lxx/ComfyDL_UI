@@ -1200,6 +1200,12 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
         "X": lambda cfg, name: _training_pair()[0],
         "y": lambda cfg, name: _training_pair()[1],
     },
+    # Coarse regression trainer: same matched pair so the held-out MAE / RMSE are
+    # demanded to collapse to (near) zero on the exactly-linear problem.
+    "CdlRegressionTrain": {
+        "X": lambda cfg, name: _training_pair()[0],
+        "y": lambda cfg, name: _training_pair()[1],
+    },
     "TrainingParametersMerge": {"params_b": _f_params_alt},
     # Loss / Metrics: a *matched* float pair, so the default widgets (mse / mae)
     # run on data that is actually valid for them.
@@ -2051,6 +2057,50 @@ def _check_linreg_train(result: Any, args: dict[str, Any]) -> None:
         f"the loss did not trend down: first-half mean {float(curve[:half].mean()):.4f} "
         f"vs second-half mean {float(curve[half:].mean()):.4f}"
     )
+
+
+def _check_regression_train(result: Any, args: dict[str, Any]) -> None:
+    """The coarse trainer must fit the deterministic relation and return a reusable model.
+
+    Verifies the five-port contract (``nn_model`` / ``mae`` / ``rmse`` /
+    ``predictions`` / ``loss_history``): the model is a real ``nn.Module`` (so it
+    drops into ``CdlNNForward`` / ``CdlModelSave``), the metrics are finite
+    scalars, the predictions match the label shape, the loss curve is a non-empty
+    1-D tensor, and — because the harness feeds the exactly-linear problem
+    ``y = 2 * x0 - 3 * x1 + 1`` — the held-out MAE / RMSE are essentially zero.
+    """
+    import torch
+
+    nn_model, mae, rmse, predictions, loss_history = _as_tuple(result)
+
+    assert isinstance(nn_model, torch.nn.Module), (
+        f"nn_model must be an nn.Module, got {type(nn_model)}"
+    )
+    for tensor, name in (
+        (mae, "mae"), (rmse, "rmse"), (predictions, "predictions"),
+        (loss_history, "loss_history"),
+    ):
+        assert isinstance(tensor, torch.Tensor), (
+            f"{name} must be a tensor, got {type(tensor)}"
+        )
+        assert torch.isfinite(tensor).all(), f"{name} contains non-finite values"
+
+    assert mae.dim() == 0 and rmse.dim() == 0, (
+        f"mae/rmse must be scalars, got {tuple(mae.shape)} / {tuple(rmse.shape)}"
+    )
+    assert float(mae) >= 0.0 and float(rmse) >= 0.0, "metrics must be non-negative"
+
+    assert predictions.dim() == 2 and predictions.shape[1] == 1, (
+        f"predictions must be [n, 1], got {tuple(predictions.shape)}"
+    )
+
+    assert loss_history.dim() == 1 and loss_history.numel() >= 1, (
+        f"loss_history must be a non-empty 1-D tensor, got {tuple(loss_history.shape)}"
+    )
+
+    # The fed problem is exactly linear, so a competent fit is near-perfect.
+    assert float(mae) < 0.1, f"MAE too high for an exactly linear problem: {float(mae):.4f}"
+    assert float(rmse) < 0.1, f"RMSE too high for an exactly linear problem: {float(rmse):.4f}"
 
 
 def _check_training_scheduler(result: Any, args: dict[str, Any]) -> None:
@@ -3202,6 +3252,7 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "TrainingParametersToText": [_check_training_parameters_to_text],
     "TrainingTextToParameters": [_check_training_text_to_parameters],
     "CdlLinRegTrain": [_check_linreg_train],
+    "CdlRegressionTrain": [_check_regression_train],
     "PoolingSliding": [_check_pooling_sliding],
     "PoolingAdaptive": [_check_pooling_adaptive],
     "ConvolutionConv": [_check_convolution_conv],

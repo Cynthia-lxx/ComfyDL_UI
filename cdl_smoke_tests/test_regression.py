@@ -10,6 +10,10 @@ Covers:
     closure).
   - The closed loop:  CdlLinRegTrain --w,b--> CdlLinReg --y_hat--> CdlSquaredLoss
     reproduces the training loss_history[-1] up to numerical tolerance.
+  - CdlRegressionTrain (batch 5) trains a self-contained nn_model from raw X / y
+    and from a DATASET, reports finite mae / rmse on the held-out split, and folds
+    the feature standardisation into the model so raw-feature inference and a
+    save / reload round-trip reproduce the training predictions.
 """
 
 import sys
@@ -93,6 +97,48 @@ def main() -> int:
           f"{float(curve2[0]):.4f} -> {float(curve2[-1]):.4f}")
     check("dataset path: converged", float(curve2[-1]) < 1e-2,
           f"final loss {float(curve2[-1]):.6f}")
+
+    # --- coarse regression trainer (batch 5) -------------------------------- #
+    check("CdlRegressionTrain registered", "CdlRegressionTrain" in REG)
+    if "CdlRegressionTrain" in REG:
+        Xr, yr = _problem(seed=3)
+        nn_model, mae, rmse, preds, curve = REG["CdlRegressionTrain"]().execute(
+            Xr, yr, test_size=0.2, standardize="yes", hidden="", activation="relu",
+            loss="mse", steps=500, batch_size=0, lr=0.1, seed=0,
+            early_stop_patience=30, early_stop_min_delta=1e-4, save_path="",
+        )
+        check("nn_model is nn.Module", isinstance(nn_model, torch.nn.Module))
+        check("mae scalar finite", mae.dim() == 0 and torch.isfinite(mae))
+        check("rmse scalar finite", rmse.dim() == 0 and torch.isfinite(rmse))
+        check("mae small on linear", float(mae) < 0.1, f"mae={float(mae):.4f}")
+        check("rmse small on linear", float(rmse) < 0.1, f"rmse={float(rmse):.4f}")
+        check("predictions [48,1]", tuple(preds.shape) == (48, 1), str(tuple(preds.shape)))
+        check("loss_history 1-D nonempty", curve.dim() == 1 and curve.numel() >= 1)
+        check("predictions finite", torch.isfinite(preds).all())
+        # Standardisation is folded into the model: raw features reproduce preds.
+        check("nn_model self-contained", torch.allclose(nn_model(Xr), preds, atol=1e-5))
+
+        # DATASET path.
+        ds = CdlDataset.from_tensors(Xr, yr, feature_names=["x0", "x1"], target_name="y")
+        nn2, mae2, rmse2, preds2, _ = REG["CdlRegressionTrain"]().execute(
+            Xr, yr, dataset=ds, test_size=0.2, standardize="yes", steps=500, lr=0.1, seed=0,
+        )
+        check("dataset path: nn_model nn.Module", isinstance(nn2, torch.nn.Module))
+        check("dataset path: mae small", float(mae2) < 0.1, f"mae={float(mae2):.4f}")
+
+        # Save / reload round-trip (compare against the SAME run's predictions).
+        import os
+
+        sp = str(sandbox / "reg.pt")
+        nn_s, mae_s, rmse_s, preds_s, _ = REG["CdlRegressionTrain"]().execute(
+            Xr, yr, steps=400, lr=0.1, seed=0, save_path=sp
+        )
+        check("save_path wrote file", os.path.exists(sp))
+        from comfydl.nodes.regression_train import _Regressor
+
+        reloaded = _Regressor(2, 1, (), "relu", mean=torch.zeros(2), std=torch.ones(2))
+        reloaded.load_state_dict(torch.load(sp, weights_only=True))
+        check("reload reproduces", torch.allclose(reloaded(Xr), preds_s, atol=1e-4))
 
     return _report()
 
