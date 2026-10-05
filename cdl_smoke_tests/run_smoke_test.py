@@ -119,6 +119,26 @@ def _seed_fixtures(sandbox: Path) -> None:
 
     torch.save(_f_model({}, "model").state_dict(), sandbox / "model.pt")
 
+    # --- dataset reader fixtures (csv / txt / json / sqlite) ---
+    import csv as _csv, json as _json, sqlite3 as _sqlite3
+
+    _rows = [(float(i), float(i * 2), float(i * 3), float(i * 0.5)) for i in range(8)]
+    with open(sandbox / "cdl_dataset.csv", "w", newline="") as _f:
+        _w = _csv.writer(_f)
+        _w.writerow(["a", "b", "c", "y"])
+        _w.writerows(_rows)
+    with open(sandbox / "cdl_dataset.txt", "w") as _f:
+        _f.write("a\tb\tc\ty\n")
+        for _r in _rows:
+            _f.write("\t".join(str(_v) for _v in _r) + "\n")
+    with open(sandbox / "cdl_dataset.json", "w") as _f:
+        _json.dump([{"a": _r[0], "b": _r[1], "c": _r[2], "y": _r[3]} for _r in _rows], _f)
+    _con = _sqlite3.connect(sandbox / "cdl_dataset.db")
+    _con.execute("CREATE TABLE data (a REAL, b REAL, c REAL, y REAL)")
+    _con.executemany("INSERT INTO data VALUES (?,?,?,?)", _rows)
+    _con.commit()
+    _con.close()
+
     bucket = sandbox / "output" / "comfydl"
     bucket.mkdir(parents=True, exist_ok=True)
     save_file(
@@ -963,6 +983,8 @@ _SKIPPED_NODES: dict[str, str] = {
     "CdlRNNLMScratch": "needs an RNN model built by the RNN scratch nodes, not a generic nn.Module",
     "CdlRNNLMScratchPredict": "needs an RNN model built by the RNN scratch nodes, not a generic nn.Module",
     "GetImageSize": "reports progress through PromptServer.instance, which only exists inside the server",
+    "CdlReadXLSX": "needs openpyxl (xlsx reader) - covered by cdl_smoke_tests/test_data_io.py",
+    "CdlReadAccDB": "needs pyodbc + Microsoft Access driver - covered by cdl_smoke_tests/test_data_io.py",
 }
 
 #: node id -> substring its raised error must contain.  These nodes are part of the
