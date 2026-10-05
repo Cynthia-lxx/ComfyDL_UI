@@ -91,7 +91,8 @@ def _run_workflow(path: Path):
             f"but {len(order_names)} widgets declared {order_names}"
         )
         args.update(zip(order_names, wvals))
-        out = cls().execute(**args)
+        instance = cls()
+        out = getattr(instance, cls.FUNCTION)(**args)
         node_out[node["id"]] = out if isinstance(out, tuple) else (out,)
     return node_out
 
@@ -102,6 +103,18 @@ def main() -> int:
     harness._load_registry(False)
 
     workflows_dir = REPO_ROOT / "comfydl" / "example_workflows"
+
+    for name in ("linear_regression_from_scratch", "tabular_regression_production"):
+        wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
+        types = {n["type"] for n in wf["nodes"]}
+        linked = {i.get("link") for n in wf["nodes"] for i in n.get("inputs", [])}
+        has_wired_preview = any(
+            n["type"] == "PreviewImage" and n.get("inputs") and n["inputs"][0].get("link") is not None
+            for n in wf["nodes"]
+        )
+        check(f"{name}: PreviewImage output node present and wired",
+              has_wired_preview,
+              "a template without an OUTPUT_NODE fails to queue ('workflow has no outputs')")
 
     # --- Template A: linear_regression_from_scratch -------------------------- #
     out = _run_workflow(workflows_dir / "linear_regression_from_scratch.json")
