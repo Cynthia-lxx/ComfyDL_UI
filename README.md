@@ -37,46 +37,6 @@ its cross-entropy curve **under itself while it trains** (the preview card below
 > More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule
 > README ([中文](comfydl/README_zh.md), [FUNCTIONS.md](comfydl/FUNCTIONS.md)).
 
-## Memory profiling
-
-Deep-learning graphs tend to fail in one place first: memory. Before anything is queued,
-ComfyDL_UI estimates the peak memory of the current graph from its parameters and data flow,
-compares it against the device budget and grades the run green / amber / red — so a graph that
-cannot fit tells you *before* it dies mid-step.
-
-![Profiling sidebar: device budget, a CERTAIN OOM verdict and the per-node breakdown](assets/profiling_memory_verdict.png)
-
-- **Estimates while you edit** — every parameter or wire change re-estimates after a 500 ms
-  debounce. The sidebar shows the device budget (total / free / used), the estimated peak with
-  the largest single tensor, and a per-node breakdown of parameters, activations and optimizer
-  state, each with the reasoning behind its number.
-- **Traffic-light verdict** — green fits, amber is tight (a toast, nothing blocking), and red
-  means **certain OOM**: the estimate exceeds the total budget, or a single tensor alone is
-  larger than free memory. Pressing Run on a red graph warns first (below) and can be overridden.
-- **Post-mortem analysis** — if an allocation does fail anyway, the byte count in the
-  allocator's own error is matched back to the tensor that asked for it, and the panel suggests
-  a value that fits (for example a batch size that no longer overshoots).
-- **Honest about unknowns** — node types the estimator does not cover are reported as `unknown`
-  instead of guessed at.
-- **Bilingual** — panel, badge, confirmation dialog and post-mortem card all follow the UI
-  language (English / 中文).
-
-Pressing Run on a graph graded red warns first, and can be overridden:
-
-<p align="center">
-  <img src="assets/profiling_memory_warning.png" alt="Memory warning dialog shown when queueing a graph graded certain-OOM" width="620" />
-</p>
-
-The per-node breakdown keeps the largest single tensor next to every row — in the case above a
-single `B × T × V` logits tensor was 1.21 TB on its own:
-
-<p align="center">
-  <img src="assets/profiling_memory_breakdown.png" alt="Per-node memory breakdown with the largest single tensor per row" width="230" />
-</p>
-
-Formulas, thresholds, degradation paths and the acceptance checklist live in
-[`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md).
-
 ## Features
 
 - A visual node graph for building and reusing deep-learning workflows without code.
@@ -94,6 +54,35 @@ Formulas, thresholds, degradation paths and the acceptance checklist live in
 - Runs fully offline: the core downloads nothing unless you ask it to.
 - Still compatible with third-party custom nodes via `custom_nodes/`.
 - Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).
+
+## Memory profiling
+
+Before anything is queued, ComfyDL_UI estimates the graph's peak memory from its parameters and
+data flow, grades it green / amber / red against the device budget, and warns before a run that
+cannot fit.
+
+![Profiling sidebar: device budget, a CERTAIN OOM verdict and the per-node breakdown](assets/profiling_memory_verdict.png)
+
+- **Estimates while you edit** — re-estimated after a 500 ms debounce; the sidebar shows the budget, estimated peak, largest single tensor, and a per-node breakdown (params / activations / optimizer state).
+- **Traffic-light verdict** — green fits; amber is tight (a toast); red is **certain OOM** and warns before running.
+- **Post-mortem analysis** — a failed allocation's byte count is matched back to its tensor, with a suggested value that fits.
+- **Honest about unknowns** — uncovered node types are reported as `unknown`.
+- **Bilingual** — panel, badge, dialog and post-mortem card follow the UI language.
+
+Pressing Run on a red graph warns first and can be overridden:
+
+<p align="center">
+  <img src="assets/profiling_memory_warning.png" alt="Memory warning dialog shown when queueing a graph graded certain-OOM" width="620" />
+</p>
+
+The per-node breakdown keeps the largest single tensor next to every row:
+
+<p align="center">
+  <img src="assets/profiling_memory_breakdown.png" alt="Per-node memory breakdown with the largest single tensor per row" width="230" />
+</p>
+
+Formulas, thresholds and the acceptance checklist live in
+[`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md).
 
 ## Installation
 
