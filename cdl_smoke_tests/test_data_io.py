@@ -41,7 +41,6 @@ def _write_samples(tmp: Path):
         w.writerows(rows)
     txt_p = tmp / "s.txt"
     with open(txt_p, "w") as f:
-        f.write("a\tb\tc\ty\n")
         for r in rows:
             f.write("\t".join(str(v) for v in r) + "\n")
     json_p = tmp / "s.json"
