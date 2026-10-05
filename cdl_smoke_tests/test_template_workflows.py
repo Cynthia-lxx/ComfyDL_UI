@@ -161,18 +161,20 @@ def main() -> int:
     check("B: CSV exported",
           csv_path.exists() and csv_path.stat().st_size > 1000, str(csv_path))
     check("B: plot produced IMAGE", out[6][0].dim() == 4)
+    check("B: model saved for reuse", Path("output/regression_model.pt").exists(),
+          "Model Save must persist the trained weights for the Load & Predict template")
 
-    # --- Template C: regression_model_reuse ----------------------------------- #
+    # --- Template C: regression_model_reuse (pure inference) ------------------- #
+    # Loads the file B just saved — this is exactly the intended user flow:
+    # run Production once, then Load & Predict in the same or a later session.
     out = _run_workflow(workflows_dir / "regression_model_reuse.json")
-    check("C: model file created", Path("output/regression_model.pt").exists(),
-          "Model Save must persist the trained weights for later sessions")
-    preds, truth = out[7][0], out[6][1]
+    preds, truth = out[4][0], out[3][1]
     err = float((preds - truth).abs().mean())
     check("C: reloaded model tracks fresh data", err < 0.15, f"mae={err:.4f}")
-    csv_path = Path(out[9][0])
+    csv_path = Path(out[6][0])
     check("C: predictions CSV exported",
           csv_path.exists() and csv_path.stat().st_size > 1000, str(csv_path))
-    check("C: preview text written", isinstance(out[10][0], str) and "x0" in out[10][0])
+    check("C: preview text written", isinstance(out[7][0], str) and "x0" in out[7][0])
 
     return _report()
 

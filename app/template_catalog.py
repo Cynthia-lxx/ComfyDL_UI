@@ -164,16 +164,17 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
         },
         {
             "name": "regression_model_reuse",
-            "title": "Regression Model: Save & Reuse",
+            "title": "Regression Model: Load & Predict",
             "description": (
-                "Persistence round-trip in one graph: train a regression "
-                "model, save it with Model Save, rebuild it from the file "
-                "alone with Regression Model Load, run inference on fresh "
-                "data and export predictions vs. ground truth to CSV."
+                "Inference on a saved regression model: rebuild the "
+                "architecture from the .pt file alone (no trainer, no "
+                "skeleton), run Model Forward on fresh data and export "
+                "predictions vs. ground truth to CSV. Run the Production "
+                "template once first so output/regression_model.pt exists."
             ),
             "mediaType": "image",
             "mediaSubtype": "jpg",
-            "tags": ["regression", "save", "load", "inference"],
+            "tags": ["regression", "load", "inference", "csv"],
             "date": "2026-10-05",
             "openSource": True,
         },
@@ -204,8 +205,9 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "即可跑你自己的数据。"
         ),
         "regression_model_reuse": (
-            "一张图跑通模型持久化闭环：训练回归模型 → Model Save 存盘 → Regression Model Load "
-            "仅凭文件重建架构 → 对新数据推理 → 预测与真值导出 CSV。之后任何会话只需加载部分即可复用模型。"
+            "对已保存的回归模型做推理：仅凭 .pt 文件重建架构（无需训练器与骨架），Model Forward "
+            "跑新数据并把预测与真值导出 CSV。请先运行一次《Tabular Regression: Production》"
+            "以生成 output/regression_model.pt。"
         ),
     },
 }
