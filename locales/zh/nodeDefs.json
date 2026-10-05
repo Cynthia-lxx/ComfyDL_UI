@@ -214,11 +214,11 @@
   },
   "CdlRNNLM": {
     "display_name": "RNN 语言模型（高层封装）",
-    "description": "将 RNN/GRU cdlModel 包装为使用高层 LazyLinear 头的语言模型，接口与从头版本一致。"
+    "description": "将 RNN/GRU nn_model 包装为使用高层 LazyLinear 头的语言模型，接口与从头版本一致。"
   },
   "CdlRNNLMScratch": {
     "display_name": "RNN 语言模型（从头实现）",
-    "description": "将 RNN/GRU cdlModel（要求 num_inputs == vocab_size）包装为从头实现的语言模型，输出投影到 vocab_size 个类别。前向输入索引张量 (batch_size, num_steps)，返回 logits (num_steps, batch_size, vocab_size)。"
+    "description": "将 RNN/GRU nn_model（要求 num_inputs == vocab_size）包装为从头实现的语言模型，输出投影到 vocab_size 个类别。前向输入索引张量 (batch_size, num_steps)，返回 logits (num_steps, batch_size, vocab_size)。"
   },
   "CdlRNNLMScratchPredict": {
     "display_name": "RNN LM 预测",

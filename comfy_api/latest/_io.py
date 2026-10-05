@@ -756,11 +756,12 @@ class ModelSpec(ComfyTypeIO):
     """
     Type = tuple
 
-@comfytype(io_type="NNMODEL")
+@comfytype(io_type="nn_model")
 class NNModel(ComfyTypeIO):
     """A materialised, self-contained ``torch.nn.Module``.
 
-    A stateful Python object in the ComfyUI sense (cached like a cdlModel):
+    A stateful Python object in the ComfyUI sense (cached like any materialised
+    nn.Module):
     training nodes return a *new* trained copy rather than mutating the input,
     so the cached value of every node stays correct.
 

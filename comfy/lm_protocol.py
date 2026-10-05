@@ -421,7 +421,7 @@ class LanguageModel(nn.Module):
 def build_model(chain: Sequence, seed: int = 0) -> LanguageModel:
     """Materialise a spec chain into a :class:`LanguageModel`, seeded.
 
-    What: the bridge from the ``MODELSPEC`` slot to the ``NNMODEL`` slot. The
+    What: the bridge from the ``MODELSPEC`` slot to the ``nn_model`` slot. The
           initialisation runs inside :func:`training_protocol.seeded_rng`, so
           the same chain and seed always produce the same weights and the
           process RNG is restored afterwards. Linear weights use Xavier

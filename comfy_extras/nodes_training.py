@@ -35,7 +35,7 @@ closure as ordinary, composable nodes:
   the trainer through ``comfy.training_metrics``), for evaluation graphs and
   custom training objectives.
 * ``Evaluate`` - the read-only twin of a trainer: forward only, no gradients,
-  on either an ``NNMODEL`` or a ``PARAMS`` set (rebuilt as an MLP).
+  on either an ``nn_model`` or a ``PARAMS`` set (rebuilt as an MLP).
 * ``Training Loop`` - the trainer: builds a small MLP from the ``hidden`` widget,
   then runs ``steps`` iterations of forward / backward / ``optimizer.step()``
   inside a ``torch.inference_mode(False)`` block and returns the trained
@@ -1711,7 +1711,7 @@ class TrainingEvaluate(io.ComfyNode):
           No gradients are taken, the model is left untouched, and the
           parameters are never mutated, so the node can sit on the cached path
           of any workflow.
-    In:   model (NNMODEL, optional) - a materialised ``nn.Module``, e.g. from
+    In:   model (nn_model, optional) - a materialised ``nn.Module``, e.g. from
           ``Language Model Build`` / ``Language Model Train``. Takes precedence
           when both a model and parameters are wired.
           params (PARAMS, optional) - a parameter set with the trainer's naming
@@ -1752,7 +1752,7 @@ class TrainingEvaluate(io.ComfyNode):
             node_id="TrainingEvaluate",
             display_name="Evaluate",
             category=CATEGORY,
-            description="Evaluates a model (NNMODEL) or a parameter set (PARAMS) on x/y: loss, metric and predictions, without training.",
+            description="Evaluates a model (nn_model) or a parameter set (PARAMS) on x/y: loss, metric and predictions, without training.",
             search_aliases=[
                 "evaluate", "eval", "test", "validation", "metric", "loss",
                 "score", "perplexity", "accuracy", "benchmark",
@@ -1820,7 +1820,7 @@ class TrainingEvaluate(io.ComfyNode):
             )
         if model is None and params is None:
             raise ValueError(
-                "[Network & Layers] Evaluate: wire either a model (NNMODEL) or a "
+                "[Network & Layers] Evaluate: wire either a model (nn_model) or a "
                 "parameter set (PARAMS) to evaluate."
             )
         # The network has to be built / run outside ComfyUI's inference_mode:

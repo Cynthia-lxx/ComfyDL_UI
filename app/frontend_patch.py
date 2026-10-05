@@ -36,6 +36,11 @@ UPSTREAM_REPO = "https://github.com/Comfy-Org/ComfyUI"
 
 TENSOR_SLOT_COLOUR = "#C6FF00"
 
+# The "materialised nn.Module" type, unified between the ComfyDL inference
+# nodes (formerly cdlModel) and the Network & Layers training system.
+NN_MODEL_SLOT_COLOUR = "#FF8C42"
+NN_MODEL_MARK = "nn_model:`" + NN_MODEL_SLOT_COLOUR + "`"
+
 # The Profiling panel loader: one <script type="module"> tag before </body>.
 PROFILING_LOADER_TAG = (
     '<!--ComfyDL_UI:profiling-loader-->'
@@ -73,6 +78,7 @@ def apply_frontend_patches(web_root: str) -> None:
         ("Nodes 2.0 default", _patch_nodes2_default),
         ("about panel", _patch_about_panel),
         ("TENSOR slot colour", _patch_tensor_slot_colour),
+        ("nn_model slot colour", _patch_nn_model_slot_colour),
     ):
         try:
             if patch(assets):
@@ -225,6 +231,55 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
         raise ValueError(f"expected 6 theme palettes, found {tables}")
     _write(path, "".join(out))
     logging.info(f"{TAG} TENSOR slot colour added to {tables} palettes in {path.name}")
+    return True
+
+
+def _patch_nn_model_slot_colour(assets: Path) -> bool:
+    """Colour the ``nn_model`` slot in every theme palette.
+
+    ``nn_model`` is the unified "materialised nn.Module" type used by both the
+    ComfyDL inference nodes (formerly ``cdlModel``) and the ``Network & Layers``
+    training system, so they share one slot colour.
+
+    A stale ``NNMODEL`` entry left behind by the earlier cdlModel -> NNMODEL
+    rename is stripped first, so only the unified ``nn_model`` colour remains.
+
+    Returns ``True`` when the asset was rewritten, ``False`` when the marker was
+    already there.
+    """
+    path = _locate(assets, "settingStore-*.js", "node_slot:{")
+    text = _text(path)
+    # Drop the stale NNMODEL entry from the earlier rename so it does not linger.
+    text = text.replace(",NNMODEL:`#FF6B6B`", "")
+    if NN_MODEL_MARK in text:
+        logging.debug(f"{TAG} nn_model slot colour already applied")
+        return False
+
+    marker = "node_slot:{"
+    insert = f",nn_model:`{NN_MODEL_SLOT_COLOUR}`"
+    out = []
+    pos = 0
+    search = 0
+    tables = 0
+    while True:
+        start = text.find(marker, search)
+        if start < 0:
+            break
+        body = start + len(marker)
+        search = body
+        if text[body:body + 3] == "...":
+            continue
+        end = text.index("}", body)
+        out.append(text[pos:end])
+        out.append(insert)
+        pos = end
+        tables += 1
+    out.append(text[pos:])
+
+    if tables != 6:
+        raise ValueError(f"expected 6 theme palettes, found {tables}")
+    _write(path, "".join(out))
+    logging.info(f"{TAG} nn_model slot colour added to {tables} palettes in {path.name}")
     return True
 
 

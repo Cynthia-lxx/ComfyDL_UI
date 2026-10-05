@@ -5,7 +5,7 @@ inside ``torch.inference_mode()``, so a gradient cannot cross a node boundary
 and a language model cannot be assembled as a pure TENSOR dataflow: the
 structure is therefore stated as a *spec chain* (``MODELSPEC`` slot, frozen
 blueprints, no tensors), materialised by ``Language Model Build`` into a real
-``nn.Module`` (``NNMODEL`` slot) and trained inside a single node - the same
+``nn.Module`` (``nn_model`` slot) and trained inside a single node - the same
 technique the step-6 ``Training Loop`` and upstream's ``TrainLoraNode`` use.
 
 * ``Language Model Embedding``      - the first spec link: token embedding
@@ -101,7 +101,7 @@ def _as_chain(value):
 
 
 def _as_language_model(value) -> mp.LanguageModel:
-    """Validate an NNMODEL slot payload with a readable error."""
+    """Validate an nn_model slot payload with a readable error."""
     if isinstance(value, mp.LanguageModel):
         return value
     raise ValueError(
@@ -349,7 +349,7 @@ class LanguageModelTransformerBlock(io.ComfyNode):
 class LanguageModelBuild(io.ComfyNode):
     """Materialise a spec chain into a real, seeded language model.
 
-    What: the bridge from the blueprint to the ``NNMODEL`` slot. Validates the
+    What: the bridge from the blueprint to the ``nn_model`` slot. Validates the
           chain (embedding first, consistent width, heads divide the width),
           builds the module and initialises it deterministically from ``seed``
           - Xavier-uniform linear weights, zero biases, N(0, 0.01) embeddings -
@@ -359,7 +359,7 @@ class LanguageModelBuild(io.ComfyNode):
           of transformer blocks; zero blocks make a bag-of-contexts linear
           model, which is itself an instructive baseline).
           seed (INT) - the initialisation seed.
-    Out:  model (NNMODEL) - the untrained model, ready for Language Model
+    Out:  model (nn_model) - the untrained model, ready for Language Model
           Train / Forward / Generate.
           params (INT) - the total trainable parameter count.
     """
@@ -425,7 +425,7 @@ class LanguageModelTrain(io.ComfyNode):
           one frame per ~0.5 s, always a final frame at the end) and shown
           under the node - the same side channel the KSampler latent preview
           uses.
-    In:   model (NNMODEL) - link from Language Model Build (or another Train
+    In:   model (nn_model) - link from Language Model Build (or another Train
           node, to continue training).
           x (TENSOR) - ``(samples, window)`` long contexts; link from Sliding
           Window's ``x``.
@@ -448,7 +448,7 @@ class LanguageModelTrain(io.ComfyNode):
           stopping.
           early_stop_min_delta (FLOAT) - the smallest improvement of the
           smoothed loss that resets the patience counter.
-    Out:  model (NNMODEL) - the trained copy, in eval mode (dropout off); with
+    Out:  model (nn_model) - the trained copy, in eval mode (dropout off); with
           early stopping it holds the parameters of the *best* step, not the
           last one.
           loss (FLOAT) - the last entry of the (possibly truncated) loss
@@ -698,7 +698,7 @@ class LanguageModelForward(io.ComfyNode):
           Useful for inspecting what the model believes (wire the logits into
           the argmax / softmax tensor nodes), or for a hand-rolled decoding
           loop of your own design.
-    In:   model (NNMODEL) - link from Language Model Build / Train.
+    In:   model (nn_model) - link from Language Model Build / Train.
           ids (TENSOR) - token indices: a 1-D stream (treated as one
           sequence) or a 2-D ``(batch, seq_len)`` batch.
     Out:  logits (TENSOR) - ``(batch, seq_len, vocab_size)`` float32; entry
@@ -762,7 +762,7 @@ class LanguageModelGenerate(io.ComfyNode):
           end) and shown under the node - the same side channel the KSampler
           latent preview uses. Needs a wired ``vocab`` to decode; without one
           the preview shows the raw token indices instead.
-    In:   model (NNMODEL) - link from Language Model Train (a trained model
+    In:   model (nn_model) - link from Language Model Train (a trained model
           generates text; an untrained one generates noise).
           vocab (VOCAB, optional) - link from Vocab Build to read the ``prefix``
           text and decode the ``text`` output. Without it the node still
@@ -962,7 +962,7 @@ class LanguageModelSave(io.ComfyNode):
           exact model and talk text again without re-running Vocab Build or
           re-wiring the spec chain. The node passes the model through, so
           saving does not end the graph.
-    In:   model (NNMODEL) - the model to write; link from Language Model Train
+    In:   model (nn_model) - the model to write; link from Language Model Train
           (an untrained Build output saves too - it is just a checkpoint of
           the initial weights).
           vocab (VOCAB) - the vocabulary the model was trained with; it is
@@ -972,7 +972,7 @@ class LanguageModelSave(io.ComfyNode):
           ``"comfydl/language_models"``; a counter is appended
           (``language_models_00001_.safetensors``) so an earlier save is
           never overwritten.
-    Out:  model (NNMODEL) - the same model, passed through unchanged so the
+    Out:  model (nn_model) - the same model, passed through unchanged so the
           graph can continue (e.g. straight into Language Model Generate).
           path (STRING) - absolute path of the file that was written; paste it
           into the ``path`` widget of ``Load Language Model`` to read the
@@ -1045,7 +1045,7 @@ class LanguageModelLoad(io.ComfyNode):
           Model writes), an absolute path is used as it is. The default
           points at the first file Save writes, so "save, then load" works
           without typing.
-    Out:  model (NNMODEL) - the restored model, in eval mode.
+    Out:  model (nn_model) - the restored model, in eval mode.
           vocab (VOCAB) - the vocabulary stored with the model; wire it into
           Language Model Generate to prompt and decode with text.
           params (INT) - the total trainable parameter count.

@@ -271,7 +271,7 @@ def _f_latent(cfg: dict, name: str) -> dict[str, Any]:
 
 
 def _f_model(cfg: dict, name: str) -> Any:
-    """A tiny ``nn.Module``: ComfyDL's ``cdlModel`` is just "any nn.Module".
+    """A tiny ``nn.Module``: ComfyDL's ``nn_model`` is just "any nn.Module".
 
     ``in_features=3`` matches the dummy ``TENSOR`` (2, 3) produced by
     :func:`_f_tensor`, so forward-pass nodes work with the synthesised pair.
@@ -650,14 +650,14 @@ def _f_lm_spec(cfg: dict, name: str) -> Any:
 
 
 def _f_lm_model(cfg: dict, name: str) -> Any:
-    """``NNMODEL`` dummy: the spec chain above, materialised with seed 0."""
+    """``nn_model`` dummy: the spec chain above, materialised with seed 0."""
     from comfy import lm_protocol as protocol
 
     return protocol.build_model(_f_lm_spec(cfg, name), seed=0)
 
 
 def _f_lm_model_vocab(cfg: dict, name: str) -> Any:
-    """``NNMODEL`` matched to the dummy 5-token vocabulary, seed 0.
+    """``nn_model`` matched to the dummy 5-token vocabulary, seed 0.
 
     ``Save Language Model`` stores the vocabulary next to the weights and
     ``Load Language Model`` refuses a file whose blueprint and vocabulary
@@ -914,7 +914,7 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "IMAGE": _f_image,
     "MASK": _f_mask,
     "LATENT": _f_latent,
-    "CDLMODEL": _f_model,
+    "NN_MODEL": _f_model,
     "CDLDATALOADER": _f_dataloader,
     "CDLVOCAB": _f_vocab,
     "ARRAY": _f_array,
@@ -931,7 +931,6 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "SCHEDULER": _f_scheduler,
     "VOCAB": _f_vocab_dummy,
     "MODELSPEC": _f_lm_spec,
-    "NNMODEL": _f_lm_model,
     "*": _f_any,
 }
 
@@ -1178,7 +1177,7 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     # run on data that is actually valid for them.
     "TrainingLoss": {"prediction": _f_loss_prediction, "target": _f_loss_target},
     "TrainingMetrics": {"prediction": _f_loss_prediction, "target": _f_loss_target},
-    # Evaluate: the NNMODEL path on the shared LM world (the optional 'params'
+    # Evaluate: the nn_model path on the shared LM world (the optional 'params'
     # slot stays unconnected, so 'model' has to be wired for the node to run).
     "TrainingEvaluate": {"model": _f_lm_model, "x": _f_lm_x, "y": _f_lm_y},
 }
@@ -2172,7 +2171,7 @@ def _check_training_metrics(result: Any, args: dict[str, Any]) -> None:
 def _check_training_evaluate(result: Any, args: dict[str, Any]) -> None:
     """Evaluate must report the model's own numbers, and rebuild PARAMS networks.
 
-    The default run exercises the NNMODEL path on the shared LM world: the
+    The default run exercises the nn_model path on the shared LM world: the
     prediction has to be the model's logits on ``x``, the loss the token-level
     cross entropy (targets built exactly like Language Model Train reads the
     Sliding Window pair) and the metric the accuracy over all positions.  Then

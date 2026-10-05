@@ -358,7 +358,7 @@ model talks back. 13 new core nodes in three groups — 3 mask / position utilit
 `TextSlidingWindow`, new category `Network & Layers/Text`) and 6 language-model nodes
 (`LanguageModelEmbedding` / `LanguageModelTransformerBlock` / `LanguageModelBuild` /
 `LanguageModelTrain` / `LanguageModelForward` / `LanguageModelGenerate`, category
-`Network & Layers/Training`) — plus three new graph value types (`VOCAB`, `MODELSPEC`, `NNMODEL`)
+`Network & Layers/Training`) — plus three new graph value types (`VOCAB`, `MODELSPEC`, `nn_model`)
 declared in `comfy_api/latest/_io.py`. Because a gradient cannot cross a node boundary
 (`execution.py:751`), the model's *structure* travels as a frozen spec chain on the `MODELSPEC`
 slot and `Language Model Train` runs the whole forward + backward + `optimizer.step()` closure
@@ -374,7 +374,7 @@ imports only `torch` + `training_protocol`, matching the dehydration rule. See
 `Network & Layers/Text`）与 6 个语言模型节点（`LanguageModelEmbedding` /
 `LanguageModelTransformerBlock` / `LanguageModelBuild` / `LanguageModelTrain` /
 `LanguageModelForward` / `LanguageModelGenerate`，分类 `Network & Layers/Training`）——外加在
-`comfy_api/latest/_io.py` 声明的三个新图数据类型（`VOCAB`、`MODELSPEC`、`NNMODEL`）。由于梯度无法
+`comfy_api/latest/_io.py` 声明的三个新图数据类型（`VOCAB`、`MODELSPEC`、`nn_model`）。由于梯度无法
 跨越节点边界（`execution.py:751`），模型的**结构**以冻结 spec 链的形式走 `MODELSPEC` 槽，
 `Language Model Train` 在深拷贝上自己跑完整的前向 + 反向 + `optimizer.step()` 闭环，并复用第六步的
 `OPTIMIZER` 槽；新增 `comfy/lm_protocol.py`（Vocab、两个 spec、pre-LN `LanguageModel`、带种子的

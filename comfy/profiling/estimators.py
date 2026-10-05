@@ -1735,7 +1735,7 @@ def _estimate_cdl_corr2d(ctx: EstimationCtx) -> NodeEstimate:
 
 
 # --------------------------------------------------------------------------- #
-# M3 batch 2: module constructors (cdlModel builders).
+# M3 batch 2: module constructors (nn_model builders).
 #
 # A constructor publishes a ModuleVal: the parameter count it implies, the
 # family it belongs to and its declared width, so downstream nodes (a head

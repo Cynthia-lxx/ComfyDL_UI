@@ -164,7 +164,7 @@ class SpecVal(EstValue):
 
 @dataclasses.dataclass(frozen=True)
 class ModelVal(EstValue):
-    """An ``NNMODEL`` payload: the spec chain is all the estimator needs."""
+    """An ``nn_model`` payload: the spec chain is all the estimator needs."""
 
     spec: Optional[SpecVal] = None
 
@@ -174,7 +174,7 @@ class ModelVal(EstValue):
 
 @dataclasses.dataclass(frozen=True)
 class ModuleVal(EstValue):
-    """A ``cdlModel`` payload for the non-LM modules (M3).
+    """An ``nn_model`` payload for the non-LM modules (M3).
 
     RNNs, attention modules, conv nets and seq2seq encoders are opaque to
     the estimator except for one number it can derive from the widgets:
