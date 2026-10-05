@@ -41,6 +41,11 @@ TENSOR_SLOT_COLOUR = "#C6FF00"
 NN_MODEL_SLOT_COLOUR = "#FF8C42"
 NN_MODEL_MARK = "nn_model:`" + NN_MODEL_SLOT_COLOUR + "`"
 
+# The universal "dataset" type used by the ComfyDL data-IO and regression nodes.
+# Teal, distinct from the orange nn_model and the lemon-green TENSOR slots.
+DATASET_SLOT_COLOUR = "#1ABC9C"
+DATASET_MARK = "DATASET:`" + DATASET_SLOT_COLOUR + "`"
+
 # The Profiling panel loader: one <script type="module"> tag before </body>.
 PROFILING_LOADER_TAG = (
     '<!--ComfyDL_UI:profiling-loader-->'
@@ -79,6 +84,7 @@ def apply_frontend_patches(web_root: str) -> None:
         ("about panel", _patch_about_panel),
         ("TENSOR slot colour", _patch_tensor_slot_colour),
         ("nn_model slot colour", _patch_nn_model_slot_colour),
+        ("DATASET slot colour", _patch_dataset_slot_colour),
     ):
         try:
             if patch(assets):
@@ -280,6 +286,50 @@ def _patch_nn_model_slot_colour(assets: Path) -> bool:
         raise ValueError(f"expected 6 theme palettes, found {tables}")
     _write(path, "".join(out))
     logging.info(f"{TAG} nn_model slot colour added to {tables} palettes in {path.name}")
+    return True
+
+
+def _patch_dataset_slot_colour(assets: Path) -> bool:
+    """Colour the ``DATASET`` slot in every theme palette (teal ``#1ABC9C``).
+
+    ``DATASET`` is the universal dataset type used by the ComfyDL data-IO and
+    regression nodes, so it gets one shared slot colour distinct from the
+    orange ``nn_model`` and the lemon-green ``TENSOR`` slots.
+
+    Returns ``True`` when the asset was rewritten, ``False`` when the marker was
+    already there.
+    """
+    path = _locate(assets, "settingStore-*.js", "node_slot:{")
+    text = _text(path)
+    if DATASET_MARK in text:
+        logging.debug(f"{TAG} DATASET slot colour already applied")
+        return False
+
+    marker = "node_slot:{"
+    insert = f",DATASET:`{DATASET_SLOT_COLOUR}`"
+    out = []
+    pos = 0
+    search = 0
+    tables = 0
+    while True:
+        start = text.find(marker, search)
+        if start < 0:
+            break
+        body = start + len(marker)
+        search = body
+        if text[body:body + 3] == "...":
+            continue
+        end = text.index("}", body)
+        out.append(text[pos:end])
+        out.append(insert)
+        pos = end
+        tables += 1
+    out.append(text[pos:])
+
+    if tables != 6:
+        raise ValueError(f"expected 6 theme palettes, found {tables}")
+    _write(path, "".join(out))
+    logging.info(f"{TAG} DATASET slot colour added to {tables} palettes in {path.name}")
     return True
 
 
