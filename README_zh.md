@@ -50,7 +50,7 @@ ComfyUI 分支。
 - 仍可通过 `custom_nodes/` 兼容第三方自定义节点包。
 - 可通过 [`extra_model_paths.yaml`](extra_model_paths.yaml.example) 配置额外的模型目录。
 
-## 内存分析
+### 内存分析
 
 任何东西入队之前，ComfyDL_UI 会根据当前图的参数与数据流估算峰值内存，与设备预算比对并给出
 绿 / 黄 / 红三色判定，放不下的图会在入队前先警告。
@@ -67,12 +67,6 @@ ComfyUI 分支。
 
 <p align="center">
   <img src="assets/profiling_memory_warning.png" alt="对判定为一定 OOM 的图入队时弹出的内存警告框" width="620" />
-</p>
-
-按节点分解表把「最大的单张量」放在每一行旁：
-
-<p align="center">
-  <img src="assets/profiling_memory_breakdown.png" alt="按节点分解表，每行附带最大的单张量" width="230" />
 </p>
 
 公式、阈值与验收清单见 [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md)。

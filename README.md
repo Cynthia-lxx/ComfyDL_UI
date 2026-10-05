@@ -55,7 +55,7 @@ its cross-entropy curve **under itself while it trains** (the preview card below
 - Still compatible with third-party custom nodes via `custom_nodes/`.
 - Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).
 
-## Memory profiling
+### Memory profiling
 
 Before anything is queued, ComfyDL_UI estimates the graph's peak memory from its parameters and
 data flow, grades it green / amber / red against the device budget, and warns before a run that
@@ -73,12 +73,6 @@ Pressing Run on a red graph warns first and can be overridden:
 
 <p align="center">
   <img src="assets/profiling_memory_warning.png" alt="Memory warning dialog shown when queueing a graph graded certain-OOM" width="620" />
-</p>
-
-The per-node breakdown keeps the largest single tensor next to every row:
-
-<p align="center">
-  <img src="assets/profiling_memory_breakdown.png" alt="Per-node memory breakdown with the largest single tensor per row" width="230" />
 </p>
 
 Formulas, thresholds and the acceptance checklist live in
