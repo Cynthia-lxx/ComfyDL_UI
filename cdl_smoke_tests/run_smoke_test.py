@@ -1193,6 +1193,13 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
         "x": lambda cfg, name: _training_pair()[0],
         "y": lambda cfg, name: _training_pair()[1],
     },
+    # Fine-grained linear-regression trainer: the generic (2, 3) dummy cannot be
+    # matmul'd into a [n, 1] target, so feed the same matched pair the trainer
+    # is expected to fit (y = 2*x0 - 3*x1 + 1) and demand that the loss falls.
+    "CdlLinRegTrain": {
+        "X": lambda cfg, name: _training_pair()[0],
+        "y": lambda cfg, name: _training_pair()[1],
+    },
     "TrainingParametersMerge": {"params_b": _f_params_alt},
     # Loss / Metrics: a *matched* float pair, so the default widgets (mse / mae)
     # run on data that is actually valid for them.
@@ -2010,6 +2017,39 @@ def _check_training_loop(result: Any, args: dict[str, Any]) -> None:
     )
     assert float(stopped_loss_hist[1]) == float(stopped_curve[-1]), (
         "the loss output must stay the last entry of the truncated history"
+    )
+
+
+def _check_linreg_train(result: Any, args: dict[str, Any]) -> None:
+    """The from-scratch trainer must really minimise the squared loss.
+
+    Verifies the documented four-port contract (``w`` / ``b`` / ``loss_history``
+    / ``y_hat``), that every output is detached, finite and correctly shaped,
+    and that the per-step loss curve actually falls — the whole point of the
+    node is to be a verifiable, transparent training step.
+    """
+    import torch
+
+    w, b, curve, y_hat = _as_tuple(result)
+    assert w.dim() == 2 and w.shape[1] == 1, f"w must be [f, 1], got {tuple(w.shape)}"
+    assert tuple(b.shape) in ((1,), (1, 1)), f"b must be a scalar, got {tuple(b.shape)}"
+    assert curve.dim() == 1, f"loss_history must be 1-D, got {tuple(curve.shape)}"
+    assert curve.numel() == 100, f"loss_history must span num_steps=100, got {curve.numel()}"
+    assert tuple(y_hat.shape) == (48, 1), f"y_hat must be [48, 1], got {tuple(y_hat.shape)}"
+
+    for tensor, name in ((w, "w"), (b, "b"), (curve, "loss_history"), (y_hat, "y_hat")):
+        assert torch.isfinite(tensor).all(), f"{name} contains non-finite values"
+        assert not tensor.requires_grad, f"{name} still carries autograd state"
+
+    assert float(curve[-1]) < float(curve[0]) / 2.0, (
+        f"the loss did not fall: {float(curve[0])} -> {float(curve[-1])}"
+    )
+    # SGD on mini-batches is not monotonic per step, but the run as a whole must
+    # converge: the second half of the curve sits far below the first half.
+    half = curve.numel() // 2
+    assert float(curve[half:].mean()) < float(curve[:half].mean()) / 2.0, (
+        f"the loss did not trend down: first-half mean {float(curve[:half].mean()):.4f} "
+        f"vs second-half mean {float(curve[half:].mean()):.4f}"
     )
 
 
@@ -3161,6 +3201,7 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "TrainingLoadParameters": [_check_training_load_parameters],
     "TrainingParametersToText": [_check_training_parameters_to_text],
     "TrainingTextToParameters": [_check_training_text_to_parameters],
+    "CdlLinRegTrain": [_check_linreg_train],
     "PoolingSliding": [_check_pooling_sliding],
     "PoolingAdaptive": [_check_pooling_adaptive],
     "ConvolutionConv": [_check_convolution_conv],
