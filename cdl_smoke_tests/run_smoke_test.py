@@ -128,7 +128,6 @@ def _seed_fixtures(sandbox: Path) -> None:
         _w.writerow(["a", "b", "c", "y"])
         _w.writerows(_rows)
     with open(sandbox / "cdl_dataset.txt", "w") as _f:
-        _f.write("a\tb\tc\ty\n")
         for _r in _rows:
             _f.write("\t".join(str(_v) for _v in _r) + "\n")
     with open(sandbox / "cdl_dataset.json", "w") as _f:

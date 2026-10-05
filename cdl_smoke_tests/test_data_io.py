@@ -80,9 +80,17 @@ def main() -> int:
 
     # CdlReadText -----------------------------------------------------------
     try:
-        ds = REG["CdlReadText"]().execute(str(files["txt"]), "y", "\t")[0]
+        rows = [(float(i), float(i * 2), float(i * 3), float(i * 0.5)) for i in range(8)]
+        hdr_txt = sandbox / "s_hdr.txt"
+        with open(hdr_txt, "w") as f:
+            f.write("a\tb\tc\ty\n")
+            for r in rows:
+                f.write("\t".join(str(v) for v in r) + "\n")
+        ds = REG["CdlReadText"]().execute(str(hdr_txt), "y", "\t", "float32", True)[0]
         check("ReadText features", ds.features.shape == (8, 3))
         check("ReadText labels", ds.labels is not None and ds.labels.shape == (8,))
+        ds0 = REG["CdlReadText"]().execute(str(files["txt"]), "", "\t", "float32", False)[0]
+        check("ReadText headerless", ds0.features.shape == (8, 4) and ds0.labels is None)
     except Exception as e:  # pragma: no cover
         check("ReadText", False, f"{type(e).__name__}: {e}")
 
