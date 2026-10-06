@@ -109,6 +109,31 @@ async def estimate(request: web.Request) -> web.Response:
     return web.json_response(report)
 
 
+@routes.post("/comfydl/profiling/opgraph")
+async def opgraph(request: web.Request) -> web.Response:
+    """The M3 operator-graph probe: manual Analyze button, never auto-run.
+
+    Runs the whole workflow once under a FakeTensor probe (zero real memory)
+    in a worker thread so the event loop stays responsive, and returns the
+    per-node ATen op census with probed FLOPs (fallback: M2 formula values).
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "body must be a JSON object"}, status=400)
+    prompt = payload.get("prompt") if isinstance(payload.get("prompt"), dict) else None
+
+    import asyncio
+
+    from comfy.profiling import opgraph
+
+    loop = asyncio.get_running_loop()
+    report = await loop.run_in_executor(None, opgraph.analyse_workflow, prompt)
+    return web.json_response(report)
+
+
 @routes.post("/comfydl/profiling/postmortem")
 async def postmortem(request: web.Request) -> web.Response:
     try:

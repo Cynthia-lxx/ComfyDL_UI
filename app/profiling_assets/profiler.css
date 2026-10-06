@@ -412,3 +412,58 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 .cdlp-cpu-ok { color: #4ade80; }
 .cdlp-cpu-warn { color: #fbbf24; }
 .cdlp-cpu-hot { color: #f87171; }
+
+/* M3: operator graph (Analyze button, stale marker, census table) */
+.cdlp-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.cdlp-stale { color: #fbbf24; }
+.cdlp-op-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+.cdlp-op-table th, .cdlp-op-table td {
+  text-align: left;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--border-color, #2a2a2a);
+}
+.cdlp-op-table th { color: var(--input-text-read-only, #9a9a9a); font-weight: 600; }
+.cdlp-op-table td:last-child, .cdlp-op-table th:last-child { text-align: right; }
+
+/* M3: overlay display mode (full dashboard above the canvas) */
+.cdlp-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  align-items: center;
+  justify-content: center;
+}
+.cdlp-overlay.cdlp-overlay-open { display: flex; }
+.cdlp-overlay-inner {
+  width: min(1200px, 92vw);
+  height: min(860px, 90vh);
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-menu-bg, #1f1f1f);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.cdlp-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color, #2a2a2a);
+  font-weight: 700;
+  color: var(--fg-color, #e0e0e0);
+}
+.cdlp-overlay-body {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 14px;
+}

@@ -30,10 +30,12 @@
 
   const CSS_URL = "/comfydl/profiling/profiler.css";
   const ESTIMATE_URL = "/comfydl/profiling/estimate";
+  const OPGRAPH_URL = "/comfydl/profiling/opgraph";
   const POSTMORTEM_URL = "/comfydl/profiling/postmortem";
   const WATCHDOG_STATUS_URL = "/comfydl/profiling/watchdog/status";
   const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
   const TAB_ID = "comfydl-profiling";
+  const DISPLAY_MODE_KEY = "cdlpDisplayMode";
 
   // ------------------------------------------------------------------ i18n --
   const I18N = {
@@ -168,6 +170,23 @@
       watchdog_unavailable: "monitoring unavailable (psutil missing on the server)",
       watchdog_bursts: "CPU burst log",
       watchdog_systemwide: "system-wide",
+      // M3: operator-graph probe
+      analyze: "Analyze operators",
+      analyzing: "Analyzing...",
+      reanalyze: "Graph changed - re-analyze",
+      opgraph_title: "Operator graph (ATen level)",
+      opgraph_none: "Press Analyze to expand every node into the ATen operators it really runs - FLOPs are counted bottom-up, per operator.",
+      opgraph_stale_hint: "The graph changed since this analysis - results may be stale.",
+      opgraph_summary: "{probed}/{nodes} nodes probed \u00b7 formula {formula} vs probe {probed} (ratio {ratio})",
+      opgraph_fallback: "formula fallback: {error}",
+      opgraph_col_op: "Operator",
+      opgraph_col_count: "Calls",
+      opgraph_col_flops: "FLOPs",
+      opgraph_canned: "{n} data-dependent read(s) answered with a constant (training loops)",
+      opgraph_expand: "Expand",
+      opgraph_collapse: "Collapse",
+      opgraph_pick: "Select a node",
+      opgraph_probe_ms: "probe {ms} ms",
     },
     zh: {
       sidebar_title: "性能分析",
@@ -300,6 +319,23 @@
       watchdog_unavailable: "监控不可用（服务端缺少 psutil）",
       watchdog_bursts: "瞬爆案底",
       watchdog_systemwide: "整机",
+      // M3：算子图探针
+      analyze: "分析算子",
+      analyzing: "分析中...",
+      reanalyze: "图已变更——重新分析",
+      opgraph_title: "算子图（ATen 级）",
+      opgraph_none: "点击「分析算子」把每个节点展开成它真正执行的 ATen 算子——FLOPs 按算子自底向上统计。",
+      opgraph_stale_hint: "分析后图已变更——结果可能过期。",
+      opgraph_summary: "{probed}/{nodes} 个节点已分析 · 公式 {formula} vs 探针 {probed}（比值 {ratio}）",
+      opgraph_fallback: "公式回退：{error}",
+      opgraph_col_op: "算子",
+      opgraph_col_count: "次数",
+      opgraph_col_flops: "FLOPs",
+      opgraph_canned: "{n} 次数据依赖读取以常量应答（训练循环）",
+      opgraph_expand: "展开",
+      opgraph_collapse: "收起",
+      opgraph_pick: "选择节点",
+      opgraph_probe_ms: "探针 {ms} ms",
     },
   };
 
@@ -331,6 +367,17 @@
     // breakdown). Kept in state because renderPanel() rebuilds the DOM on every
     // update and would otherwise reset any DOM-only collapsed flag.
     collapsed: { bursts: false, nodes: false },
+    // M3: operator-graph probe (manual Analyze button - never auto-run).
+    opgraph: null,
+    opgraphLoading: false,
+    opgraphStale: false,
+    selectedOpNode: null,
+    // M3: display mode - "sidebar" (quick view) vs "overlay" (full dashboard).
+    overlayEl: null,
+    displayMode: (() => {
+      try { return localStorage.getItem(DISPLAY_MODE_KEY) === "overlay" ? "overlay" : "sidebar"; }
+      catch (e) { return "sidebar"; }
+    })(),
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -457,7 +504,89 @@
 
   function scheduleEstimate() {
     if (state.timer) clearTimeout(state.timer);
+    markOpgraphStale();
     state.timer = setTimeout(() => requestEstimate(true), 500);
+  }
+
+  // -------------------------------------------------- M3: operator graph --
+  // Manual-only: the FakeTensor probe costs real milliseconds per node, so it
+  // never runs automatically and never sits on the Run path.
+  async function requestOpgraph() {
+    const api = getApi();
+    if (!api || state.opgraphLoading) return state.opgraph;
+    state.opgraphLoading = true;
+    state.opgraphStale = false;
+    renderPanel();
+    renderOverlay();
+    try {
+      const gtp = await callOriginalGTP();
+      if (gtp && gtp.output) state.lastPrompt = gtp.output;
+      const resp = await api.fetchApi(OPGRAPH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: state.lastPrompt || {} }),
+      });
+      if (resp.ok) {
+        state.opgraph = await resp.json();
+      }
+    } catch (e) { /* silent: the analyze is a courtesy, never a blocker */ }
+    state.opgraphLoading = false;
+    renderPanel();
+    renderOverlay();
+    return state.opgraph;
+  }
+
+  function markOpgraphStale() {
+    if (state.opgraph && !state.opgraphStale) {
+      state.opgraphStale = true;
+      renderPanel();
+      renderOverlay();
+    }
+  }
+
+  function setDisplayMode(mode) {
+    state.displayMode = mode === "overlay" ? "overlay" : "sidebar";
+    try { localStorage.setItem(DISPLAY_MODE_KEY, state.displayMode); } catch (e) { /* private mode */ }
+    renderOverlay();
+  }
+
+  function renderOpgraphSummary() {
+    const og = state.opgraph;
+    const btnLabel = esc(state.opgraphLoading ? t("analyzing")
+      : state.opgraphStale ? t("reanalyze") : t("analyze"));
+    const btn = '<button class="cdlp-button" id="cdlp-analyze"'
+      + (state.opgraphLoading ? " disabled" : "") + ">" + btnLabel + "</button>";
+    if (!og) {
+      return '<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("opgraph_none")) + "</div>" + btn + "</div>";
+    }
+    const totals = og.totals || {};
+    const summary = t("opgraph_summary", {
+      probed: totals.probed, nodes: totals.nodes,
+      formula: fmtFlops(totals.flops_formula),
+      probedFlops: fmtFlops(totals.flops_probed),
+      ratio: totals.ratio === null || totals.ratio === undefined ? "\u2014" : totals.ratio,
+    });
+    let html = '<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>";
+    html += '<div class="cdlp-flops-total">' + esc(fmtFlops(totals.flops_probed)) + "</div>";
+    html += '<div class="cdlp-hint">' + esc(summary) + "</div>";
+    if (state.opgraphStale) html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_stale_hint")) + "</div>";
+    html += btn;
+    html += "</div>";
+    return html;
+  }
+
+  function opCensusTable(node) {
+    const rows = (node.ops || []).map((row) => {
+      const name = row.op.replace(/^aten\./, "").replace(/\.default$/, "");
+      return '<tr><td>' + esc(name) + "</td><td>" + row.count + "</td><td>"
+        + esc(fmtFlops(row.flops)) + "</td></tr>";
+    });
+    return '<table class="cdlp-op-table"><thead><tr>'
+      + "<th>" + esc(t("opgraph_col_op")) + "</th><th>" + esc(t("opgraph_col_count"))
+      + "</th><th>" + esc(t("opgraph_col_flops")) + "</th></tr></thead><tbody>"
+      + (rows.join("") || '<tr><td colspan="3">\u2014</td></tr>')
+      + "</tbody></table>";
   }
 
   // ------------------------------------------------------------ run guard --
@@ -799,7 +928,7 @@
 
   function renderPanel() {
     const el = state.panelEl;
-    if (!el) return;
+    if (!el && !state.overlayEl) return;
     const r = state.report;
     const pm = state.postmortem;
     const budget = (r && r.budget) || null;
@@ -807,6 +936,8 @@
 
     const html = [];
     html.push('<div class="cdlp-panel">');
+    html.push('<div class="cdlp-toolbar"><button class="cdlp-button cdlp-expand" id="cdlp-expand">'
+      + esc(t("opgraph_expand")) + "</button></div>");
 
     // Verdict header
     html.push('<div class="cdlp-verdict cdlp-v-' + ((r && r.verdict) || "unknown") + '">');
@@ -824,6 +955,9 @@
       html.push('<span class="cdlp-verdict-reason">' + esc(t("loading")) + "</span>");
     }
     html.push("</div>");
+
+    // M3: operator-graph summary + Analyze button (manual, never auto-run)
+    html.push(renderOpgraphSummary());
 
     // Budget card
     if (budget) {
@@ -1002,6 +1136,20 @@
         });
         html.push("</table>");
       }
+      // M3: the probed ATen census for this node (from the last Analyze).
+      if (state.opgraph) {
+        const ogNode = (state.opgraph.nodes || []).find(
+          (row) => String(row.id) === String(n.id));
+        if (ogNode && ogNode.status === "probed") {
+          html.push('<div class="cdlp-hint">'
+            + esc(t("opgraph_canned", { n: ogNode.data_dependent_reads }))
+            + " \u00b7 " + esc(t("opgraph_probe_ms", { ms: ogNode.probe_ms })) + "</div>");
+          html.push(opCensusTable(ogNode));
+        } else if (ogNode && ogNode.status === "fallback") {
+          html.push('<div class="cdlp-hint cdlp-stale">'
+            + esc(t("opgraph_fallback", { error: ogNode.error || "" })) + "</div>");
+        }
+      }
       html.push("</details>");
     });
     if (!nodes.length) html.push('<div class="cdlp-hint">' + esc(t("loading")) + "</div>");
@@ -1010,9 +1158,15 @@
     html.push('<div class="cdlp-disclaimer">' + esc(t("disclaimer")) + "</div>");
     html.push("</div>");
 
-    el.innerHTML = html.join("");
+    const htmlString = html.join("");
+    [el, state.overlayEl].forEach((target) => {
+      if (!target) return;
+      target.innerHTML = htmlString;
+      wirePanel(target);
+    });
+  }
 
-    // wire events
+  function wirePanel(el) {
     el.querySelectorAll("[data-assumption]").forEach((input) => {
       input.addEventListener("change", () => {
         const key = input.getAttribute("data-assumption");
@@ -1038,6 +1192,34 @@
     if (refresh) refresh.addEventListener("click", () => requestEstimate(true));
     const apply = el.querySelector("#cdlp-apply-suggestion");
     if (apply) apply.addEventListener("click", applySuggestion);
+    const analyze = el.querySelector("#cdlp-analyze");
+    if (analyze) analyze.addEventListener("click", () => requestOpgraph());
+    const expand = el.querySelector("#cdlp-expand");
+    if (expand) expand.addEventListener("click", () => { mountOverlay(); setDisplayMode("overlay"); });
+  }
+
+  // M3: the full-dashboard overlay. Same content as the sidebar (one render
+  // into both containers), just roomier - the op census deserves the space.
+  function mountOverlay() {
+    if (state.overlayEl) return;
+    const wrap = document.createElement("div");
+    wrap.className = "cdlp-overlay"
+      + (state.displayMode === "overlay" ? " cdlp-overlay-open" : "");
+    wrap.innerHTML = '<div class="cdlp-overlay-inner"><div class="cdlp-overlay-head">'
+      + '<span class="cdlp-overlay-title">' + esc(t("sidebar_title")) + " \u00b7 "
+      + esc(t("opgraph_title")) + "</span>"
+      + '<button class="cdlp-button" id="cdlp-collapse">' + esc(t("opgraph_collapse")) + "</button></div>"
+      + '<div class="cdlp-overlay-body"></div></div>';
+    document.body.appendChild(wrap);
+    state.overlayEl = wrap.querySelector(".cdlp-overlay-body");
+    wrap.querySelector("#cdlp-collapse").addEventListener("click", () => setDisplayMode("sidebar"));
+    wrap.addEventListener("click", (ev) => {
+      if (ev.target === wrap) setDisplayMode("sidebar");
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && state.displayMode === "overlay") setDisplayMode("sidebar");
+    });
+    renderPanel();
   }
 
   function registerSidebar() {
@@ -1095,6 +1277,7 @@
     await waitFor(() => getApp() && getApp().extensionManager);
     try { registerSidebar(); } catch (e) { /* sidebar optional */ }
     try { await mountBadge(); } catch (e) { /* badge optional */ }
+    try { mountOverlay(); } catch (e) { /* overlay optional */ }
     scheduleEstimate();
   }
 
