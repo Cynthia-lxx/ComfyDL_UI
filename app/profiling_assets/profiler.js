@@ -37,6 +37,10 @@
   const SERVER_LOG_URL = "/internal/logs/raw";
   const TAB_ID = "comfydl-profiling";
   const SETTING_LOG_LEVEL = "ComfyDL.Profiling.LogLevel";
+  // P0: the real-execution probe is opt-in. The setting alone is not enough -
+  // the header is attached per-request only while this flag is true.
+  const SETTING_DANGEROUS = "ComfyDL.Profiling.DangerousProbe";
+  const DANGEROUS_HEADER = "X-CDL-Profiling-Dangerous";
   const LOG_RANKS = { off: 0, low: 1, medium: 2, high: 3 };
 
   // ------------------------------------------------------------------ i18n --
@@ -190,6 +194,8 @@
       opgraph_pick: "Select a node",
       logs_title: "Server log (profiling)",
       logs_empty: "No profiling log lines yet - press Analyze or run a workflow with the log level raised.",
+      opgraph_safe_mode: "Safe mode: the probe executes REAL node code, so it is disabled by default. Enable it under Settings \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe.",
+      danger_confirm: "The profiling probe executes REAL node code with REAL tensors. Very large inputs can consume significant CPU and memory while it runs. Enable the dangerous probe?",
       opgraph_probe_ms: "probe {ms} ms",
     },
     zh: {
@@ -341,6 +347,8 @@
       opgraph_pick: "选择节点",
       logs_title: "服务端日志（profiling）",
       logs_empty: "暂无 profiling 日志——调高档位后点一次 Analyze 或跑一次工作流。",
+      opgraph_safe_mode: "安全模式：探针会真实执行节点代码，默认关闭。到 设置 \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe 开启后再分析。",
+      danger_confirm: "profiling 探针将以真实张量真实执行节点代码。输入很大时可能占用大量 CPU 与内存。确定开启危险模式？",
       opgraph_probe_ms: "探针 {ms} ms",
     },
   };
@@ -381,6 +389,8 @@
     // M3+: pip-style verbosity dial (off/low/medium/high), driven by the
     // ComfyDL.Profiling.LogLevel setting and sent per-request as a header.
     logLevel: "off",
+    // P0: real-execution probe gate (ComfyDL.Profiling.DangerousProbe).
+    dangerousProbe: false,
     serverLog: null,
     serverLogLoading: false,
     // M3: display mode - "sidebar" (quick view) vs "overlay" (full dashboard).
@@ -459,6 +469,18 @@
     const h = extra || {};
     h["X-CDL-Profiling-Log"] = state.logLevel;
     return h;
+  }
+
+  // P0: turn the Dangerous probe toggle back off (user declined the confirm).
+  async function revertDangerous() {
+    state.dangerousProbe = false;
+    try {
+      const em = getApp() && getApp().extensionManager;
+      if (em && em.setting && typeof em.setting.set === "function") {
+        await em.setting.set(SETTING_DANGEROUS, false);
+      }
+    } catch (e) { /* private mode / unavailable: local state already off */ }
+    renderPanel();
   }
 
   function itemLabel(item) {
@@ -564,9 +586,13 @@
       renderOverlay();
       const gtp = await callOriginalGTP();
       if (gtp && gtp.output) state.lastPrompt = gtp.output;
+      const opHeaders = profHeaders({ "Content-Type": "application/json" });
+      // P0: the probe executes real node code - only attach the acknowledgement
+      // header while the user's Dangerous probe setting is on.
+      if (state.dangerousProbe) opHeaders[DANGEROUS_HEADER] = "1";
       const resp = await api.fetchApi(OPGRAPH_URL, {
         method: "POST",
-        headers: profHeaders({ "Content-Type": "application/json" }),
+        headers: opHeaders,
         body: JSON.stringify({ prompt: state.lastPrompt || {} }),
       });
       plog("medium", "Analyze: server answered " + resp.status);
@@ -623,6 +649,12 @@
     html += '<div class="cdlp-flops-total">' + esc(fmtFlops(totals.flops_probed)) + "</div>";
     html += '<div class="cdlp-hint">' + esc(summary) + "</div>";
     if (state.opgraphStale) html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_stale_hint")) + "</div>";
+    // P0: safe/timeout runs carry a mode flag - say so where the user looks.
+    if (og.mode === "safe") {
+      html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_safe_mode")) + "</div>";
+    } else if (og.mode === "timeout") {
+      html += '<div class="cdlp-hint cdlp-stale">' + esc(String(og.error || t("opgraph_safe_mode"))) + "</div>";
+    }
     html += btn;
     html += "</div>";
     return html;
@@ -1409,7 +1441,8 @@
       app.registerExtension({
         name: "ComfyDL.Profiler",
         async setup() { await init(); },
-        settings: [{
+        settings: [
+        {
           id: SETTING_LOG_LEVEL,
           name: "ComfyDL profiling log level",
           category: ["ComfyDL", "Profiling"],
@@ -1427,7 +1460,26 @@
             if (state.logLevel !== "off" && state.serverLog === null) fetchServerLog();
             renderPanel();
           },
-        }],
+        },
+        {
+          // P0: the real-execution probe is opt-in. Enabling asks for a
+          // lightweight confirmation; declining reverts the toggle (which
+          // re-enters onChange with false - benign).
+          id: SETTING_DANGEROUS,
+          name: "ComfyDL profiling dangerous probe (executes real node code)",
+          category: ["ComfyDL", "Profiling"],
+          type: "boolean",
+          defaultValue: false,
+          onChange: (newVal) => {
+            state.dangerousProbe = newVal === true;
+            plog("high", "dangerous probe -> " + state.dangerousProbe);
+            if (state.dangerousProbe && !window.confirm(t("danger_confirm"))) {
+              revertDangerous();
+            }
+            renderPanel();
+          },
+        },
+        ],
         commands: [{
           id: "ComfyDL_Profiling_Open",
           icon: "pi pi-chart-bar",

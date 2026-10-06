@@ -1,9 +1,14 @@
 ﻿"""opgraph - the operator-level equivalent computation graph probe (M3).
 
-What: for each node of a prompt-format workflow, run its ``execute`` once under
-a ``FakeTensorMode`` wrapped in a ``TorchDispatchMode`` recorder plus
-``torch.utils.flop_counter.FlopCounterMode``.  The probe intercepts the ATen
-operators the node *actually executes* and produces, per node:
+What: for each node of a prompt-format workflow, run its ``execute`` once with
+REAL tensors under a ``TorchDispatchMode`` recorder plus
+``torch.utils.flop_counter.FlopCounterMode``.  (P0 correction, 2026-10-06: an
+earlier revision of this docstring claimed a ``FakeTensorMode`` wrapper - that
+import existed but was never used, so every probe to date has executed real
+code on real tensors.  The safety story is therefore the explicit guardrails
+below plus the dangerous-mode gate in ``app/profiling_routes.py``, NOT fake
+memory.)  The probe intercepts the ATen operators the node *actually executes*
+and produces, per node:
 
   * the op census (op name -> call count, FLOPs),
   * the probed FLOPs total (bottom-up, per-op ``2MNK`` style counting),
@@ -32,11 +37,22 @@ Honest boundaries
 * Ops are capped (``OPS_LIMIT``); a node whose probe would explode (huge step
   counts) falls back instead of stalling the analyze request.
 
-Inputs are resolved in topological order and cached fake outputs feed
-downstream probes, so wired tensors keep their real shapes without a single
-byte of real memory.  Results are cached per workflow hash: repeated Analyze
+Inputs are resolved in topological order and the probed (real) outputs feed
+downstream probes.  Results are cached per workflow hash: repeated Analyze
 clicks on an unchanged graph are instant, and a changed graph simply produces
 a new key.
+
+Safety guardrails (P0)
+----------------------
+* Per-node string inputs above ``MAX_NODE_INPUT_BYTES`` and graphs whose
+  string inputs total above ``MAX_TOTAL_INPUT_BYTES`` never reach
+  ``execute`` - the node (or the whole analysis) falls back with a readable
+  error instead of pinning the CPU on a megabyte of tokenization.
+* ``probe_workflow`` honours a cooperative ``deadline``: once it passes, the
+  remaining nodes are marked ``probe deadline exceeded`` without execution.
+  The caller (the route) additionally wraps the run in a hard timeout.
+* Online probing is opt-in ("dangerous mode"); the route refuses to execute
+  anything without an explicit acknowledgement header.
 """
 
 from __future__ import annotations
@@ -63,6 +79,20 @@ logger = logging.getLogger(__name__)
 # Version of *this* report.  The M1/M2 memory + formula report keeps its own
 # REPORT_VERSION (=2) in engine.py; the two documents are independent.
 OPGRAPH_REPORT_VERSION = 1
+
+# --- P0 safety guardrails (2026-10-06) --------------------------------------
+# The probe below executes REAL node code with REAL tensors (the docstring's
+# old "FakeTensorMode" claim was wrong - that import was never used), so an
+# unbounded input wedges the whole profiling backend: 1MB of corpus text pins
+# CPU/RAM, starves the shared event loop (estimate dies with it) and Ctrl+C
+# cannot stop the worker thread. These caps keep an Analyze click cheap; the
+# values are tunable and sized so every shipped example workflow passes with
+# room to spare. The online probe additionally requires the explicit
+# "dangerous mode" acknowledgement (see app/profiling_routes.py); offline
+# sampling (Profiling v2 P1) goes through the same guards deliberately.
+MAX_NODE_INPUT_BYTES = 64 * 1024          # per-node string input cap
+MAX_TOTAL_INPUT_BYTES = 2 * 1024 * 1024   # whole-graph string input cap
+PROBE_DEADLINE_SECONDS = 60.0             # cooperative whole-analysis deadline
 
 # A node probe recording more ATen calls than this falls back to the formula
 # ledger (huge step counts would otherwise spin the dispatcher for seconds).
@@ -260,12 +290,32 @@ def _formula_flops(formula_report):
     return per_node, total
 
 
-def probe_workflow(prompt, formula_report=None):
+def _string_input_bytes(node) -> int:
+    """Total UTF-8 size of a prompt node's string widget inputs.
+
+    Link inputs arrive as ``[upstream_id, slot]`` lists and are ignored here;
+    only literal strings count - they are the vector the 1MB-corpus incident
+    rode in on (tokenizers and text nodes loop over every byte for real).
+    """
+    total = 0
+    for value in (node.get("inputs") or {}).values():
+        if isinstance(value, str):
+            total += len(value.encode("utf-8", errors="replace"))
+    return total
+
+
+def probe_workflow(prompt, formula_report=None, deadline: Optional[float] = None):
     """Probe every node of ``prompt`` and return the opgraph report.
 
     ``formula_report`` (optional) is the M2 ``engine.estimate_workflow``
     report; its per-node FLOPs back the ``fallback`` records and the
-    cross-validation totals.
+    cross-validation totals.  ``deadline`` (optional, ``time.monotonic()``
+    based) is a cooperative cap: once it passes, remaining nodes are marked
+    ``probe deadline exceeded`` without being executed.
+
+    P0 guardrails: a node whose string inputs exceed ``MAX_NODE_INPUT_BYTES``
+    and a graph whose total exceeds ``MAX_TOTAL_INPUT_BYTES`` never reach
+    ``execute`` - the guard fires before the probe, whatever calls this.
     """
     registry = _node_registry()
     # A fresh interpreter (unit tests, standalone probe) has only the host's
@@ -290,6 +340,14 @@ def probe_workflow(prompt, formula_report=None):
     }
     if not isinstance(prompt, dict) or not prompt:
         report["error"] = "no_graph"
+        return report
+
+    total_bytes = sum(_string_input_bytes(n) for n in prompt.values())
+    if total_bytes > MAX_TOTAL_INPUT_BYTES:
+        report["error"] = (
+            "graph string inputs too large for probe "
+            f"({total_bytes // 1024} KB > {MAX_TOTAL_INPUT_BYTES // 1024} KB limit)"
+        )
         return report
 
     from comfy.profiling.engine import _topological_order
@@ -318,7 +376,15 @@ def probe_workflow(prompt, formula_report=None):
         }
         cls = registry.get(class_type)
         resolved, resolve_error = _resolve_inputs(node, outputs)
-        if cls is None:
+        node_bytes = _string_input_bytes(node)
+        if node_bytes > MAX_NODE_INPUT_BYTES:
+            entry["error"] = (
+                "input too large for probe "
+                f"({node_bytes // 1024} KB > {MAX_NODE_INPUT_BYTES // 1024} KB limit)"
+            )
+        elif deadline is not None and time.monotonic() > deadline:
+            entry["error"] = "probe deadline exceeded"
+        elif cls is None:
             entry["error"] = "node type not registered"
         elif resolved is None:
             entry["error"] = resolve_error
@@ -344,13 +410,16 @@ def probe_workflow(prompt, formula_report=None):
     return report
 
 
-def analyse_workflow(prompt, formula_report=None):
+def analyse_workflow(prompt, formula_report=None, deadline: Optional[float] = None):
     """Cached entry point for the ``/opgraph`` endpoint.
 
     The cache key is a canonical hash of the prompt (widget values included),
     so repeated Analyze clicks on an unchanged graph are instant while any
     edit produces a fresh probe.  The formula report (M2) is computed here
-    when not supplied, so callers only need the prompt.
+    when not supplied, so callers only need the prompt.  ``deadline`` is
+    forwarded to :func:`probe_workflow`; reports that ended in an error
+    (guardrail, deadline) are NOT cached so a retry with saner inputs or a
+    raised dangerous-mode flag probes fresh.
     """
     try:
         key = hashlib.sha256(
@@ -373,8 +442,9 @@ def analyse_workflow(prompt, formula_report=None):
             logger.warning("opgraph formula report failed: %s", exc)
             formula_report = None
 
-    report = probe_workflow(prompt if isinstance(prompt, dict) else {}, formula_report)
-    if key is not None:
+    report = probe_workflow(
+        prompt if isinstance(prompt, dict) else {}, formula_report, deadline=deadline)
+    if key is not None and report.get("error") is None:
         if len(_CACHE) >= _CACHE_LIMIT:
             _CACHE.pop(next(iter(_CACHE)))
         _CACHE[key] = report

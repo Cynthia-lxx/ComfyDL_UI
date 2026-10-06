@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import mimetypes
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
 from aiohttp import web
@@ -121,13 +122,71 @@ async def estimate(request: web.Request) -> web.Response:
     return web.json_response(report)
 
 
+#: P0: the probe executes REAL node code with REAL tensors, so it runs on a
+#: dedicated single-worker pool instead of the shared default executor - a
+#: runaway analysis can no longer starve other profiling routes, and the
+#: "cdl-probe" thread name keeps runaway stacks identifiable in dumps. A
+#: thread cannot be killed mid-run; the hard timeout below only *abandons*
+#: the future (the worker finishes in the background and its result is
+#: discarded) - documented in docs/profiling-m3-opgraph.md, Safety model.
+_PROBE_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cdl-probe")
+
+#: The header the frontend attaches ONLY when the user explicitly enabled the
+#: dangerous probe (Settings -> ComfyDL -> Profiling). Without it the route
+#: never executes a single node.
+DANGEROUS_HEADER = "X-CDL-Profiling-Dangerous"
+
+
+def _safe_mode_report(prompt: Optional[dict]) -> dict:
+    """A complete, zero-execution opgraph report for the safe-mode path.
+
+    Same shape as a real probe report (so the frontend needs no special
+    casing beyond the ``mode`` flag), with every node marked fallback.
+    """
+    from comfy.profiling.opgraph import OPGRAPH_REPORT_VERSION
+
+    nodes = []
+    for node_id, node in (prompt or {}).items():
+        nodes.append({
+            "id": str(node_id),
+            "class_type": str((node or {}).get("class_type") or ""),
+            "status": "fallback",
+            "ops": [],
+            "ops_total": 0,
+            "total_flops": None,
+            "formula_flops": None,
+            "data_dependent_reads": 0,
+            "error": "probe disabled (dangerous mode off)",
+            "probe_ms": 0,
+        })
+    return {
+        "version": OPGRAPH_REPORT_VERSION,
+        "mode": "safe",
+        "totals": {
+            "nodes": len(nodes),
+            "probed": 0,
+            "fallback": len(nodes),
+            "flops_formula": 0,
+            "flops_probed": 0,
+            "ratio": None,
+        },
+        "nodes": nodes,
+        "error": "probe disabled (dangerous mode off)",
+        "disclaimer_key": "opgraphDisclaimer",
+    }
+
+
 @routes.post("/comfydl/profiling/opgraph")
 async def opgraph(request: web.Request) -> web.Response:
     """The M3 operator-graph probe: manual Analyze button, never auto-run.
 
-    Runs the whole workflow once under a FakeTensor probe (zero real memory)
-    in a worker thread so the event loop stays responsive, and returns the
-    per-node ATen op census with probed FLOPs (fallback: M2 formula values).
+    P0 safety model (2026-10-06): the probe executes real node code on real
+    tensors, so it is gated behind the explicit ``X-CDL-Profiling-Dangerous``
+    header (the frontend only sends it when the user enabled the Dangerous
+    probe setting).  Without the header the route returns a zero-execution
+    safe-mode report.  With it, input-size guardrails and a hard deadline
+    still apply (see comfy/profiling/opgraph.py and
+    docs/profiling-m3-opgraph.md).
     """
     try:
         payload = await request.json()
@@ -138,8 +197,18 @@ async def opgraph(request: web.Request) -> web.Response:
         proflog.log("low", "opgraph: 400 body must be a JSON object", request=request)
         return web.json_response({"error": "body must be a JSON object"}, status=400)
     prompt = payload.get("prompt") if isinstance(payload.get("prompt"), dict) else None
+
+    dangerous = request.headers.get(DANGEROUS_HEADER, "") == "1"
+    if not dangerous:
+        proflog.log(
+            "low", "opgraph: safe mode - dangerous probe off, no node executed (%d nodes)",
+            len(prompt) if isinstance(prompt, dict) else 0,
+            request=request,
+        )
+        return web.json_response(_safe_mode_report(prompt))
+
     proflog.log(
-        "low", "opgraph analyze: start (%d graph nodes)",
+        "low", "opgraph analyze: start (%d graph nodes, DANGEROUS mode)",
         len(prompt) if isinstance(prompt, dict) else 0,
         request=request,
     )
@@ -149,9 +218,34 @@ async def opgraph(request: web.Request) -> web.Response:
     from comfy.profiling import opgraph
 
     started = time.perf_counter()
+    deadline = time.monotonic() + opgraph.PROBE_DEADLINE_SECONDS
     loop = asyncio.get_running_loop()
     try:
-        report = await loop.run_in_executor(None, opgraph.analyse_workflow, prompt)
+        report = await asyncio.wait_for(
+            loop.run_in_executor(
+                _PROBE_POOL, opgraph.analyse_workflow, prompt, None, deadline),
+            timeout=opgraph.PROBE_DEADLINE_SECONDS + 5.0,
+        )
+    except asyncio.TimeoutError:
+        # The worker thread cannot be killed: it finishes in the background
+        # and its (discarded) result never reaches the cache. The route
+        # answers immediately instead of wedging the request forever.
+        proflog.log(
+            "low", "opgraph analyze: gave up after %.0fs (worker may still finish in background)",
+            opgraph.PROBE_DEADLINE_SECONDS + 5.0, request=request,
+        )
+        return web.json_response({
+            "version": 1,
+            "mode": "timeout",
+            "totals": {"nodes": 0, "probed": 0, "fallback": 0,
+                       "flops_formula": 0, "flops_probed": 0, "ratio": None},
+            "nodes": [],
+            "error": (
+                f"probe timeout after {int(opgraph.PROBE_DEADLINE_SECONDS)}s - "
+                "the analysis was abandoned; results are discarded"
+            ),
+            "disclaimer_key": "opgraphDisclaimer",
+        })
     except Exception as exc:
         proflog.log("low", "opgraph analyze: worker crashed: %r", exc, request=request)
         raise

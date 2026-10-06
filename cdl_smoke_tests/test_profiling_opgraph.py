@@ -154,18 +154,93 @@ def main():
     from aiohttp import test_utils, web
     import app.profiling_routes as profiling_routes
 
+    # P0 guardrails: oversized string inputs never reach execute().
+    huge = "x" * (opgraph.MAX_NODE_INPUT_BYTES + 1)
+    guard_prompt = {
+        "1": {"class_type": "TextVocabBuild", "inputs": {
+            "corpus": huge, "level": "char", "min_freq": 1}},
+        "2": {"class_type": "TextEncode", "inputs": {
+            "vocab": ["1", 0], "text": "the fox"}},
+    }
+    guard_report = opgraph.probe_workflow(guard_prompt)
+    g_by_id = {n["id"]: n for n in guard_report["nodes"]}
+    check("P0: oversized node falls back without executing",
+          g_by_id["1"]["status"] == "fallback"
+          and "input too large for probe" in (g_by_id["1"]["error"] or ""),
+          str(g_by_id["1"]["error"]))
+    check("P0: guard cascades downstream",
+          "upstream" in (g_by_id["2"]["error"] or ""),
+          str(g_by_id["2"]["error"]))
+
+    whole = {
+        str(i): {"class_type": "TextVocabBuild", "inputs": {
+            "corpus": "y" * (opgraph.MAX_TOTAL_INPUT_BYTES // 2 + 1024),
+            "level": "char", "min_freq": 1}}
+        for i in range(2)
+    }
+    whole_report = opgraph.probe_workflow(whole)
+    check("P0: whole-graph cap returns early error report",
+          whole_report["error"] is not None
+          and "graph string inputs too large" in whole_report["error"]
+          and whole_report["totals"]["probed"] == 0,
+          str(whole_report["error"]))
+
+    dl_report = opgraph.probe_workflow(prompt, deadline=0.0)
+    check("P0: cooperative deadline marks nodes without executing",
+          dl_report["totals"]["probed"] == 0
+          and all("probe deadline exceeded" in (n["error"] or "")
+                  for n in dl_report["nodes"]),
+          str(dl_report["nodes"][0]["error"] if dl_report["nodes"] else "?"))
+
+    from aiohttp import test_utils, web
+    import app.profiling_routes as profiling_routes
+
     async def _route_checks():
         app = web.Application(client_max_size=100 * 1024**2)
         app.add_routes(profiling_routes.routes)
         client = test_utils.TestClient(test_utils.TestServer(app))
         await client.start_server()
         try:
+            # P0: without the dangerous header the route must NOT execute
+            # anything - a complete zero-execution safe-mode report comes back.
             resp = await client.post("/comfydl/profiling/opgraph",
                                      json={"prompt": prompt})
             check("route: POST /opgraph 200", resp.status == 200)
             data = await resp.json()
             check("route: report has totals + nodes",
                   "totals" in data and "nodes" in data and data.get("version") == 1)
+            check("route: safe mode without header (zero execution)",
+                  data.get("mode") == "safe"
+                  and data["totals"]["probed"] == 0
+                  and all("probe disabled" in (n["error"] or "")
+                          for n in data["nodes"]),
+                  str(data.get("error")))
+
+            resp2 = await client.post("/comfydl/profiling/opgraph",
+                                      json={"prompt": prompt},
+                                      headers={"X-CDL-Profiling-Dangerous": "1"})
+            check("route: dangerous header probes for real", resp2.status == 200)
+            data2 = await resp2.json()
+            check("route: dangerous run probes nodes",
+                  data2.get("mode") is None and data2["totals"]["probed"] > 0,
+                  json.dumps(data2.get("totals")))
+
+            # P0: a 1MB-style oversized corpus answers instantly as a guard
+            # fallback even in dangerous mode (the 2026-10-06 wedge scenario).
+            big_prompt = {
+                "1": {"class_type": "TextVocabBuild", "inputs": {
+                    "corpus": "z" * (opgraph.MAX_NODE_INPUT_BYTES + 1),
+                    "level": "char", "min_freq": 1}},
+            }
+            resp4 = await client.post("/comfydl/profiling/opgraph",
+                                      json={"prompt": big_prompt},
+                                      headers={"X-CDL-Profiling-Dangerous": "1"})
+            data4 = await resp4.json()
+            check("route: oversized input guarded even in dangerous mode",
+                  resp4.status == 200 and data4["totals"]["probed"] == 0
+                  and "input too large" in (data4["nodes"][0]["error"] or ""),
+                  str(data4.get("error")))
+
             resp3 = await client.post("/comfydl/profiling/opgraph", data="not-json")
             check("route: bad JSON 400", resp3.status == 400)
         finally:

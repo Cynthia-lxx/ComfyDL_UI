@@ -188,10 +188,15 @@ def _route_checks() -> None:
 
             resp = await client.post("/comfydl/profiling/opgraph", json={"prompt": {}})
             check("T3c opgraph route 200", resp.status == 200, str(resp.status))
-            check("T3d off: still silent", cap.lines == [], str(cap.lines))
+            # P0: without the dangerous header the route answers safe-mode and
+            # executes nothing. The refusal line is a "low" log, so at log
+            # level off it is muted too (off = zero output, by contract).
+            check("T3d off: safe mode silent", cap.lines == [], str(cap.lines))
 
-            # 2. Header raises to high without any server restart.
-            headers = {"X-CDL-Profiling-Log": "high"}
+            # 2. Header raises to high without any server restart; the analyze
+            # path additionally needs the P0 dangerous-mode acknowledgement.
+            headers = {"X-CDL-Profiling-Log": "high",
+                       "X-CDL-Profiling-Dangerous": "1"}
             resp = await client.post("/comfydl/profiling/opgraph",
                                      json={"prompt": {}}, headers=headers)
             check("T3e opgraph route 200 (header)", resp.status == 200, str(resp.status))
@@ -305,6 +310,20 @@ def _js_checks() -> None:
     check("T4j display mode starts closed", 'displayMode: "sidebar"' in src)
     check("T4k overlay mode not persisted", "cdlpDisplayMode" not in src
           and "DISPLAY_MODE_KEY" not in src)
+
+    # P0 dangerous-probe gate (2026-10-07): opt-in setting, per-request header,
+    # safe-mode hint wired into the i18n dictionaries.
+    for needle, name in [
+        ("ComfyDL.Profiling.DangerousProbe", "T4l dangerous setting registered"),
+        ("X-CDL-Profiling-Dangerous", "T4m dangerous header sent"),
+        ("opgraph_safe_mode", "T4n safe-mode hint i18n"),
+        ("danger_confirm", "T4o enable confirmation i18n"),
+        ("revertDangerous", "T4p declining reverts the toggle"),
+    ]:
+        check(name, needle in src)
+    for key in ("opgraph_safe_mode", "danger_confirm"):
+        check(f"T4q zh+en have {key}",
+              src.count(key + ":") >= 2, str(src.count(key + ":")))
 
 
 def main() -> int:
