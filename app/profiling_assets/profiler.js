@@ -197,6 +197,13 @@
       opgraph_safe_mode: "Safe mode: the probe executes REAL node code, so it is disabled by default. Enable it under Settings \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe.",
       danger_confirm: "The profiling probe executes REAL node code with REAL tensors. Very large inputs can consume significant CPU and memory while it runs. Enable the dangerous probe?",
       opgraph_guarded: "Input guardrail blocked {n} node(s) from probing - their string inputs exceed the 64 KB per-node cap, and the probe would otherwise loop over every byte for real: {list}. Shrink the text or feed it through a data node instead.",
+      opgraph_assembled: "Equivalent graph assembled from the static rule library - no node was executed.",
+      opgraph_rule_hint: "Operator sequence from the rule library (not executed); FLOPs are the formula estimate for the actual shapes.",
+      coverage_line: "Coverage: {covered} rule-derived \u00b7 {driven} formula-derived \u00b7 {unknown} FLOPs unmodelled \u00b7 {missing} no info",
+      export_json: "JSON",
+      export_outline: "Outline",
+      export_mermaid: "Mermaid",
+      opgraph_leaf: "no ATen ops (pure-Python leaf)",
       opgraph_probe_ms: "probe {ms} ms",
     },
     zh: {
@@ -351,6 +358,13 @@
       opgraph_safe_mode: "安全模式：探针会真实执行节点代码，默认关闭。到 设置 \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe 开启后再分析。",
       danger_confirm: "profiling 探针将以真实张量真实执行节点代码。输入很大时可能占用大量 CPU 与内存。确定开启危险模式？",
       opgraph_guarded: "输入护栏拦截了 {n} 个节点——字符串输入超过单节点 64KB 上限（探针会逐字节真实处理）：{list}。请缩小文本，或改用文件 / 数据节点接入。",
+      opgraph_assembled: "等效计算图由规则库推定，未执行任何节点。",
+      opgraph_rule_hint: "算子序列来自规则库推定（未真实执行）；FLOPs 为公式按实际 shape 的估算值。",
+      coverage_line: "覆盖：{covered} 规则推定 · {driven} 公式推定 · {unknown} FLOPs 无法建模 · {missing} 无信息",
+      export_json: "JSON",
+      export_outline: "大纲",
+      export_mermaid: "Mermaid",
+      opgraph_leaf: "无 ATen 算子（纯 Python 叶子节点）",
       opgraph_probe_ms: "探针 {ms} ms",
     },
   };
@@ -650,6 +664,19 @@
     let html = '<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>";
     html += '<div class="cdlp-flops-total">' + esc(fmtFlops(totals.flops_probed)) + "</div>";
     html += '<div class="cdlp-hint">' + esc(summary) + "</div>";
+    // P1: assembled mode badge + honest coverage line + exports.
+    if (og.mode === "assembled") {
+      html += '<div class="cdlp-hint">' + esc(t("opgraph_assembled")) + "</div>";
+      const cov = og.coverage || {};
+      html += '<div class="cdlp-hint">' + esc(t("coverage_line", {
+        covered: cov.covered || 0, driven: cov.params_driven || 0,
+        unknown: cov.unknown || 0, missing: cov.missing || 0,
+      })) + "</div>";
+      html += '<div class="cdlp-hint"><span class="cdlp-title-right">'
+        + '<button class="cdlp-button" id="cdlp-export-json">' + esc(t("export_json")) + "</button> "
+        + '<button class="cdlp-button" id="cdlp-export-outline">' + esc(t("export_outline")) + "</button> "
+        + '<button class="cdlp-button" id="cdlp-export-mermaid">' + esc(t("export_mermaid")) + "</button></span></div>";
+    }
     if (state.opgraphStale) html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_stale_hint")) + "</div>";
     // P0: guardrail hits must never be silent - name the blocked nodes and
     // say why (0 FLOPs on its own looks like the probe "did nothing").
@@ -673,17 +700,116 @@
     return html;
   }
 
-  function opCensusTable(node) {
+  function opCensusTable(node, showFlops) {
     const rows = (node.ops || []).map((row) => {
       const name = row.op.replace(/^aten\./, "").replace(/\.default$/, "");
-      return '<tr><td>' + esc(name) + "</td><td>" + row.count + "</td><td>"
-        + esc(fmtFlops(row.flops)) + "</td></tr>";
+      const flops = showFlops ? esc(fmtFlops(row.flops)) : "\u2014";
+      return "<tr><td>" + esc(name) + "</td><td>" + row.count + "</td><td>"
+        + flops + "</td></tr>";
     });
     return '<table class="cdlp-op-table"><thead><tr>'
       + "<th>" + esc(t("opgraph_col_op")) + "</th><th>" + esc(t("opgraph_col_count"))
       + "</th><th>" + esc(t("opgraph_col_flops")) + "</th></tr></thead><tbody>"
-      + (rows.join("") || '<tr><td colspan="3">\u2014</td></tr>')
+      + (rows.join("") || '<tr><td colspan="3">' + esc(t("opgraph_leaf")) + "</td></tr>")
       + "</tbody></table>";
+  }
+
+  // P1 exports: the assembled report as JSON / a text outline / mermaid.
+  function downloadText(filename, text) {
+    try {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { plog("low", "export failed: " + e); }
+  }
+
+  function mermaidSafe(s) {
+    // split/join instead of regex-with-quotes: the bracket-balance linter
+    // (T4a) strips strings/comments but not regex literals (memory pit 24).
+    let out = String(s);
+    out = out.split('"').join("'");
+    out = out.split("{").join("(").split("}").join(")");
+    return out;
+  }
+
+  function buildMermaid(og) {
+    // One subgraph per workflow node, its ATen op chain inside; workflow
+    // links become edges between the subgraphs' first/last operators.
+    const prompt = state.lastPrompt || {};
+    const byId = {};
+    (og.nodes || []).forEach((n) => { byId[String(n.id)] = n; });
+    const nid = (id) => "n" + String(id).replace(/\W/g, "_");
+    const lines = ["flowchart LR"];
+    (og.nodes || []).forEach((n) => {
+      const id = nid(n.id);
+      const title = mermaidSafe(n.class_type + " #" + n.id);
+      const ops = (n.ops || []).slice(0, 6).map((o) => {
+        const base = o.op.replace(/^aten\./, "").replace(/\.default$/, "");
+        return base + (o.count > 1 ? " x" + o.count : "");
+      });
+      if (!ops.length) {
+        lines.push('  ' + id + '("' + title + '")');
+        return;
+      }
+      lines.push('  subgraph sg_' + id + '["' + title + '"]');
+      ops.forEach((op, i) => {
+        lines.push('    ' + id + "_op" + i + '["' + mermaidSafe(op) + '"]');
+        if (i) lines.push("    " + id + "_op" + (i - 1) + " --> " + id + "_op" + i);
+      });
+      lines.push("  end");
+    });
+    Object.entries(prompt).forEach(([target, node]) => {
+      Object.values(node.inputs || {}).forEach((v) => {
+        if (Array.isArray(v) && v.length === 2 && byId[String(v[0])] && byId[String(target)]) {
+          const src = byId[String(v[0])];
+          const srcOps = (src.ops || []).length;
+          const dstOps = ((byId[String(target)] || {}).ops || []).length;
+          const from = srcOps ? nid(v[0]) + "_op" + (Math.min(srcOps, 6) - 1) : nid(v[0]);
+          const to = dstOps ? nid(target) + "_op0" : nid(target);
+          lines.push("  " + from + " --> " + to);
+        }
+      });
+    });
+    return lines.join("\n");
+  }
+
+  function buildOutline(og) {
+    const lines = ["Equivalent computation graph (rule library, zero execution)", ""];
+    (og.nodes || []).forEach((n) => {
+      lines.push("#" + n.id + " " + n.class_type + "  [" + n.status
+        + ", coverage=" + (n.coverage || "?") + ", FLOPs="
+        + fmtFlops(n.total_flops) + "]");
+      if (n.ops && n.ops.length) {
+        n.ops.forEach((o) => {
+          lines.push("    " + o.op.replace(/^aten\./, "").replace(/\.default$/, "")
+            + "  x" + o.count);
+        });
+      } else {
+        lines.push("    (" + t("opgraph_leaf") + ")");
+      }
+      if (n.error) lines.push("    ! " + n.error);
+      lines.push("");
+    });
+    return lines.join("\n");
+  }
+
+  function exportAssembled(kind) {
+    const og = state.opgraph;
+    if (!og) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (kind === "json") {
+      downloadText("equivalent_graph_" + stamp + ".json", JSON.stringify(og, null, 1));
+    } else if (kind === "outline") {
+      downloadText("equivalent_graph_" + stamp + ".txt", buildOutline(og));
+    } else if (kind === "mermaid") {
+      downloadText("equivalent_graph_" + stamp + ".mmd", buildMermaid(og));
+    }
+    plog("high", "exported assembled graph as " + kind);
   }
 
   // ------------------------------------------------------------ run guard --
@@ -1264,7 +1390,7 @@
         });
         html.push("</table>");
       }
-      // M3: the probed ATen census for this node (from the last Analyze).
+      // M3/P1: the ATen census for this node (probed live or rule-derived).
       if (state.opgraph) {
         const ogNode = (state.opgraph.nodes || []).find(
           (row) => String(row.id) === String(n.id));
@@ -1272,7 +1398,10 @@
           html.push('<div class="cdlp-hint">'
             + esc(t("opgraph_canned", { n: ogNode.data_dependent_reads }))
             + " \u00b7 " + esc(t("opgraph_probe_ms", { ms: ogNode.probe_ms })) + "</div>");
-          html.push(opCensusTable(ogNode));
+          html.push(opCensusTable(ogNode, true));
+        } else if (ogNode && ogNode.status === "rule") {
+          html.push('<div class="cdlp-hint">' + esc(t("opgraph_rule_hint")) + "</div>");
+          html.push(opCensusTable(ogNode, false));
         } else if (ogNode && ogNode.status === "fallback") {
           html.push('<div class="cdlp-hint cdlp-stale">'
             + esc(t("opgraph_fallback", { error: ogNode.error || "" })) + "</div>");
@@ -1347,6 +1476,10 @@
     });
     const logsRefresh = el.querySelector("#cdlp-logs-refresh");
     if (logsRefresh) logsRefresh.addEventListener("click", () => fetchServerLog());
+    ["json", "outline", "mermaid"].forEach((kind) => {
+      const btn = el.querySelector("#cdlp-export-" + kind);
+      if (btn) btn.addEventListener("click", () => exportAssembled(kind));
+    });
   }
 
   // M3: the full-dashboard overlay. Same content as the sidebar (one render

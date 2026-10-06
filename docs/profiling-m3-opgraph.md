@@ -142,3 +142,29 @@ prompt（graphToPrompt 输出）→ engine._topological_order
 
 **与 P1 的关系**：规则库（离线采样 + 在线纯查表组装）上线后，危险模式仅剩
 "采样复核"用途；safe-mode 报告是 P1 前的占位提示。
+
+## 9. P1：等效计算图组装器（2026-10-07，回归原始目标）
+
+Analyze 的**默认路径**已从探针切换为 `opgraph.assemble_workflow`——零节点执行，把两个
+静态源按节点合并成等效计算图：
+
+| 来源 | 提供 | 实现 |
+|---|---|---|
+| **规则库** `comfy/profiling/oprules.py` + `data/op_rules.json` | 每节点的 ATen 算子 census（结构：哪些算子、调用多少次） | 离线采样器 `comfy/profiling/sampler.py`（CLI，`python -m comfy.profiling.sampler`，复用 `_probe_one` + P0 护栏 + UI/网络黑名单 + 30s 守护超时）批量生成；可随注册表演进重跑 |
+| **M2 公式账本** `engine.estimate_workflow` | shape 感知的 per-node FLOPs（纯公式，零执行） | 组装器直接读取其 nodes 的 flops_total/flops_status |
+
+报告 `mode:"assembled"`；per-node `status:"rule"`（census 来自规则库，**未真实执行**，
+FLOPs 为公式估算）或 `fallback`（无规则，error=`no rule for this node type`）；顶层
+`coverage` 四档：`covered`（有 census）/ `params_driven`（M2 公式确定性给出，含
+zero）/ `unknown`（M2 都无法建模）/ `missing`（无规则无 estimator）——诚实标注，
+不猜。首版基线：**153 条规则 / 181 复核**；LM 模板 5 rule + 6 params_driven + 1
+unknown + 0 missing（首次调用含一次性 import 成本 ~4.5s，稳态 <0.5s）；tabular 模板
+5 rule。前端：assembled 徽标 + 覆盖率行 + rule census 表（FLOPs 列显示 —，数值看
+M2 公式）+ 导出器 JSON / 文本大纲 / mermaid 语法文本（前端 bundle 无 mermaid
+渲染器——已核实 vendor chunk 全枚举——渲染成图留 P3，绝不引入 npm 依赖）。
+
+**采样器教训（memory 坑 28）**：全注册表真实执行必须防 UI/网络副作用节点——
+`CdlMessageBox` 曾以默认 block(wait) 参数被采样执行，用户桌面被原生对话框轰炸且
+采样卡死。防线 = 类名黑名单（messagebox/dialog/popup/download/upload）+ 每节点
+30s 守护线程超时（超时放弃、进程继续）。V3 节点兼容：`INPUT_TYPES()` 返回 **list**
+而非 tuple 且 combo 记作 `"COMBO"`+meta.options——采样器两者都吃。

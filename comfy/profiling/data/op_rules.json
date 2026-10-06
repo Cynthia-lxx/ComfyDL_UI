@@ -1,0 +1,4941 @@
+{
+ "version": 1,
+ "generated": "2026-10-06T23:39:51+00:00",
+ "generator": "comfy.profiling.sampler",
+ "rules": {
+  "ActivationELU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "alpha": 1.0,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.elu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationGELU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "approximate": "none",
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.gelu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 19679
+    }
+   ]
+  },
+  "ActivationHardSwish": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.hardswish.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationIdentity": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationLeakyReLU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "negative_slope": 0.01,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.leaky_relu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationMish": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.softplus.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.tanh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationReLU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.relu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationReLU6": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.hardtanh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationSELU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.elu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationSiLU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.silu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationSigmoid": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.sigmoid.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationSoftmax": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dim": -1,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten._softmax.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationSoftplus": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.softplus.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ActivationTanh": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.tanh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "AttentionCausalMask": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "seq_len": 8
+     },
+     "ops": [
+      {
+       "op": "aten.ones.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.tril.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 2,
+     "data_dependent_reads": 0,
+     "probe_ms": 3
+    }
+   ]
+  },
+  "AttentionCross": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_heads": 4,
+      "dropout_p": 0.0,
+      "seed": 0,
+      "tensor": "TensorVal(shape=[8, 8])",
+      "context": "TensorVal(shape=[8, 8])",
+      "q_weight": "TensorVal(shape=[8, 8])",
+      "k_weight": "TensorVal(shape=[8, 8])",
+      "v_weight": "TensorVal(shape=[8, 8])",
+      "out_weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 9,
+       "flops": 0
+      },
+      {
+       "op": "aten.promote_types.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.transpose.int",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten._unsafe_view.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.bmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten._softmax.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 41,
+     "data_dependent_reads": 0,
+     "probe_ms": 4
+    }
+   ]
+  },
+  "AttentionMultihead": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_heads": 4,
+      "dropout_p": 0.0,
+      "seed": 0,
+      "queries": "TensorVal(shape=[8, 8])",
+      "keys": "TensorVal(shape=[8, 8])",
+      "values": "TensorVal(shape=[8, 8])",
+      "q_weight": "TensorVal(shape=[8, 8])",
+      "k_weight": "TensorVal(shape=[8, 8])",
+      "v_weight": "TensorVal(shape=[8, 8])",
+      "out_weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 9,
+       "flops": 0
+      },
+      {
+       "op": "aten.promote_types.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.transpose.int",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten._unsafe_view.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.bmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten._softmax.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 41,
+     "data_dependent_reads": 0,
+     "probe_ms": 3
+    }
+   ]
+  },
+  "AttentionPositionalEncoding": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "length": 8,
+      "width": 32
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.slice.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.copy_.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.start_step",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.cos.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.exp.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sin.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 15,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "AttentionSelf": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_heads": 4,
+      "dropout_p": 0.0,
+      "seed": 0,
+      "tensor": "TensorVal(shape=[8, 8])",
+      "q_weight": "TensorVal(shape=[8, 8])",
+      "k_weight": "TensorVal(shape=[8, 8])",
+      "v_weight": "TensorVal(shape=[8, 8])",
+      "out_weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 9,
+       "flops": 0
+      },
+      {
+       "op": "aten.promote_types.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.transpose.int",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten._unsafe_view.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.bmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten._softmax.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 41,
+     "data_dependent_reads": 0,
+     "probe_ms": 3
+    }
+   ]
+  },
+  "BasicAdd": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "a": "TensorVal(shape=[1, 8])",
+      "b": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.add.Tensor",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicBroadcast": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "target_shape": "2,3",
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.expand.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicConcat": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dim": -1,
+      "a": "TensorVal(shape=[1, 8])",
+      "b": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.cat.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicEmbedding": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])",
+      "weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten._to_copy.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.embedding.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 2,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicFlatten": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "start_dim": 1,
+      "end_dim": -1,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicLinear": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])",
+      "weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.mm.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 2,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicMultiply": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "a": "TensorVal(shape=[1, 8])",
+      "b": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "BasicReshape": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "target_shape": "1,-1",
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CaseConverter": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "mode": "UPPERCASE"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlAccuracy": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "y_hat": "TensorVal(shape=[1, 8])",
+      "y": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten._to_copy.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.argmax.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.eq.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sum.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 1,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlActivation": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "func": "relu",
+      "dim": -1,
+      "negative_slope": 0.01,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.relu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlAddNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "norm_shape": 16,
+      "dropout": 0.0
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.fill_.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zero_.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlAdditiveAttention": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_hiddens": 8,
+      "dropout": 0.0
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 6,
+       "flops": 0
+      }
+     ],
+     "ops_total": 6,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlAreaChart": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "stacked": false,
+      "alpha": 0.5,
+      "color_palette": "tab10",
+      "xlabel": "",
+      "ylabel": "",
+      "figsize_w": 7.0,
+      "figsize_h": 4.0,
+      "Y": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 76
+    }
+   ]
+  },
+  "CdlBananasDetection": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "batch_size": 32
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 1100,
+       "flops": 0
+      },
+      {
+       "op": "aten.permute.default",
+       "count": 1100,
+       "flops": 0
+      },
+      {
+       "op": "image.read_file.default",
+       "count": 1100,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 2,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3306,
+     "data_dependent_reads": 0,
+     "probe_ms": 3059
+    }
+   ]
+  },
+  "CdlBarChart": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "labels": "",
+      "xlabel": "",
+      "ylabel": "",
+      "horizontal": false,
+      "color": "#4673a6",
+      "annotate": true,
+      "figsize_w": 7.0,
+      "figsize_h": 4.0,
+      "values": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 68
+    }
+   ]
+  },
+  "CdlBleu": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "pred_seq": "the quick brown",
+      "label_seq": "the quick brown fox",
+      "max_n": 4
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlBoxCenterToCorner": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "boxes": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 13,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlBoxCornerToCenter": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "boxes": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.select.int",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 11,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlBroadcast": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "target_shape": "2,3",
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.expand.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlConfusionMatrix": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "class_labels": "",
+      "cmap": "Blues",
+      "normalize": false,
+      "fmt": ".0f",
+      "figsize_w": 6.0,
+      "figsize_h": 5.0,
+      "matrix": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 140
+    }
+   ]
+  },
+  "CdlConv2d": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "stride": 1,
+      "padding": 0,
+      "input_tensor": "TensorVal(shape=[1, 8])",
+      "kernel": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.convolution.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.squeeze.dim",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 6,
+     "data_dependent_reads": 0,
+     "probe_ms": 4
+    }
+   ]
+  },
+  "CdlCorr2d": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "input_tensor": "TensorVal(shape=[1, 8])",
+      "kernel": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.select.int",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.alias.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.copy_.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sum.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 7,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlDeviceInfo": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {},
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlDotProductAttention": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "dropout": 0.0
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlFashionMNIST": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "batch_size": 64,
+      "resize": 28
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten._to_copy.default",
+       "count": 2,
+       "flops": 0
+      }
+     ],
+     "ops_total": 6,
+     "data_dependent_reads": 0,
+     "probe_ms": 64
+    }
+   ]
+  },
+  "CdlFormulaDataGen": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "formula": "2 + 3*x0 - 1.5*x1 + 0.5*sin(6*x0)",
+      "num_examples": 1000,
+      "x_min": -3.0,
+      "x_max": 3.0,
+      "sampling": "uniform",
+      "noise": "none",
+      "noise_std": 0.1,
+      "seed": 0
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.abs.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.all.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.eq.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.ne.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.rand.generator",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sin.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 19,
+     "data_dependent_reads": 1,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlGRU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_inputs": 32,
+      "num_hiddens": 64,
+      "num_layers": 1,
+      "dropout": 0.0
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.uniform_.default",
+       "count": 4,
+       "flops": 0
+      }
+     ],
+     "ops_total": 8,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlGetTokensAndSegments": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "tokens_a": "the,quick,brown,fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlGradClipping": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "theta": 1.0
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlHeatmapsTo3D": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "cmap": "Reds",
+      "opacity": 0.6,
+      "thickness": 0.15,
+      "matrices": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.alias.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 3
+    }
+   ]
+  },
+  "CdlHistogram": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "bins": 30,
+      "density": false,
+      "color": "#4673a6",
+      "alpha": 0.7,
+      "title": "",
+      "xlabel": "",
+      "ylabel": "",
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 76
+    }
+   ]
+  },
+  "CdlLeNet": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_classes": 10,
+      "lr": 0.1
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 15,
+       "flops": 0
+      }
+     ],
+     "ops_total": 15,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlLinReg": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "X": "TensorVal(shape=[1, 8])",
+      "w": "TensorVal(shape=[8, 8])",
+      "b": "TensorVal(shape=[8])"
+     },
+     "ops": [
+      {
+       "op": "aten.add.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 2,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlMaskedSoftmax": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "X": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten._softmax.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlMultiHeadAttention": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_hiddens": 8,
+      "num_heads": 4,
+      "dropout": 0.0,
+      "use_bias": false
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 8,
+       "flops": 0
+      }
+     ],
+     "ops_total": 8,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlMultiboxPrior": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "sizes": "0.75,0.5,0.25",
+      "ratios": "1,2,0.5"
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.sqrt.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten._unsafe_view.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.cat.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.neg.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.slice.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.permute.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.reciprocal.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.repeat.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 46,
+     "data_dependent_reads": 0,
+     "probe_ms": 25
+    }
+   ]
+  },
+  "CdlNoOp": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {},
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlOffsetBoxes": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "eps": 1e-06,
+      "anchors": "TensorVal(shape=[1, 8])",
+      "assigned_bb": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.select.int",
+       "count": 8,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten.slice.Tensor",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.cat.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.log.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 35,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlPlot": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "xlabel": "x",
+      "ylabel": "y",
+      "xscale": "linear",
+      "yscale": "linear",
+      "figsize_w": 6.0,
+      "figsize_h": 4.0
+     },
+     "ops": [
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 2,
+     "data_dependent_reads": 0,
+     "probe_ms": 55
+    }
+   ]
+  },
+  "CdlPositionWiseFFN": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "ffn_num_hiddens": 64,
+      "ffn_num_outputs": 16
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 6,
+       "flops": 0
+      }
+     ],
+     "ops_total": 6,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlPositionalEncoding": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_hiddens": 16,
+      "dropout": 0.0,
+      "max_len": 1000
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.copy_.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.slice.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.start_step",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.cos.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.pow.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sin.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 17,
+     "data_dependent_reads": 0,
+     "probe_ms": 3
+    }
+   ]
+  },
+  "CdlRNN": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_inputs": 32,
+      "num_hiddens": 64
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.uniform_.default",
+       "count": 4,
+       "flops": 0
+      }
+     ],
+     "ops_total": 8,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlRNNScratch": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_inputs": 32,
+      "num_hiddens": 64,
+      "sigma": 0.01
+     },
+     "ops": [
+      {
+       "op": "aten.mul.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.randn.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlRandomTensor": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "shape": "4,4",
+      "dist": "normal",
+      "mean": 0.0,
+      "std": 1.0,
+      "low": 0.0,
+      "high": 1.0,
+      "seed": -1
+     },
+     "ops": [
+      {
+       "op": "aten.add.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.randn.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlReadString": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "text": "a\tb\tc\ty\n0\t0\t0\t0.0\n1\t2\t3\t0.5\n2\t4\t6\t1.0\n",
+      "target": ""
+     },
+     "ops": [
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlRegressionTrain": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "test_size": 0.2,
+      "standardize": "yes",
+      "hidden": "",
+      "activation": "relu",
+      "loss": "mse",
+      "steps": 500,
+      "batch_size": 0,
+      "lr": 0.1,
+      "seed": 0,
+      "early_stop_patience": 30,
+      "early_stop_min_delta": 0.0001,
+      "save_path": "",
+      "X": "TensorVal(shape=[1, 8])",
+      "y": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 170,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 157,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 126,
+       "flops": 0
+      },
+      {
+       "op": "aten.add_.Tensor",
+       "count": 124,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 65,
+       "flops": 0
+      },
+      {
+       "op": "aten.addmm.default",
+       "count": 64,
+       "flops": 0
+      },
+      {
+       "op": "aten.sqrt.default",
+       "count": 63,
+       "flops": 0
+      },
+      {
+       "op": "aten.addcdiv_.default",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "aten.addcmul_.default",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "aten.lerp_.Scalar",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "aten.mse_loss.default",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul_.Tensor",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "profiler._record_function_enter_new.default",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "profiler._record_function_exit._RecordFunction",
+       "count": 62,
+       "flops": 0
+      },
+      {
+       "op": "aten.ones_like.default",
+       "count": 32,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 31,
+       "flops": 0
+      },
+      {
+       "op": "aten.mse_loss_backward.default",
+       "count": 31,
+       "flops": 0
+      },
+      {
+       "op": "aten.sum.dim_IntList",
+       "count": 31,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 8,
+       "flops": 0
+      },
+      {
+       "op": "aten.index.Tensor",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.copy_.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros_like.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.empty.memory_format",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.mean.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.uniform_.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.abs.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lt.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mean.dim",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.pow.Tensor_Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.std.correction",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.where.self",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1429,
+     "data_dependent_reads": 124,
+     "probe_ms": 224
+    }
+   ]
+  },
+  "CdlResNeXtBlock": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_channels": 64,
+      "groups": 32,
+      "bot_mul": 0.5,
+      "use_1x1conv": false,
+      "strides": 1
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 21,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 3,
+       "flops": 0
+      }
+     ],
+     "ops_total": 24,
+     "data_dependent_reads": 0,
+     "probe_ms": 2
+    }
+   ]
+  },
+  "CdlResNet18": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_classes": 10,
+      "in_channels": 1
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 127,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 17,
+       "flops": 0
+      },
+      {
+       "op": "aten.uniform_.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.zero_.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.fill_.Scalar",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.ones.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 155,
+     "data_dependent_reads": 0,
+     "probe_ms": 7
+    }
+   ]
+  },
+  "CdlReshape": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "target_shape": "3,2",
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlResidual": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_channels": 64,
+      "use_1x1conv": false,
+      "strides": 1
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 14,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 2,
+       "flops": 0
+      }
+     ],
+     "ops_total": 16,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlScatter": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "alpha": 0.6,
+      "cmap": "viridis",
+      "xlabel": "",
+      "ylabel": "",
+      "figsize_w": 6.0,
+      "figsize_h": 5.0,
+      "X": "TensorVal(shape=[1, 8])",
+      "Y": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 65
+    }
+   ]
+  },
+  "CdlSeq2SeqEncoder": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "vocab_size": 32,
+      "embed_size": 16,
+      "num_hiddens": 16,
+      "num_layers": 2,
+      "dropout": 0.0
+     },
+     "ops": [
+      {
+       "op": "aten.uniform_.default",
+       "count": 12,
+       "flops": 0
+      },
+      {
+       "op": "aten.empty.memory_format",
+       "count": 9,
+       "flops": 0
+      },
+      {
+       "op": "aten.normal_.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 22,
+     "data_dependent_reads": 0,
+     "probe_ms": 2
+    }
+   ]
+  },
+  "CdlSgdStep": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "lr": 0.03,
+      "batch_size": 32
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlShowHeatmaps": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "xlabel": "",
+      "ylabel": "",
+      "figsize_w": 2.5,
+      "figsize_h": 2.5,
+      "cmap": "Reds",
+      "matrices": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.alias.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 54
+    }
+   ]
+  },
+  "CdlShowHeatmapsOutput": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "xlabel": "",
+      "ylabel": "",
+      "figsize_w": 2.5,
+      "figsize_h": 2.5,
+      "cmap": "Reds",
+      "matrices": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.alias.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 38
+    }
+   ]
+  },
+  "CdlShowTrace2D": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "results": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 43
+    }
+   ]
+  },
+  "CdlSquaredLoss": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "y_hat": "TensorVal(shape=[1, 8])",
+      "y": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.pow.Tensor_Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlStrToTensor": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "text": "[[1, 2, 3], [4, 5, 6]]",
+      "error_strategy": "empty_tensor"
+     },
+     "ops": [
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlSyntheticData": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_features": 2,
+      "num_examples": 100,
+      "noise_std": 0.01,
+      "seed": 0
+     },
+     "ops": [
+      {
+       "op": "aten.normal.float_float",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.add_.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 8,
+     "data_dependent_reads": 0,
+     "probe_ms": 2
+    }
+   ]
+  },
+  "CdlTensorToStr": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "max_elems": 100,
+      "precision": 6,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlTensorToValue": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTensorsToDataset": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "X": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTimer": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "operation": "sum",
+      "num_iters": 10,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.sum.default",
+       "count": 13,
+       "flops": 0
+      }
+     ],
+     "ops_total": 13,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTokenize": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "text": "the quick brown fox\njumps over the lazy dog",
+      "token_mode": "word"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTransformerEncoder": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "vocab_size": 32,
+      "num_hiddens": 8,
+      "ffn_num_hiddens": 64,
+      "num_heads": 4,
+      "num_blks": 2,
+      "dropout": 0.0,
+      "use_bias": false
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.fill_.Scalar",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.zero_.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.copy_.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.slice.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.arange.start_step",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.cos.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.normal_.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.pow.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sin.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 63,
+     "data_dependent_reads": 0,
+     "probe_ms": 8
+    }
+   ]
+  },
+  "CdlTransformerEncoderBlock": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_hiddens": 8,
+      "ffn_num_hiddens": 64,
+      "num_heads": 4,
+      "dropout": 0.0,
+      "use_bias": false
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 18,
+       "flops": 0
+      },
+      {
+       "op": "aten.fill_.Scalar",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.zero_.default",
+       "count": 2,
+       "flops": 0
+      }
+     ],
+     "ops_total": 22,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "CdlTranspose": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dim0": 0,
+      "dim1": 1,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.transpose.int",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTruncatePad": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_steps": 64,
+      "padding_token": 0
+     },
+     "ops": [
+      {
+       "op": "aten.full.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTryAllGpus": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {},
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlTryGpu": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "gpu_index": 0
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlUpdateD": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {},
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlUpdateG": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {},
+     "ops": [
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlVocClasses": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "index": -1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlVocColormap2Label": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {},
+     "ops": [
+      {
+       "op": "aten.copy_.default",
+       "count": 21,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 21,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 21,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 64,
+     "data_dependent_reads": 0,
+     "probe_ms": 40
+    }
+   ]
+  },
+  "CdlVocabBuild": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "tokens_text": "the quick\nbrown fox\nthe lazy dog",
+      "min_freq": 1,
+      "reserved_tokens": "<pad>,<bos>,<eos>"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "CdlWhat": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "OMG": false
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ConvolutionConv": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dims": 2,
+      "groups": 1,
+      "stride": 1,
+      "padding": 1,
+      "padding_mode": "zeros",
+      "dilation": 1,
+      "tensor": "TensorVal(shape=[1, 1, 8, 8])",
+      "weight": "TensorVal(shape=[1, 1, 8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.convolution.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 173
+    }
+   ]
+  },
+  "ConvolutionConvTranspose": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dims": 2,
+      "groups": 1,
+      "stride": 2,
+      "padding": 0,
+      "output_padding": 0,
+      "dilation": 1,
+      "tensor": "TensorVal(shape=[1, 1, 8, 8])",
+      "weight": "TensorVal(shape=[1, 1, 8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.convolution.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 128
+    }
+   ]
+  },
+  "ConvolutionPixelUnshuffle": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "r": 2,
+      "tensor": "TensorVal(shape=[1, 1, 8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.pixel_unshuffle.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "ConvolutionUpsample": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dims": 2,
+      "mode": "nearest",
+      "scale_factor": 2.0,
+      "align_corners": false,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.squeeze.dim",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.upsample_nearest2d.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 29
+    }
+   ]
+  },
+  "EmptyImage": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1,
+      "color": 0
+     },
+     "ops": [
+      {
+       "op": "aten.full.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.cat.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 4
+    }
+   ]
+  },
+  "EmptyLatentImage": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+     },
+     "ops": [
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "JsonExtractString": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "json_string": "the quick brown fox",
+      "key": "the quick brown fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "LanguageModelEmbedding": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "vocab_size": 16,
+      "d_model": 32,
+      "include_position": true
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "LanguageModelLoad": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "path": "comfydl/language_models_00001_.safetensors"
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 74,
+       "flops": 0
+      },
+      {
+       "op": "aten.uniform_.default",
+       "count": 39,
+       "flops": 0
+      },
+      {
+       "op": "aten.copy_.default",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.set_.source_Storage",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.dtype",
+       "count": 37,
+       "flops": 0
+      },
+      {
+       "op": "aten.zero_.default",
+       "count": 18,
+       "flops": 0
+      },
+      {
+       "op": "aten.fill_.Scalar",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten.normal_.default",
+       "count": 2,
+       "flops": 0
+      }
+     ],
+     "ops_total": 397,
+     "data_dependent_reads": 37,
+     "probe_ms": 23
+    }
+   ]
+  },
+  "LatentOperationSharpen": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "sharpen_radius": 9,
+      "sigma": 1.0,
+      "alpha": 0.1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "LatentOperationTonemapReinhard": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "multiplier": 1.0
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "LoadImage": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "image": "example.png"
+     },
+     "ops": [
+      {
+       "op": "aten._to_copy.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 13
+    }
+   ]
+  },
+  "LoadImageMask": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "image": "example.png",
+      "channel": "alpha"
+     },
+     "ops": [
+      {
+       "op": "aten._to_copy.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.zeros.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 12
+    }
+   ]
+  },
+  "NormalizationBatchNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "eps": 1e-05,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.empty.memory_format",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mean.dim",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.native_batch_norm.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.var.correction",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "NormalizationGroupNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_groups": 1,
+      "eps": 1e-05,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.native_group_norm.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "NormalizationInstanceNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "eps": 1e-05,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.mean.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.var.correction",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "NormalizationLayerNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "normalized_shape": "last",
+      "eps": 1e-05,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.native_layer_norm.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "NormalizationRMSNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "normalized_shape": "last",
+      "eps": 1e-06,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.add_.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mean.dim",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.pow.Tensor_Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.rsqrt.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "NormalizationSpectralNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "n_power_iterations": 10,
+      "dim": 0,
+      "eps": 1e-12,
+      "weight": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.linalg_vector_norm.default",
+       "count": 44,
+       "flops": 0
+      },
+      {
+       "op": "aten.ones_like.default",
+       "count": 44,
+       "flops": 0
+      },
+      {
+       "op": "aten.where.self",
+       "count": 44,
+       "flops": 0
+      },
+      {
+       "op": "aten.clamp_min.default",
+       "count": 23,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 23,
+       "flops": 0
+      },
+      {
+       "op": "aten.gt.Scalar",
+       "count": 22,
+       "flops": 0
+      },
+      {
+       "op": "aten.mv.default",
+       "count": 21,
+       "flops": 0
+      },
+      {
+       "op": "aten.transpose.int",
+       "count": 10,
+       "flops": 0
+      },
+      {
+       "op": "aten.sum.dim_IntList",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.abs.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.dot.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.permute.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 237,
+     "data_dependent_reads": 0,
+     "probe_ms": 12
+    }
+   ]
+  },
+  "NormalizationWeightNorm": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dim": 0,
+      "eps": 1e-12,
+      "weight": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.clamp_min.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.linalg_vector_norm.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "PoolingAdaptive": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dims": 2,
+      "mode": "avg",
+      "output_size": 1,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.mean.dim",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.squeeze.dim",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.unsqueeze.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 4
+    }
+   ]
+  },
+  "PoolingSliding": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "dims": 2,
+      "mode": "max",
+      "kernel_size": 2,
+      "stride": 0,
+      "padding": 0,
+      "dilation": 1,
+      "ceil_mode": false,
+      "count_include_pad": true,
+      "tensor": "TensorVal(shape=[1, 1, 8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.max_pool2d_with_indices.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 6
+    }
+   ]
+  },
+  "PrimitiveBoolean": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "value": true
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "PrimitiveBoundingBox": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "x": 0,
+      "y": 0,
+      "width": 512,
+      "height": 512
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "PrimitiveFloat": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "value": 1.0
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "PrimitiveInt": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "value": 1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "PrimitiveString": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "value": "the quick brown fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "PrimitiveStringMultiline": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "value": "the quick brown fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "RecurrentGRU": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "hidden_size": 16,
+      "x": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.zeros.default",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.addmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.sigmoid.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.split.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.rsub.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.tanh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 28,
+     "data_dependent_reads": 0,
+     "probe_ms": 2
+    }
+   ]
+  },
+  "RecurrentLSTM": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "hidden_size": 16,
+      "x": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.zeros.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.mul.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.sigmoid.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.addmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.tanh.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.split.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 28,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "RecurrentRNN": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "hidden_size": 16,
+      "x": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.zeros.default",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten.addmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.select.int",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.stack.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.tanh.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 17,
+     "data_dependent_reads": 0,
+     "probe_ms": 1
+    }
+   ]
+  },
+  "RegexExtract": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "regex_pattern": "the quick brown fox",
+      "mode": "First Match",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "RegexMatch": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "regex_pattern": "the quick brown fox",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "RegexReplace": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "regex_pattern": "the quick brown fox",
+      "replace": "the quick brown fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "RegularizationDropout": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "p": 0.5,
+      "seed": 0,
+      "tensor": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.ge.Scalar",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.new_zeros.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.rand.generator",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.where.self",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "ResolutionSelector": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "aspect_ratio": "1:1 (Square)",
+      "megapixels": 1.0,
+      "multiple": 8
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "SaveText": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "text": "the quick brown fox",
+      "filename_prefix": "ComfyUI",
+      "format": "txt"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 124
+    }
+   ]
+  },
+  "SolidMask": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "value": 1.0,
+      "width": 512,
+      "height": 512
+     },
+     "ops": [
+      {
+       "op": "aten.full.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 1,
+     "data_dependent_reads": 0,
+     "probe_ms": 4
+    }
+   ]
+  },
+  "StringCompare": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string_a": "the quick brown fox",
+      "string_b": "the quick brown fox",
+      "mode": "Starts With",
+      "case_sensitive": true
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "StringConcatenate": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string_a": "the quick brown fox",
+      "string_b": "the quick brown fox",
+      "delimiter": ""
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "StringContains": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "substring": "the quick brown fox",
+      "case_sensitive": true
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "StringLength": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "StringReplace": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "find": "the quick brown fox",
+      "replace": "the quick brown fox"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "StringSubstring": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "start": 1,
+      "end": 1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "StringTrim": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "string": "the quick brown fox",
+      "mode": "Both"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TextSlidingWindow": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "window": 4,
+      "ids": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten._to_copy.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.equal.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.round.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 6,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TextVocabBuild": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "corpus": "the quick brown fox jumps over the lazy dog",
+      "level": "char",
+      "min_freq": 1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingLRScheduler": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "scheduler": "CosineAnnealingLR",
+      "step_size": 30,
+      "gamma": 0.1,
+      "t_max": 0,
+      "eta_min": 0.0,
+      "pct_start": 0.3,
+      "patience": 10,
+      "factor": 0.1
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingLoss": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "loss": "mse",
+      "prediction": "TensorVal(shape=[1, 8])",
+      "target": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mse_loss.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingMetrics": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "metric": "mae",
+      "prediction": "TensorVal(shape=[1, 8])",
+      "target": "TensorVal(shape=[1, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.abs.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.mean.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.sub.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 5,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingMode": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "mode": "train"
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingOptimizer": {
+   "source": "offline_probe",
+   "flops_from_shape": "unknown",
+   "probes": [
+    {
+     "input_signature": {
+      "optimizer": "AdamW",
+      "lr": 0.01,
+      "momentum": 0.9,
+      "beta1": 0.9,
+      "beta2": 0.999,
+      "eps": 1e-08,
+      "weight_decay": 0.01,
+      "amsgrad": false,
+      "grad_clip_norm": 0.0,
+      "grad_clip_value": 0.0
+     },
+     "ops": [],
+     "ops_total": 0,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingParameters": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "name": "weight",
+      "shape": "2,3",
+      "init": "normal",
+      "seed": 0
+     },
+     "ops": [
+      {
+       "op": "aten.clone.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.empty.memory_format",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.randn.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 4,
+     "data_dependent_reads": 0,
+     "probe_ms": 2
+    }
+   ]
+  },
+  "TrainingRunStats": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "running_mean": "0.0",
+      "running_var": "1.0"
+     },
+     "ops": [
+      {
+       "op": "aten.lift_fresh.default",
+       "count": 2,
+       "flops": 0
+      }
+     ],
+     "ops_total": 2,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TrainingTextToParameters": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "text": "CDLPARAMS1:QAAAAAAAAAB7IndlaWdodCI6eyJkdHlwZSI6IkYzMiIsInNoYXBlIjpbMiwzXSwiZGF0YV9vZmZzZXRzIjpbMCwyNF19fSAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+     },
+     "ops": [
+      {
+       "op": "aten.clone.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.detach.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.view.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 3,
+     "data_dependent_reads": 0,
+     "probe_ms": 0
+    }
+   ]
+  },
+  "TransformerDecoderBlock": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_heads": 4,
+      "dropout_p": 0.0,
+      "ffn_activation": "relu",
+      "seed": 0,
+      "tensor": "TensorVal(shape=[8, 8])",
+      "context": "TensorVal(shape=[8, 8])",
+      "q_weight": "TensorVal(shape=[8, 8])",
+      "k_weight": "TensorVal(shape=[8, 8])",
+      "v_weight": "TensorVal(shape=[8, 8])",
+      "out_weight": "TensorVal(shape=[8, 8])",
+      "cross_q_weight": "TensorVal(shape=[8, 8])",
+      "cross_k_weight": "TensorVal(shape=[8, 8])",
+      "cross_v_weight": "TensorVal(shape=[8, 8])",
+      "cross_out_weight": "TensorVal(shape=[8, 8])",
+      "ffn1_weight": "TensorVal(shape=[8, 8])",
+      "ffn2_weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 18,
+       "flops": 0
+      },
+      {
+       "op": "aten.promote_types.default",
+       "count": 12,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 10,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 10,
+       "flops": 0
+      },
+      {
+       "op": "aten.transpose.int",
+       "count": 10,
+       "flops": 0
+      },
+      {
+       "op": "aten._unsafe_view.default",
+       "count": 8,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 8,
+       "flops": 0
+      },
+      {
+       "op": "aten.bmm.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten.native_layer_norm.default",
+       "count": 3,
+       "flops": 0
+      },
+      {
+       "op": "aten._softmax.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.relu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 93,
+     "data_dependent_reads": 0,
+     "probe_ms": 9
+    }
+   ]
+  },
+  "TransformerEncoderBlock": {
+   "source": "offline_probe",
+   "flops_from_shape": "estimated",
+   "probes": [
+    {
+     "input_signature": {
+      "num_heads": 4,
+      "dropout_p": 0.0,
+      "ffn_activation": "relu",
+      "seed": 0,
+      "tensor": "TensorVal(shape=[8, 8])",
+      "q_weight": "TensorVal(shape=[8, 8])",
+      "k_weight": "TensorVal(shape=[8, 8])",
+      "v_weight": "TensorVal(shape=[8, 8])",
+      "out_weight": "TensorVal(shape=[8, 8])",
+      "ffn1_weight": "TensorVal(shape=[8, 8])",
+      "ffn2_weight": "TensorVal(shape=[8, 8])"
+     },
+     "ops": [
+      {
+       "op": "aten.view.default",
+       "count": 9,
+       "flops": 0
+      },
+      {
+       "op": "aten.mm.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.promote_types.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.t.default",
+       "count": 6,
+       "flops": 0
+      },
+      {
+       "op": "aten.transpose.int",
+       "count": 5,
+       "flops": 0
+      },
+      {
+       "op": "aten._unsafe_view.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.expand.default",
+       "count": 4,
+       "flops": 0
+      },
+      {
+       "op": "aten.add.Tensor",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.bmm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten.native_layer_norm.default",
+       "count": 2,
+       "flops": 0
+      },
+      {
+       "op": "aten._softmax.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.clone.default",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.div.Tensor",
+       "count": 1,
+       "flops": 0
+      },
+      {
+       "op": "aten.relu.default",
+       "count": 1,
+       "flops": 0
+      }
+     ],
+     "ops_total": 50,
+     "data_dependent_reads": 0,
+     "probe_ms": 6
+    }
+   ]
+  }
+ }
+}

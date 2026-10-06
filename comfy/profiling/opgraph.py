@@ -410,6 +410,113 @@ def probe_workflow(prompt, formula_report=None, deadline: Optional[float] = None
     return report
 
 
+def assemble_workflow(prompt, formula_report=None):
+    """The P1 equivalent computation graph WITHOUT executing anything.
+
+    Merges two static sources per node:
+
+    * the **rule census** (``comfy.profiling.oprules``): which ATen operators
+      the node's execute runs, and how often - frozen offline by the sampler;
+    * the **M2 formula ledger** (``engine.estimate_workflow``): shape-aware
+      FLOPs, computed without executing nodes either (pure formulas).
+
+    The census is the *structure* of the equivalent graph; the ledger provides
+    the *numbers* for the actual input shapes.  Rule-covered nodes report
+    ``status: "rule"`` (the census is a rule-library inference, not a run);
+    nodes without a rule degrade to the ledger values (``fallback``) - honest
+    coverage buckets are aggregated in the report's ``coverage`` field.
+
+    Zero node execution: safe for a 1MB corpus by construction (no guardrails
+    needed on this path - there is nothing to guard).
+    """
+    from comfy.profiling import oprules
+    from comfy.profiling.engine import estimate_workflow
+
+    report: Dict[str, Any] = {
+        "version": OPGRAPH_REPORT_VERSION,
+        "mode": "assembled",
+        "totals": {
+            "nodes": 0,
+            "probed": 0,      # rule-covered nodes (field kept for the frontend)
+            "fallback": 0,
+            "flops_formula": 0,
+            "flops_probed": 0,
+            "ratio": None,
+        },
+        "nodes": [],
+        "error": None,
+        "disclaimer_key": "opgraphDisclaimer",
+        "coverage": {},
+    }
+    if not isinstance(prompt, dict) or not prompt:
+        report["error"] = "no_graph"
+        return report
+
+    if formula_report is None:
+        try:
+            formula_report = estimate_workflow(prompt)
+        except Exception as exc:
+            proflog("low", "assemble: M2 ledger failed: %s", exc)
+            formula_report = None
+
+    m2_nodes: Dict[Any, dict] = {}
+    if isinstance(formula_report, dict):
+        for row in formula_report.get("nodes") or []:
+            m2_nodes[row.get("id")] = row
+        totals_m2 = formula_report.get("flops") or {}
+        report["totals"]["flops_formula"] = totals_m2.get("total") or 0
+
+    buckets: Dict[str, str] = {}
+    rule_nodes = 0
+    fallback_nodes = 0
+    flops_probed = 0
+    for node_id in sorted(prompt, key=lambda k: str(k)):
+        node = prompt.get(node_id) or {}
+        class_type = str(node.get("class_type") or "")
+        m2 = m2_nodes.get(node_id) or {}
+        m2_flops = m2.get("flops_total")
+        m2_status = m2.get("flops_status")
+        m2_estimated = m2.get("status") == "estimated"
+        entry: Dict[str, Any] = {
+            "id": node_id,
+            "class_type": class_type,
+            "status": "fallback",
+            "ops": [],
+            "ops_total": 0,
+            "total_flops": m2_flops,
+            "formula_flops": m2_flops,
+            "data_dependent_reads": 0,
+            "error": None,
+            "probe_ms": 0,
+        }
+        census = oprules.census_for(class_type)
+        if census is not None:
+            entry["status"] = "rule"
+            entry["ops"] = census
+            entry["ops_total"] = sum(int(op.get("count") or 0) for op in census)
+            entry["data_dependent_reads"] = oprules.data_dependent_reads_for(class_type)
+            rule_nodes += 1
+            if m2_flops:
+                flops_probed += int(m2_flops)
+        else:
+            entry["error"] = "no rule for this node type (census unavailable)"
+            fallback_nodes += 1
+        entry["coverage"] = oprules.coverage_for(
+            class_type, m2_flops_status=m2_status, m2_estimated=m2_estimated)
+        buckets[str(node_id)] = entry["coverage"]
+        report["nodes"].append(entry)
+
+    totals = report["totals"]
+    totals["nodes"] = len(prompt)
+    totals["probed"] = rule_nodes
+    totals["fallback"] = fallback_nodes
+    totals["flops_probed"] = flops_probed
+    if totals["flops_formula"] and flops_probed:
+        totals["ratio"] = round(flops_probed / totals["flops_formula"], 4)
+    report["coverage"] = oprules.coverage_summary(buckets)
+    return report
+
+
 def analyse_workflow(prompt, formula_report=None, deadline: Optional[float] = None):
     """Cached entry point for the ``/opgraph`` endpoint.
 

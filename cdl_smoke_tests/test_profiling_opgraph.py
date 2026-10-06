@@ -201,20 +201,23 @@ def main():
         client = test_utils.TestClient(test_utils.TestServer(app))
         await client.start_server()
         try:
-            # P0: without the dangerous header the route must NOT execute
-            # anything - a complete zero-execution safe-mode report comes back.
+            # P1: without the dangerous header the route serves the assembled
+            # equivalent graph - zero execution, rule census + M2 ledger.
             resp = await client.post("/comfydl/profiling/opgraph",
                                      json={"prompt": prompt})
             check("route: POST /opgraph 200", resp.status == 200)
             data = await resp.json()
             check("route: report has totals + nodes",
                   "totals" in data and "nodes" in data and data.get("version") == 1)
-            check("route: safe mode without header (zero execution)",
-                  data.get("mode") == "safe"
-                  and data["totals"]["probed"] == 0
-                  and all("probe disabled" in (n["error"] or "")
-                          for n in data["nodes"]),
-                  str(data.get("error")))
+            check("route: assembled mode without header",
+                  data.get("mode") == "assembled"
+                  and isinstance(data.get("coverage"), dict)
+                  and any(n["status"] == "rule" for n in data["nodes"]),
+                  str(data.get("mode")))
+            check("route: assembled nodes carry coverage buckets",
+                  all(n.get("coverage") in
+                      ("covered", "params_driven", "unknown", "missing")
+                      for n in data["nodes"]))
 
             resp2 = await client.post("/comfydl/profiling/opgraph",
                                       json={"prompt": prompt},
@@ -248,6 +251,9 @@ def main():
 
     asyncio.run(_route_checks())
 
+    _oprules_checks()
+    _assembled_checks()
+
     passed = sum(1 for _, ok, _ in _RESULTS if ok)
     for name, ok, detail in _RESULTS:
         flag = "PASS" if ok else "FAIL"
@@ -258,6 +264,125 @@ def main():
     print("\n=== opgraph test: %d PASS / %d FAIL (of %d) ==="
           % (passed, len(_RESULTS) - passed, len(_RESULTS)))
     return 1 if (len(_RESULTS) - passed) else 0
+
+
+def _assembled_checks() -> None:
+    """P1: the zero-execution assembler on the shipped example templates."""
+    import json as _json
+    import time
+
+    from comfy.profiling import opgraph
+
+    # warmup: the first call pays one-time import costs (estimators registry,
+    # rules JSON) - the "fast" assertion measures the steady state.
+    opgraph.assemble_workflow({})
+
+    wf_dir = REPO_ROOT / "comfydl" / "example_workflows"
+    for name, min_rules in (("language_model_train_and_chat", 5),
+                            ("tabular_regression_production", 5)):
+        wf = _json.loads((wf_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
+        prompt = {}
+        for n in wf["nodes"]:
+            if n["type"] in ("Note", "MarkdownNote", "PreviewImage"):
+                continue
+            inputs = {}
+            for i in n.get("inputs", []):
+                if i.get("link") is not None:
+                    link = next(l for l in wf["links"] if l[0] == i["link"])
+                    inputs[i["name"]] = [str(link[1]), link[2]]
+            prompt[str(n["id"])] = {"class_type": n["type"], "inputs": inputs}
+        t0 = time.perf_counter()
+        report = opgraph.assemble_workflow(prompt)
+        elapsed = time.perf_counter() - t0
+        check(f"assemble {name}: mode + coverage present",
+              report.get("mode") == "assembled"
+              and set(report.get("coverage") or {})
+              == {"covered", "params_driven", "unknown", "missing"})
+        check(f"assemble {name}: rule coverage >= {min_rules}",
+              report["totals"]["probed"] >= min_rules,
+              _json.dumps(report["totals"]))
+        check(f"assemble {name}: fast (<0.5s steady state, zero execution)",
+              elapsed < 0.5, f"{elapsed * 1000:.0f}ms")
+        trainer = [n for n in report["nodes"] if n["class_type"] == "CdlRegressionTrain"]
+        if trainer:
+            check(f"assemble {name}: trainer census from rule library",
+                  trainer[0]["status"] == "rule" and trainer[0]["ops_total"] == 1429,
+                  str(trainer[0]["ops_total"]))
+
+
+def _oprules_checks() -> None:
+    """P1: the static rules library (load / query / coverage buckets)."""
+    import json as _json
+    import tempfile
+
+    from comfy.profiling import oprules
+
+    doc = {
+        "version": oprules.OPRULES_VERSION,
+        "generated": "2026-10-07",
+        "rules": {
+            "CdlFakeNode": {
+                "source": "offline_probe",
+                "flops_from_shape": "estimated",
+                "probes": [{
+                    "input_signature": {"x": "TensorVal(shape=(1, 8))"},
+                    "ops": [{"op": "aten.mm.default", "count": 1, "flops": 128}],
+                    "ops_total": 1, "data_dependent_reads": 0, "probe_ms": 3,
+                }],
+            },
+        },
+    }
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+        _json.dump(doc, fh)
+        path = Path(fh.name)
+    try:
+        oprules.set_rules(None)  # force a fresh load from the temp file
+        loaded = oprules.load_rules(path)
+        check("oprules: version accepted", loaded["version"] == oprules.OPRULES_VERSION)
+
+        entry = oprules.rule_for("CdlFakeNode")
+        check("oprules: rule lookup", entry is not None
+              and entry["source"] == "offline_probe")
+        check("oprules: census lookup", oprules.census_for("CdlFakeNode")[0]["op"]
+              == "aten.mm.default")
+        check("oprules: missing rule is None (honest)", oprules.rule_for("NoSuchNode") is None
+              and oprules.census_for("NoSuchNode") is None)
+        check("oprules: data_dependent_reads default 0",
+              oprules.data_dependent_reads_for("CdlFakeNode") == 0
+              and oprules.data_dependent_reads_for("NoSuchNode") == 0)
+
+        check("oprules: coverage covered", oprules.coverage_for("CdlFakeNode") == "covered")
+        check("oprules: coverage params_driven",
+              oprules.coverage_for("NoSuchNode", m2_flops_status="estimated",
+                                   m2_estimated=True) == "params_driven")
+        check("oprules: coverage unknown",
+              oprules.coverage_for("NoSuchNode", m2_flops_status="unknown",
+                                   m2_estimated=True) == "unknown")
+        check("oprules: coverage missing",
+              oprules.coverage_for("NoSuchNode") == "missing")
+        check("oprules: summary aggregation",
+              oprules.coverage_summary({"a": "covered", "b": "missing",
+                                        "c": "covered"})
+              == {"covered": 2, "params_driven": 0, "unknown": 0, "missing": 1})
+
+        # Corrupt file must degrade to an empty ruleset, never raise.
+        bad = Path(path.parent / "bad.json")
+        bad.write_text("{not json", encoding="utf-8")
+        loaded_bad = oprules.load_rules(bad)
+        check("oprules: corrupt file -> empty ruleset", loaded_bad["rules"] == {})
+        stats = oprules.stats()
+        check("oprules: stats after empty load", stats["entries"] == 0)
+
+        # A wrong document version is rejected the same way.
+        bad2 = Path(path.parent / "badver.json")
+        bad2.write_text(_json.dumps({"version": 999, "rules": {}}), encoding="utf-8")
+        check("oprules: wrong version rejected",
+              oprules.load_rules(bad2)["rules"] == {})
+    finally:
+        path.unlink(missing_ok=True)
+        (path.parent / "bad.json").unlink(missing_ok=True)
+        (path.parent / "badver.json").unlink(missing_ok=True)
+        oprules.set_rules(None)  # restore the lazy-ship default for later checks
 
 
 if __name__ == "__main__":

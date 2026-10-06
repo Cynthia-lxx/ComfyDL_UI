@@ -329,6 +329,17 @@ def _js_checks() -> None:
     # entries vanish from the settings panel in this frontend build).
     check("T4r guarded hint i18n", src.count("opgraph_guarded:") >= 2)
     check("T4s no explicit settings category", "category:" not in src)
+    # P1 assembled equivalent graph: mode badge, coverage line, exports.
+    for needle, name in [
+        ('og.mode === "assembled"', "T4t assembled badge branch"),
+        ("coverage_line", "T4u coverage line i18n"),
+        ("buildMermaid", "T4v mermaid generator present"),
+        ("cdlp-export-mermaid", "T4w export buttons wired"),
+        ("exportAssembled", "T4x export handler present"),
+    ]:
+        check(name, needle in src)
+    for key in ("opgraph_assembled", "opgraph_rule_hint", "coverage_line"):
+        check(f"T4y zh+en have {key}", src.count(key + ":") >= 2, str(src.count(key + ":")))
 
 
 def main() -> int:

@@ -1,0 +1,183 @@
+AttentionPaddingMask: ValueError: lengths must be a 1-D (batch,) tensor; got shape (1, 1).
+BatchImagesNode: required inputs not synthesizable from INPUT_TYPES
+BatchLatentsNode: required inputs not synthesizable from INPUT_TYPES
+BatchMasksNode: required inputs not synthesizable from INPUT_TYPES
+CLIPLoader: required inputs not synthesizable from INPUT_TYPES
+CLIPMergeAdd: required inputs not synthesizable from INPUT_TYPES
+CLIPMergeSimple: required inputs not synthesizable from INPUT_TYPES
+CLIPMergeSubtract: required inputs not synthesizable from INPUT_TYPES
+CLIPSave: required inputs not synthesizable from INPUT_TYPES
+CLIPSetLastLayer: required inputs not synthesizable from INPUT_TYPES
+CLIPTextEncode: required inputs not synthesizable from INPUT_TYPES
+CdlAssignAnchorToBbox: IndexError: index 2 is out of bounds for dimension 1 with size 1
+CdlBoxIou: IndexError: index 3 is out of bounds for dimension 1 with size 3
+CdlDataLoaderInfo: required inputs not synthesizable from INPUT_TYPES
+CdlDataLoaderPreview: required inputs not synthesizable from INPUT_TYPES
+CdlDataLoaderPreviewOutput: required inputs not synthesizable from INPUT_TYPES
+CdlDataLoaderStats: required inputs not synthesizable from INPUT_TYPES
+CdlDatasetPreview: required inputs not synthesizable from INPUT_TYPES
+CdlDatasetToLoader: required inputs not synthesizable from INPUT_TYPES
+CdlDatasetToTensors: required inputs not synthesizable from INPUT_TYPES
+CdlDownload: skipped: UI/network side-effect class (blacklist)
+CdlDownloadExtract: skipped: UI/network side-effect class (blacklist)
+CdlImageAdjust: required inputs not synthesizable from INPUT_TYPES
+CdlImageGrayscale: required inputs not synthesizable from INPUT_TYPES
+CdlImageNormalize: required inputs not synthesizable from INPUT_TYPES
+CdlImageRotate: required inputs not synthesizable from INPUT_TYPES
+CdlImageStats: required inputs not synthesizable from INPUT_TYPES
+CdlInitSeq2Seq: required inputs not synthesizable from INPUT_TYPES
+CdlLinRegTrain: ValueError: CdlLinRegTrain: X has 1 rows but y has 64; the sample counts must match.
+CdlLoadArray: ValueError: CdlLoadArray: at least one of features or labels must be connected.
+CdlLoraModelToTensor: required inputs not synthesizable from INPUT_TYPES
+CdlLossMapToTensor: required inputs not synthesizable from INPUT_TYPES
+CdlMessageBox: skipped: UI/network side-effect class (blacklist)
+CdlModelClone: required inputs not synthesizable from INPUT_TYPES
+CdlModelForward: required inputs not synthesizable from INPUT_TYPES
+CdlModelInfo: required inputs not synthesizable from INPUT_TYPES
+CdlModelLayers: required inputs not synthesizable from INPUT_TYPES
+CdlModelLoad: required inputs not synthesizable from INPUT_TYPES
+CdlModelMode: required inputs not synthesizable from INPUT_TYPES
+CdlModelParams: required inputs not synthesizable from INPUT_TYPES
+CdlModelSave: required inputs not synthesizable from INPUT_TYPES
+CdlMultiboxDetection: IndexError: max(): Expected reduction dim 0 to have non-zero size.
+CdlMultiboxTarget: RuntimeError: The size of tensor a (6) must match the size of tensor b (5) at non-singleton dimension 2
+CdlNms: IndexError: index 4 is out of bounds for dimension 0 with size 1
+CdlOffsetInverse: IndexError: index 3 is out of bounds for dimension 1 with size 3
+CdlPieChart: ValueError: All wedge sizes are zero
+CdlRNNLM: required inputs not synthesizable from INPUT_TYPES
+CdlRNNLMScratch: required inputs not synthesizable from INPUT_TYPES
+CdlRNNLMScratchPredict: required inputs not synthesizable from INPUT_TYPES
+CdlReadAccDB: ImportError: CdlReadAccDB requires pyodbc and the Microsoft Access Database Engine driver. Install pyodbc with `pip install pyodbc` and install the Access driver from Microsoft.
+CdlReadCSV: FileNotFoundError: [Errno 2] No such file or directory: 'cdl_dataset.csv'
+CdlReadDB: DatabaseError: Execution failed on sql 'SELECT * FROM data': (sqlite3.OperationalError) no such table: data
+[SQL: SELECT * FROM data]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+CdlReadJSON: FileNotFoundError: File cdl_dataset.json does not exist
+CdlReadText: FileNotFoundError: [Errno 2] No such file or directory: 'cdl_dataset.txt'
+CdlReadXLSX: FileNotFoundError: [Errno 2] No such file or directory: 'cdl_dataset.xlsx'
+CdlRegressionModelLoad: ValueError: CdlRegressionModelLoad: file not found: 'output/regression_model.pt'
+CdlSequenceMask: RuntimeError: The size of tensor a (3) must match the size of tensor b (8) at non-singleton dimension 4
+CdlShowBboxes: required inputs not synthesizable from INPUT_TYPES
+CdlShowImages: required inputs not synthesizable from INPUT_TYPES
+CdlTensorToLoraModel: required inputs not synthesizable from INPUT_TYPES
+CdlTensorToLossMap: required inputs not synthesizable from INPUT_TYPES
+CdlVOCSegmentation: TypeError: cannot unpack non-iterable NoneType object
+CdlValueToTensor: required inputs not synthesizable from INPUT_TYPES
+CdlVocLabelIndices: required inputs not synthesizable from INPUT_TYPES
+CdlVocRandCrop: required inputs not synthesizable from INPUT_TYPES
+CdlVocabDecode: required inputs not synthesizable from INPUT_TYPES
+CdlVocabEncode: required inputs not synthesizable from INPUT_TYPES
+CdlWriteCSV: required inputs not synthesizable from INPUT_TYPES
+CdlWriteDB: required inputs not synthesizable from INPUT_TYPES
+CdlWriteJSON: required inputs not synthesizable from INPUT_TYPES
+CdlWriteXLSX: required inputs not synthesizable from INPUT_TYPES
+CheckpointLoaderSimple: required inputs not synthesizable from INPUT_TYPES
+CheckpointSave: required inputs not synthesizable from INPUT_TYPES
+ColorToRGBInt: required inputs not synthesizable from INPUT_TYPES
+ColorTransfer: required inputs not synthesizable from INPUT_TYPES
+ComfyAndNode: required inputs not synthesizable from INPUT_TYPES
+ComfyMathExpression: required inputs not synthesizable from INPUT_TYPES
+ComfyNotNode: required inputs not synthesizable from INPUT_TYPES
+ComfyNumberConvert: required inputs not synthesizable from INPUT_TYPES
+ComfyOrNode: required inputs not synthesizable from INPUT_TYPES
+ComfySwitchNode: required inputs not synthesizable from INPUT_TYPES
+ConvertArrayToString: required inputs not synthesizable from INPUT_TYPES
+ConvertDictionaryToString: required inputs not synthesizable from INPUT_TYPES
+ConvolutionPixelShuffle: ValueError: Pixel Shuffle: the input has 1 channel(s), which must be divisible by r^2 = 4 (r=2); a conv should first pack r*r sub-pixels into the channels.
+CreateList: required inputs not synthesizable from INPUT_TYPES
+CropMask: required inputs not synthesizable from INPUT_TYPES
+CurveEditor: required inputs not synthesizable from INPUT_TYPES
+CustomCombo: required inputs not synthesizable from INPUT_TYPES
+DualCLIPLoader: required inputs not synthesizable from INPUT_TYPES
+FeatherMask: required inputs not synthesizable from INPUT_TYPES
+GetImageSize: required inputs not synthesizable from INPUT_TYPES
+GrowMask: required inputs not synthesizable from INPUT_TYPES
+ImageAddNoise: required inputs not synthesizable from INPUT_TYPES
+ImageBatch: required inputs not synthesizable from INPUT_TYPES
+ImageBlend: required inputs not synthesizable from INPUT_TYPES
+ImageBlur: required inputs not synthesizable from INPUT_TYPES
+ImageColorToMask: required inputs not synthesizable from INPUT_TYPES
+ImageCompositeMasked: required inputs not synthesizable from INPUT_TYPES
+ImageCrop: required inputs not synthesizable from INPUT_TYPES
+ImageCropToMask: required inputs not synthesizable from INPUT_TYPES
+ImageCropV2: required inputs not synthesizable from INPUT_TYPES
+ImageFlip: required inputs not synthesizable from INPUT_TYPES
+ImageFromBatch: required inputs not synthesizable from INPUT_TYPES
+ImageHistogram: required inputs not synthesizable from INPUT_TYPES
+ImageInvert: required inputs not synthesizable from INPUT_TYPES
+ImageMergeTileList: required inputs not synthesizable from INPUT_TYPES
+ImagePadForOutpaint: required inputs not synthesizable from INPUT_TYPES
+ImageQuantize: required inputs not synthesizable from INPUT_TYPES
+ImageRotate: required inputs not synthesizable from INPUT_TYPES
+ImageScale: required inputs not synthesizable from INPUT_TYPES
+ImageScaleBy: required inputs not synthesizable from INPUT_TYPES
+ImageScaleToMaxDimension: required inputs not synthesizable from INPUT_TYPES
+ImageScaleToTotalPixels: required inputs not synthesizable from INPUT_TYPES
+ImageSharpen: required inputs not synthesizable from INPUT_TYPES
+ImageStitch: required inputs not synthesizable from INPUT_TYPES
+ImageToMask: required inputs not synthesizable from INPUT_TYPES
+InvertMask: required inputs not synthesizable from INPUT_TYPES
+JoinImageWithAlpha: required inputs not synthesizable from INPUT_TYPES
+KSampler: required inputs not synthesizable from INPUT_TYPES
+LanguageModelBuild: required inputs not synthesizable from INPUT_TYPES
+LanguageModelForward: required inputs not synthesizable from INPUT_TYPES
+LanguageModelGenerate: required inputs not synthesizable from INPUT_TYPES
+LanguageModelSave: required inputs not synthesizable from INPUT_TYPES
+LanguageModelTrain: required inputs not synthesizable from INPUT_TYPES
+LanguageModelTransformerBlock: required inputs not synthesizable from INPUT_TYPES
+LatentAdd: required inputs not synthesizable from INPUT_TYPES
+LatentApplyOperation: required inputs not synthesizable from INPUT_TYPES
+LatentApplyOperationCFG: required inputs not synthesizable from INPUT_TYPES
+LatentBatch: required inputs not synthesizable from INPUT_TYPES
+LatentBatchSeedBehavior: required inputs not synthesizable from INPUT_TYPES
+LatentCompositeMasked: required inputs not synthesizable from INPUT_TYPES
+LatentConcat: required inputs not synthesizable from INPUT_TYPES
+LatentCut: required inputs not synthesizable from INPUT_TYPES
+LatentCutToBatch: required inputs not synthesizable from INPUT_TYPES
+LatentInterpolate: required inputs not synthesizable from INPUT_TYPES
+LatentMultiply: required inputs not synthesizable from INPUT_TYPES
+LatentSubtract: required inputs not synthesizable from INPUT_TYPES
+LoadImageOutput: required inputs not synthesizable from INPUT_TYPES
+LoraLoader: required inputs not synthesizable from INPUT_TYPES
+LoraLoaderModelOnly: required inputs not synthesizable from INPUT_TYPES
+MaskComposite: required inputs not synthesizable from INPUT_TYPES
+MaskPreview: required inputs not synthesizable from INPUT_TYPES
+MaskToImage: required inputs not synthesizable from INPUT_TYPES
+ModelMergeAdd: required inputs not synthesizable from INPUT_TYPES
+ModelMergeBlocks: required inputs not synthesizable from INPUT_TYPES
+ModelMergeSimple: required inputs not synthesizable from INPUT_TYPES
+ModelMergeSubtract: required inputs not synthesizable from INPUT_TYPES
+ModelSave: required inputs not synthesizable from INPUT_TYPES
+PorterDuffImageComposite: required inputs not synthesizable from INPUT_TYPES
+Preview3D: required inputs not synthesizable from INPUT_TYPES
+PreviewImage: required inputs not synthesizable from INPUT_TYPES
+RebatchImages: required inputs not synthesizable from INPUT_TYPES
+RebatchLatents: required inputs not synthesizable from INPUT_TYPES
+RepeatImageBatch: required inputs not synthesizable from INPUT_TYPES
+ReplaceVideoLatentFrames: required inputs not synthesizable from INPUT_TYPES
+ResizeAndPadImage: required inputs not synthesizable from INPUT_TYPES
+ResizeImageMaskNode: required inputs not synthesizable from INPUT_TYPES
+SaveAnimatedPNG: required inputs not synthesizable from INPUT_TYPES
+SaveAnimatedWEBP: required inputs not synthesizable from INPUT_TYPES
+SaveImage: required inputs not synthesizable from INPUT_TYPES
+SaveImageAdvanced: required inputs not synthesizable from INPUT_TYPES
+SaveSVGNode: required inputs not synthesizable from INPUT_TYPES
+SplitImageToTileList: required inputs not synthesizable from INPUT_TYPES
+SplitImageWithAlpha: required inputs not synthesizable from INPUT_TYPES
+StringFormat: required inputs not synthesizable from INPUT_TYPES
+TextDecode: required inputs not synthesizable from INPUT_TYPES
+TextEncode: required inputs not synthesizable from INPUT_TYPES
+ThresholdMask: required inputs not synthesizable from INPUT_TYPES
+TrainingEvaluate: ValueError: [Network & Layers] Evaluate: wire either a model (nn_model) or a parameter set (PARAMS) to evaluate.
+TrainingLoadParameters: ValueError: [Network & Layers] Load Parameters found no file at P:\Dev\ComfyUI_Refs\ComfyDL_UI\output\comfydl\parameters_00001_.safetensors; run 'Save Parameters' first, or fix the 'path' widget (relative paths start at the output folder).
+TrainingLoop: required inputs not synthesizable from INPUT_TYPES
+TrainingParametersExtract: required inputs not synthesizable from INPUT_TYPES
+TrainingParametersMerge: required inputs not synthesizable from INPUT_TYPES
+TrainingParametersToText: required inputs not synthesizable from INPUT_TYPES
+TrainingSaveParameters: required inputs not synthesizable from INPUT_TYPES
+UNETLoader: required inputs not synthesizable from INPUT_TYPES
+VAEDecode: required inputs not synthesizable from INPUT_TYPES
+VAEEncode: required inputs not synthesizable from INPUT_TYPES
+VAELoader: required inputs not synthesizable from INPUT_TYPES
+VAESave: required inputs not synthesizable from INPUT_TYPES
+wanBlockSwap: required inputs not synthesizable from INPUT_TYPES
