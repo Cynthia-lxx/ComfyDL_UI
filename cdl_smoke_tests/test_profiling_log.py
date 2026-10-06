@@ -300,6 +300,12 @@ def _js_checks() -> None:
     bad_ranks = set(re.findall(r'plog\(\s*"([a-z]+)"', src)) - set(proflog.LEVELS)
     check("T4i plog ranks valid", not bad_ranks, str(sorted(bad_ranks)))
 
+    # Startup must never auto-open the overlay (2026-10-06 user feedback:
+    # a full-screen dashboard covering the workflow on load disorients).
+    check("T4j display mode starts closed", 'displayMode: "sidebar"' in src)
+    check("T4k overlay mode not persisted", "cdlpDisplayMode" not in src
+          and "DISPLAY_MODE_KEY" not in src)
+
 
 def main() -> int:
     _flag_checks()

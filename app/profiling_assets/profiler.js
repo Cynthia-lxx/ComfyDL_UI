@@ -36,7 +36,6 @@
   const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
   const SERVER_LOG_URL = "/internal/logs/raw";
   const TAB_ID = "comfydl-profiling";
-  const DISPLAY_MODE_KEY = "cdlpDisplayMode";
   const SETTING_LOG_LEVEL = "ComfyDL.Profiling.LogLevel";
   const LOG_RANKS = { off: 0, low: 1, medium: 2, high: 3 };
 
@@ -385,12 +384,12 @@
     serverLog: null,
     serverLogLoading: false,
     // M3: display mode - "sidebar" (quick view) vs "overlay" (full dashboard).
+    // Always start closed (2026-10-06 user feedback): auto-reopening the
+    // full-screen dashboard over the workflow disorients the user - Expand is
+    // an explicit action, so the mode is deliberately NOT persisted.
     overlayEl: null,
     overlayWrapEl: null,
-    displayMode: (() => {
-      try { return localStorage.getItem(DISPLAY_MODE_KEY) === "overlay" ? "overlay" : "sidebar"; }
-      catch (e) { return "sidebar"; }
-    })(),
+    displayMode: "sidebar",
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -599,7 +598,6 @@
 
   function setDisplayMode(mode) {
     state.displayMode = mode === "overlay" ? "overlay" : "sidebar";
-    try { localStorage.setItem(DISPLAY_MODE_KEY, state.displayMode); } catch (e) { /* private mode */ }
     plog("high", "display mode -> " + state.displayMode);
     renderOverlay();
   }
@@ -1311,8 +1309,7 @@
   function mountOverlay() {
     if (state.overlayEl) return;
     const wrap = document.createElement("div");
-    wrap.className = "cdlp-overlay"
-      + (state.displayMode === "overlay" ? " cdlp-overlay-open" : "");
+    wrap.className = "cdlp-overlay";
     wrap.innerHTML = '<div class="cdlp-overlay-inner"><div class="cdlp-overlay-head">'
       + '<span class="cdlp-overlay-title">' + esc(t("sidebar_title")) + " \u00b7 "
       + esc(t("opgraph_title")) + "</span>"

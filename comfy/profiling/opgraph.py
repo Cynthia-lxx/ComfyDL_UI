@@ -165,6 +165,34 @@ def _resolve_inputs(node, outputs):
     return resolved, None
 
 
+def _unwrap_outputs(result):
+    """Per-slot output values, exactly as the host would deliver them.
+
+    V3 nodes (``io.ComfyNode``) return a single ``io.NodeOutput`` wrapper; the
+    host unwraps ``.args`` (plus ``.expand`` overrides) before feeding the
+    values to downstream nodes.  Without the same unwrapping the probe hands
+    downstream nodes the wrapper object itself, and their type checks fail
+    with things like "this slot needs a Vocab ... got NodeOutput" (2026-10-06,
+    the Language Model template probed 2/12 for exactly this reason).  V1
+    nodes return plain tuples and pass through untouched.
+    """
+    if (
+        result.__class__.__name__ == "NodeOutput"
+        and hasattr(result, "args")
+        and not isinstance(result, tuple)
+    ):
+        outputs = list(result.args)
+        expand = getattr(result, "expand", None)
+        if isinstance(expand, dict):
+            for key, value in expand.items():
+                try:
+                    outputs[int(key)] = value
+                except (KeyError, ValueError, IndexError):
+                    continue
+        return outputs
+    return list(result) if isinstance(result, tuple) else [result]
+
+
 def _probe_one(class_type, cls, inputs):
     """Probe a single node.  Returns ``(record, outputs)``; never raises."""
     record: Dict[str, Any] = {
@@ -210,7 +238,7 @@ def _probe_one(class_type, cls, inputs):
         record["ops_total"] = len(recorder.ops)
         record["total_flops"] = int(flops_mode.get_total_flops())
         record["data_dependent_reads"] = recorder.data_dependent_reads
-        outputs = list(result) if isinstance(result, tuple) else [result]
+        outputs = _unwrap_outputs(result)
     except Exception as exc:
         record["status"] = "fallback"
         record["error"] = f"{type(exc).__name__}: {exc}"

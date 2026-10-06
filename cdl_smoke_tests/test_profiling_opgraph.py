@@ -103,6 +103,26 @@ def main():
           forward is not None and forward["status"] == "probed",
           str(forward and forward["error"]))
 
+    # V3 nodes (io.ComfyNode) return io.NodeOutput; the probe must unwrap it
+    # the way the host does, or downstream type checks see the wrapper instead
+    # of the value (2026-10-06: the Language Model template probed 2/12 because
+    # TextEncode received the NodeOutput wrapper instead of the Vocab).
+    vocab_prompt = {
+        "1": {"class_type": "TextVocabBuild", "inputs": {
+            "corpus": "the quick brown fox jumps over the lazy dog",
+            "level": "char", "min_freq": 1}},
+        "2": {"class_type": "TextEncode", "inputs": {
+            "vocab": ["1", 0], "text": "the fox"}},
+    }
+    v3_report = opgraph.probe_workflow(vocab_prompt)
+    v3_by_id = {n["id"]: n for n in v3_report["nodes"]}
+    encode = v3_by_id.get("2")
+    check("V3 NodeOutput unwrapped: TextEncode probed",
+          encode is not None and encode["status"] == "probed",
+          str(encode and encode["error"]))
+    check("V3 chain probed 2/2",
+          v3_report["totals"]["probed"] == 2, json.dumps(v3_report["totals"]))
+
     # FLOPs precision: Model Forward over a known linear layer = 2*M*N.
     from comfydl.nodes.regression_train import _Regressor
     model = _Regressor(10, 20, (), "relu")
