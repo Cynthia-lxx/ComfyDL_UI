@@ -324,6 +324,11 @@ def _js_checks() -> None:
     for key in ("opgraph_safe_mode", "danger_confirm"):
         check(f"T4q zh+en have {key}",
               src.count(key + ":") >= 2, str(src.count(key + ":")))
+    # 2026-10-07 fix-up: guardrail hits get an explicit hint naming the nodes;
+    # settings rely on id segmentation (an explicit category array made the
+    # entries vanish from the settings panel in this frontend build).
+    check("T4r guarded hint i18n", src.count("opgraph_guarded:") >= 2)
+    check("T4s no explicit settings category", "category:" not in src)
 
 
 def main() -> int:

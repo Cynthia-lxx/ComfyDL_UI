@@ -196,6 +196,7 @@
       logs_empty: "No profiling log lines yet - press Analyze or run a workflow with the log level raised.",
       opgraph_safe_mode: "Safe mode: the probe executes REAL node code, so it is disabled by default. Enable it under Settings \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe.",
       danger_confirm: "The profiling probe executes REAL node code with REAL tensors. Very large inputs can consume significant CPU and memory while it runs. Enable the dangerous probe?",
+      opgraph_guarded: "Input guardrail blocked {n} node(s) from probing - their string inputs exceed the 64 KB per-node cap, and the probe would otherwise loop over every byte for real: {list}. Shrink the text or feed it through a data node instead.",
       opgraph_probe_ms: "probe {ms} ms",
     },
     zh: {
@@ -349,6 +350,7 @@
       logs_empty: "暂无 profiling 日志——调高档位后点一次 Analyze 或跑一次工作流。",
       opgraph_safe_mode: "安全模式：探针会真实执行节点代码，默认关闭。到 设置 \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe 开启后再分析。",
       danger_confirm: "profiling 探针将以真实张量真实执行节点代码。输入很大时可能占用大量 CPU 与内存。确定开启危险模式？",
+      opgraph_guarded: "输入护栏拦截了 {n} 个节点——字符串输入超过单节点 64KB 上限（探针会逐字节真实处理）：{list}。请缩小文本，或改用文件 / 数据节点接入。",
       opgraph_probe_ms: "探针 {ms} ms",
     },
   };
@@ -649,6 +651,17 @@
     html += '<div class="cdlp-flops-total">' + esc(fmtFlops(totals.flops_probed)) + "</div>";
     html += '<div class="cdlp-hint">' + esc(summary) + "</div>";
     if (state.opgraphStale) html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_stale_hint")) + "</div>";
+    // P0: guardrail hits must never be silent - name the blocked nodes and
+    // say why (0 FLOPs on its own looks like the probe "did nothing").
+    const guarded = (og.nodes || []).filter(
+      (n) => n.status === "fallback" && /input too large/.test(n.error || ""));
+    if (guarded.length) {
+      const list = guarded.slice(0, 4)
+        .map((n) => "#" + n.id + " " + n.class_type).join(", ")
+        + (guarded.length > 4 ? " \u2026" : "");
+      html += '<div class="cdlp-hint cdlp-stale">'
+        + esc(t("opgraph_guarded", { n: guarded.length, list })) + "</div>";
+    }
     // P0: safe/timeout runs carry a mode flag - say so where the user looks.
     if (og.mode === "safe") {
       html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_safe_mode")) + "</div>";
@@ -1445,7 +1458,6 @@
         {
           id: SETTING_LOG_LEVEL,
           name: "ComfyDL profiling log level",
-          category: ["ComfyDL", "Profiling"],
           type: "combo",
           defaultValue: "off",
           options: [
@@ -1467,7 +1479,6 @@
           // re-enters onChange with false - benign).
           id: SETTING_DANGEROUS,
           name: "ComfyDL profiling dangerous probe (executes real node code)",
-          category: ["ComfyDL", "Profiling"],
           type: "boolean",
           defaultValue: false,
           onChange: (newVal) => {
