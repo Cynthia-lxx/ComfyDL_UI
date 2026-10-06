@@ -54,6 +54,10 @@ from torch._subclasses.fake_tensor import FakeTensorMode
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils.flop_counter import FlopCounterMode
 
+# Four-level verbosity (off/low/medium/high) shared with the profiling routes;
+# see comfy/profiling/proflog.py (stdlib-only, safe to import here).
+from comfy.profiling.proflog import log as proflog
+
 logger = logging.getLogger(__name__)
 
 # Version of *this* report.  The M1/M2 memory + formula report keeps its own
@@ -326,8 +330,10 @@ def analyse_workflow(prompt, formula_report=None):
         ).hexdigest()
     except (TypeError, ValueError):
         key = None
+    proflog("high", "opgraph: cache key %s", key[:12] if key else None)
     if key is not None and key in _CACHE:
         logger.debug("opgraph cache hit (%s)", key[:12])
+        proflog("medium", "opgraph: cache hit (%s) - skipping probe", key[:12])
         return _CACHE[key]
 
     if formula_report is None:

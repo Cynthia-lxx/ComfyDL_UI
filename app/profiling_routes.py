@@ -26,11 +26,13 @@ by ``app/frontend_patch.py``. Nothing here touches the frontend package.
 from __future__ import annotations
 
 import mimetypes
+import time
 from typing import Any, Dict, Optional
 
 from aiohttp import web
 
 from comfy.profiling import analyse_oom, estimate_workflow
+from comfy.profiling import proflog
 from comfy.profiling.engine import DeviceBudget, budget_from_environment
 
 #: The panel ships a .ttf font subset under app/profiling_assets/, served by
@@ -92,11 +94,14 @@ def _budget_from_payload(payload: Dict[str, Any]) -> Optional[DeviceBudget]:
 
 @routes.post("/comfydl/profiling/estimate")
 async def estimate(request: web.Request) -> web.Response:
+    started = time.perf_counter()
     try:
         payload = await request.json()
     except Exception:
+        proflog.log("low", "estimate: 400 invalid JSON body", request=request)
         return web.json_response({"error": "invalid JSON body"}, status=400)
     if not isinstance(payload, dict):
+        proflog.log("low", "estimate: 400 body must be a JSON object", request=request)
         return web.json_response({"error": "body must be a JSON object"}, status=400)
     report = estimate_workflow(
         payload.get("prompt") if isinstance(payload.get("prompt"), dict) else {},
@@ -106,6 +111,13 @@ async def estimate(request: web.Request) -> web.Response:
     )
     global _LAST_REPORT
     _LAST_REPORT = report
+    nodes = report.get("nodes") or []
+    proflog.log(
+        "low", "estimate: %d nodes -> verdict=%s peak=%s in %.0fms",
+        len(nodes), report.get("verdict"),
+        report.get("peak_bytes"), (time.perf_counter() - started) * 1000.0,
+        request=request,
+    )
     return web.json_response(report)
 
 
@@ -120,17 +132,45 @@ async def opgraph(request: web.Request) -> web.Response:
     try:
         payload = await request.json()
     except Exception:
+        proflog.log("low", "opgraph: 400 invalid JSON body", request=request)
         return web.json_response({"error": "invalid JSON body"}, status=400)
     if not isinstance(payload, dict):
+        proflog.log("low", "opgraph: 400 body must be a JSON object", request=request)
         return web.json_response({"error": "body must be a JSON object"}, status=400)
     prompt = payload.get("prompt") if isinstance(payload.get("prompt"), dict) else None
+    proflog.log(
+        "low", "opgraph analyze: start (%d graph nodes)",
+        len(prompt) if isinstance(prompt, dict) else 0,
+        request=request,
+    )
 
     import asyncio
 
     from comfy.profiling import opgraph
 
+    started = time.perf_counter()
     loop = asyncio.get_running_loop()
-    report = await loop.run_in_executor(None, opgraph.analyse_workflow, prompt)
+    try:
+        report = await loop.run_in_executor(None, opgraph.analyse_workflow, prompt)
+    except Exception as exc:
+        proflog.log("low", "opgraph analyze: worker crashed: %r", exc, request=request)
+        raise
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    totals = report.get("totals") or {}
+    proflog.log(
+        "low", "opgraph analyze: done probed=%s/%s fallback=%s in %.0fms",
+        totals.get("probed"), totals.get("nodes"), totals.get("fallback"), elapsed_ms,
+        request=request,
+    )
+    for row in report.get("nodes") or []:
+        proflog.log(
+            "medium",
+            "opgraph: node %s %s -> %s ops=%s flops=%s probe=%sms%s",
+            row.get("id"), row.get("class_type"), row.get("status"),
+            row.get("ops_total"), row.get("total_flops"), row.get("probe_ms"),
+            f" error={row.get('error')}" if row.get("error") else "",
+            request=request,
+        )
     return web.json_response(report)
 
 
@@ -139,18 +179,36 @@ async def postmortem(request: web.Request) -> web.Response:
     try:
         payload = await request.json()
     except Exception:
+        proflog.log("low", "postmortem: 400 invalid JSON body", request=request)
         return web.json_response({"error": "invalid JSON body"}, status=400)
     if not isinstance(payload, dict):
+        proflog.log("low", "postmortem: 400 body must be a JSON object", request=request)
         return web.json_response({"error": "body must be a JSON object"}, status=400)
     result = analyse_oom(payload, _budget_from_payload(payload))
+    attributed = result.get("attributed") or {}
+    suggestion = result.get("suggestion") or {}
+    proflog.log(
+        "low",
+        "postmortem: node=%s type=%s -> attributed=%s(%s) suggested_batch=%s",
+        payload.get("node_id"), payload.get("node_type"),
+        attributed.get("label"), attributed.get("bytes"), suggestion.get("batch_size"),
+        request=request,
+    )
     return web.json_response(result)
 
 
 @routes.get("/comfydl/profiling/watchdog/status")
 async def watchdog_status(request: web.Request) -> web.Response:
     if _WATCHDOG is None:
+        proflog.log("high", "watchdog status: unavailable (no watchdog)", request)
         return web.json_response({"available": False, "running": False}, status=503)
-    return web.json_response(_WATCHDOG.snapshot())
+    snapshot = _WATCHDOG.snapshot()
+    proflog.log(
+        "high", "watchdog poll: running=%s node=%s",
+        snapshot.get("running"), snapshot.get("node_id"),
+        request=request,
+    )
+    return web.json_response(snapshot)
 
 
 @routes.get("/comfydl/profiling/watchdog/log")
@@ -161,4 +219,6 @@ async def watchdog_log(request: web.Request) -> web.Response:
         limit = int(request.query.get("limit", "50"))
     except ValueError:
         limit = 50
-    return web.json_response({"events": _WATCHDOG.recent(limit=limit)})
+    events = _WATCHDOG.recent(limit=limit)
+    proflog.log("high", "watchdog log: %d events (limit=%d)", len(events), limit, request=request)
+    return web.json_response({"events": events})

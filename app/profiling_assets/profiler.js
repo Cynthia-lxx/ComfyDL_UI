@@ -34,8 +34,11 @@
   const POSTMORTEM_URL = "/comfydl/profiling/postmortem";
   const WATCHDOG_STATUS_URL = "/comfydl/profiling/watchdog/status";
   const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
+  const SERVER_LOG_URL = "/internal/logs/raw";
   const TAB_ID = "comfydl-profiling";
   const DISPLAY_MODE_KEY = "cdlpDisplayMode";
+  const SETTING_LOG_LEVEL = "ComfyDL.Profiling.LogLevel";
+  const LOG_RANKS = { off: 0, low: 1, medium: 2, high: 3 };
 
   // ------------------------------------------------------------------ i18n --
   const I18N = {
@@ -186,6 +189,8 @@
       opgraph_expand: "Expand",
       opgraph_collapse: "Collapse",
       opgraph_pick: "Select a node",
+      logs_title: "Server log (profiling)",
+      logs_empty: "No profiling log lines yet - press Analyze or run a workflow with the log level raised.",
       opgraph_probe_ms: "probe {ms} ms",
     },
     zh: {
@@ -335,6 +340,8 @@
       opgraph_expand: "展开",
       opgraph_collapse: "收起",
       opgraph_pick: "选择节点",
+      logs_title: "服务端日志（profiling）",
+      logs_empty: "暂无 profiling 日志——调高档位后点一次 Analyze 或跑一次工作流。",
       opgraph_probe_ms: "探针 {ms} ms",
     },
   };
@@ -372,8 +379,14 @@
     opgraphLoading: false,
     opgraphStale: false,
     selectedOpNode: null,
+    // M3+: pip-style verbosity dial (off/low/medium/high), driven by the
+    // ComfyDL.Profiling.LogLevel setting and sent per-request as a header.
+    logLevel: "off",
+    serverLog: null,
+    serverLogLoading: false,
     // M3: display mode - "sidebar" (quick view) vs "overlay" (full dashboard).
     overlayEl: null,
+    overlayWrapEl: null,
     displayMode: (() => {
       try { return localStorage.getItem(DISPLAY_MODE_KEY) === "overlay" ? "overlay" : "sidebar"; }
       catch (e) { return "sidebar"; }
@@ -428,6 +441,25 @@
       .split(">").join("&gt;")
       .split('"').join("&quot;")
       .split("'").join("&#39;");
+  }
+
+  // ------------------------------------------------- diagnostics logging --
+  // pip-style dial (off/low/medium/high): state.logLevel drives both the JS
+  // console lines (plog) and the per-request X-CDL-Profiling-Log header that
+  // raises the backend verbosity without a server restart.
+  function logRank() { return LOG_RANKS[state.logLevel] || 0; }
+
+  function plog(rank, msg) {
+    try {
+      if ((LOG_RANKS[rank] || 0) > logRank()) return;
+      console.log("[ComfyDL profiler][" + rank + "] " + msg);
+    } catch (e) { /* logging must never break the panel */ }
+  }
+
+  function profHeaders(extra) {
+    const h = extra || {};
+    h["X-CDL-Profiling-Log"] = state.logLevel;
+    return h;
   }
 
   function itemLabel(item) {
@@ -489,16 +521,20 @@
       };
       const resp = await api.fetchApi(ESTIMATE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: profHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
       });
+      plog("high", "Estimate: server answered " + resp.status);
       if (resp.ok) {
         state.report = await resp.json();
         renderPanel();
         updateBadge();
       }
-    } catch (e) { /* silent: profiling must never break the UI */ }
-    state.estimating = false;
+    } catch (e) {
+      plog("low", "Estimate failed: " + (e && e.message ? e.message : e));
+    } finally {
+      state.estimating = false;
+    }
     return state.report;
   }
 
@@ -511,34 +547,51 @@
   // -------------------------------------------------- M3: operator graph --
   // Manual-only: the FakeTensor probe costs real milliseconds per node, so it
   // never runs automatically and never sits on the Run path.
+  // History note (2026-10-06): the first render used to sit OUTSIDE the try
+  // block and called an undefined renderOverlay() - the ReferenceError aborted
+  // the function after loading=true but before the fetch, wedging the button
+  // on "Analyzing" forever. Everything is inside try/finally now: the loading
+  // flag always resets, whatever happens.
   async function requestOpgraph() {
     const api = getApi();
     if (!api || state.opgraphLoading) return state.opgraph;
     state.opgraphLoading = true;
     state.opgraphStale = false;
-    renderPanel();
-    renderOverlay();
+    const t0 = Date.now();
+    plog("low", "Analyze: requested (prompt nodes: "
+      + Object.keys(state.lastPrompt || {}).length + ")");
     try {
+      renderPanel();
+      renderOverlay();
       const gtp = await callOriginalGTP();
       if (gtp && gtp.output) state.lastPrompt = gtp.output;
       const resp = await api.fetchApi(OPGRAPH_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: profHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ prompt: state.lastPrompt || {} }),
       });
+      plog("medium", "Analyze: server answered " + resp.status);
       if (resp.ok) {
         state.opgraph = await resp.json();
+        plog("low", "Analyze: done in " + (Date.now() - t0) + "ms (totals: "
+          + JSON.stringify((state.opgraph && state.opgraph.totals) || {}) + ")");
+      } else {
+        plog("low", "Analyze: server error " + resp.status);
       }
-    } catch (e) { /* silent: the analyze is a courtesy, never a blocker */ }
-    state.opgraphLoading = false;
-    renderPanel();
-    renderOverlay();
+    } catch (e) {
+      plog("low", "Analyze failed: " + (e && e.message ? e.message : e));
+    } finally {
+      state.opgraphLoading = false;
+      renderPanel();
+      renderOverlay();
+    }
     return state.opgraph;
   }
 
   function markOpgraphStale() {
     if (state.opgraph && !state.opgraphStale) {
       state.opgraphStale = true;
+      plog("high", "opgraph marked stale (graph changed since last Analyze)");
       renderPanel();
       renderOverlay();
     }
@@ -547,6 +600,7 @@
   function setDisplayMode(mode) {
     state.displayMode = mode === "overlay" ? "overlay" : "sidebar";
     try { localStorage.setItem(DISPLAY_MODE_KEY, state.displayMode); } catch (e) { /* private mode */ }
+    plog("high", "display mode -> " + state.displayMode);
     renderOverlay();
   }
 
@@ -672,10 +726,11 @@
     const d = detail || {};
     const message = String(d.exception_message || "");
     if (!/allocat/i.test(message)) return;
+    plog("low", "OOM post-mortem: requesting (node " + d.node_id + ")");
     try {
       const resp = await api.fetchApi(POSTMORTEM_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: profHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           message: message + "\n" + String(d.exception_type || ""),
           node_id: d.node_id,
@@ -689,7 +744,9 @@
         renderPanel();
         toast("error", t("oom_toast"));
       }
-    } catch (e) { /* silent */ }
+    } catch (e) {
+      plog("low", "Post-mortem failed: " + (e && e.message ? e.message : e));
+    }
   }
 
   function applySuggestion() {
@@ -762,7 +819,8 @@
     const api = getApi();
     if (!api) return;
     try {
-      const resp = await api.fetchApi(WATCHDOG_STATUS_URL);
+      const resp = await api.fetchApi(WATCHDOG_STATUS_URL, { headers: profHeaders() });
+      plog("high", "Watchdog poll: " + resp.status);
       if (resp.ok) {
         const snap = await resp.json();
         state.watchdogUnavailable = snap.available === false;
@@ -814,13 +872,40 @@
     const api = getApi();
     if (!api) return;
     try {
-      const resp = await api.fetchApi(WATCHDOG_LOG_URL + "?limit=20");
+      const resp = await api.fetchApi(WATCHDOG_LOG_URL + "?limit=20", { headers: profHeaders() });
+      plog("high", "Burst log fetch: " + resp.status);
       if (resp.ok) {
         const body = await resp.json();
         state.bursts = body.events || [];
         renderPanel();
       }
     } catch (e) { /* silent */ }
+  }
+
+  // M3+: pull the app-wide server log ring buffer and keep only the lines
+  // this panel produced ([profiling:...] from the backend, [ComfyDL profiler]
+  // fallback from toast()). Shown in the sidebar card whenever the level is
+  // raised - the fastest way to see what the backend actually did.
+  async function fetchServerLog() {
+    const api = getApi();
+    if (!api) return;
+    state.serverLogLoading = true;
+    renderPanel();
+    try {
+      const resp = await api.fetchApi(SERVER_LOG_URL, { headers: profHeaders() });
+      if (resp.ok) {
+        const body = await resp.json();
+        const lines = (body.entries || [])
+          .map((e) => String(e.m || ""))
+          .filter((m) => m.indexOf("[profiling:") !== -1 || m.indexOf("[ComfyDL profiler]") !== -1);
+        state.serverLog = lines.slice(-60).join("");
+        plog("high", "Server log: " + lines.length + " profiling line(s) in ring buffer");
+      }
+    } catch (e) {
+      plog("low", "Server log fetch failed: " + (e && e.message ? e.message : e));
+    }
+    state.serverLogLoading = false;
+    renderPanel();
   }
 
   function flopsKindLabel(kind) {
@@ -1155,6 +1240,23 @@
     if (!nodes.length) html.push('<div class="cdlp-hint">' + esc(t("loading")) + "</div>");
     html.push("</div></div>");
 
+    // M3+: server-side profiling log tail (visible only when level != off)
+    if (state.logLevel !== "off") {
+      html.push('<div class="cdlp-card' + (state.collapsed.serverlog ? " cdlp-collapsed" : "") + '">'
+        + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="serverlog">'
+        + '<span class="cdlp-collapse-label">' + esc(t("logs_title")) + "</span>"
+        + '<span class="cdlp-title-right">'
+        + '<button class="cdlp-button" id="cdlp-logs-refresh">' + esc(t("refresh")) + "</button>"
+        + '<i class="cdlp-chevron"></i></span></div>'
+        + '<div class="cdlp-card-body">');
+      if (state.serverLogLoading || state.serverLog === null || !state.serverLog) {
+        html.push('<div class="cdlp-hint">' + esc(t("logs_empty")) + "</div>");
+      } else {
+        html.push('<pre class="cdlp-pm-msg">' + esc(state.serverLog) + "</pre>");
+      }
+      html.push("</div></div>");
+    }
+
     html.push('<div class="cdlp-disclaimer">' + esc(t("disclaimer")) + "</div>");
     html.push("</div>");
 
@@ -1195,7 +1297,13 @@
     const analyze = el.querySelector("#cdlp-analyze");
     if (analyze) analyze.addEventListener("click", () => requestOpgraph());
     const expand = el.querySelector("#cdlp-expand");
-    if (expand) expand.addEventListener("click", () => { mountOverlay(); setDisplayMode("overlay"); });
+    if (expand) expand.addEventListener("click", () => {
+      plog("high", "Expand clicked");
+      mountOverlay();
+      setDisplayMode("overlay");
+    });
+    const logsRefresh = el.querySelector("#cdlp-logs-refresh");
+    if (logsRefresh) logsRefresh.addEventListener("click", () => fetchServerLog());
   }
 
   // M3: the full-dashboard overlay. Same content as the sidebar (one render
@@ -1212,6 +1320,7 @@
       + '<div class="cdlp-overlay-body"></div></div>';
     document.body.appendChild(wrap);
     state.overlayEl = wrap.querySelector(".cdlp-overlay-body");
+    state.overlayWrapEl = wrap;
     wrap.querySelector("#cdlp-collapse").addEventListener("click", () => setDisplayMode("sidebar"));
     wrap.addEventListener("click", (ev) => {
       if (ev.target === wrap) setDisplayMode("sidebar");
@@ -1220,6 +1329,16 @@
       if (ev.key === "Escape" && state.displayMode === "overlay") setDisplayMode("sidebar");
     });
     renderPanel();
+  }
+
+  // Syncs the overlay's visibility with the display mode. This function was
+  // MISSING until 2026-10-06 (four call sites -> ReferenceError), which wedged
+  // Analyze on "Analyzing" and made Expand a no-op. It only toggles the open
+  // class; content always flows through renderPanel() into both containers.
+  function renderOverlay() {
+    const wrap = state.overlayWrapEl;
+    if (!wrap) return;
+    wrap.classList.toggle("cdlp-overlay-open", state.displayMode === "overlay");
   }
 
   function registerSidebar() {
@@ -1293,6 +1412,25 @@
       app.registerExtension({
         name: "ComfyDL.Profiler",
         async setup() { await init(); },
+        settings: [{
+          id: SETTING_LOG_LEVEL,
+          name: "ComfyDL profiling log level",
+          category: ["ComfyDL", "Profiling"],
+          type: "combo",
+          defaultValue: "off",
+          options: [
+            { value: "off", text: "Off" },
+            { value: "low", text: "Low" },
+            { value: "medium", text: "Medium" },
+            { value: "high", text: "High" },
+          ],
+          onChange: (newVal) => {
+            state.logLevel = LOG_RANKS[newVal] !== undefined ? newVal : "off";
+            plog("high", "log level -> " + state.logLevel);
+            if (state.logLevel !== "off" && state.serverLog === null) fetchServerLog();
+            renderPanel();
+          },
+        }],
         commands: [{
           id: "ComfyDL_Profiling_Open",
           icon: "pi pi-chart-bar",

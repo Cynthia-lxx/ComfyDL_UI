@@ -218,6 +218,11 @@ parser.add_argument("--multi-user", action="store_true", help="Enables per-user 
 parser.add_argument("--verbose", action=VerboseAction, nargs='*', default=[], metavar='LEVEL FILE', help='Set console logging with no values or LEVEL, or add a LEVEL FILE log output. May be repeated.')
 parser.add_argument("--log-stdout", action="store_true", help="Send normal process output to stdout instead of stderr (default).")
 
+# ComfyDL profiling panel (reform: Profiling M3+): pip-style verbosity dial.
+# Read lazily by comfy/profiling/proflog.py; the frontend can also raise the
+# level per-request via the X-CDL-Profiling-Log header (no restart needed).
+parser.add_argument("--cdl-profiling-log", type=str, default="off", choices=["off", "low", "medium", "high"], help="Verbosity of the ComfyDL profiling backend logs: off / low / medium / high (default: off). The profiling frontend can raise it per-request without a restart.")
+
 
 # The default built-in provider hosted under web/
 DEFAULT_VERSION_STRING = "comfyanonymous/ComfyUI@latest"
