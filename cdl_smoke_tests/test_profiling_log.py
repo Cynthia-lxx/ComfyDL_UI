@@ -349,6 +349,9 @@ def _js_checks() -> None:
         ("collapsed: { bursts: true", "T4z4 burst log starts collapsed"),
         ("cdlp-arrow", "T4z5 svg arrow markers (mermaid.live style)"),
         ("cdlp-svg-edge", "T4z6 smooth connector class"),
+        ("fetchHistory", "T4z7 measured history fetch"),
+        ("measured_vs_formula", "T4z8 measured-vs-formula line i18n"),
+        ("collapsed.history", "T4z9 history card collapse state"),
     ]:
         check(name, needle in src)
     # The graph renders for BOTH report kinds (assembled AND dangerous probe).
