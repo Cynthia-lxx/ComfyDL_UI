@@ -676,9 +676,6 @@
         covered: cov.covered || 0, driven: cov.params_driven || 0,
         unknown: cov.unknown || 0, missing: cov.missing || 0,
       })) + "</div>";
-      // The always-rendered picture (2026-10-07 user feedback): a text export
-      // alone is not the "直观" default the P1 plan promised.
-      html += renderEquivalentGraphSvg(og);
       html += '<div class="cdlp-hint"><span class="cdlp-title-right">'
         + '<button class="cdlp-button" id="cdlp-export-json">' + esc(t("export_json")) + "</button> "
         + '<button class="cdlp-button" id="cdlp-export-outline">' + esc(t("export_outline")) + "</button> "
@@ -714,6 +711,12 @@
     } else if (og.mode === "timeout") {
       html += '<div class="cdlp-hint cdlp-stale">' + esc(String(og.error || t("opgraph_safe_mode"))) + "</div>";
     }
+    // The always-rendered picture (2026-10-07 user feedback): rule-derived
+    // AND really-probed censuses both deserve the visual graph (the dangerous
+    // probe report simply lacks the assembled-mode coverage line).
+    if ((og.nodes || []).length) {
+      html += renderEquivalentGraphSvg(og);
+    }
     html += btn;
     html += "</div>";
     return html;
@@ -747,50 +750,81 @@
     } catch (e) { plog("low", "export failed: " + e); }
   }
 
-  // P1: hand-drawn SVG equivalent graph (zero dependencies - the host bundle
-  // has no mermaid/d3 and we never add npm packages).  One box per workflow
-  // node (rule-derived = teal border), its ATen op chain stacked inside,
-  // workflow links drawn as dashed connectors.  Mermaid text stays available
-  // as an export; this is the always-rendered picture.
+  // P1: hand-drawn SVG equivalent graph in the mermaid.live visual style
+  // (rounded per-operator chips chained horizontally inside a colored node
+  // frame, dotted canvas, smooth arrowed connectors).  Zero dependencies:
+  // the host bundle has no mermaid/d3 and we never add npm packages - a
+  // 2.5MB vendored engine would also lose layout control on big graphs.
+  // Mermaid text stays available as an export.
   function renderEquivalentGraphSvg(og) {
     const prompt = state.lastPrompt || {};
     const nodes = og.nodes || [];
     if (!nodes.length) return "";
-    const COL_W = 230, ROW_H = 310, W = 205, OP_H = 20, TITLE_H = 22, PAD = 8;
-    const perRow = 5;
-    const pos = {};
-    const parts = [];
-    let maxBottom = 40;
+    const OP_H = 26, GAP = 12, TITLE_H = 20, PAD_X = 12, PAD_Y = 10;
+    const NODE_VGAP = 64, ROW_LIMIT = 1160, CHAR_W = 6.6;
+    const MAX_OPS_SHOWN = 8;
+    const strokeFor = (n) => n.status === "rule" ? "#1ABC9C"
+      : n.status === "probed" ? "#3fb950" : "#6e7681";
     const opLabel = (o) => o.op.replace(/^aten\./, "").replace(/\.default$/, "")
       + (o.count > 1 ? " \u00d7" + o.count : "");
-    nodes.forEach((n, idx) => {
-      const col = idx % perRow, row = Math.floor(idx / perRow);
-      const ops = (n.ops || []).slice(0, 6);
-      const h = TITLE_H + (ops.length ? ops.length * OP_H : OP_H) + PAD * 2;
-      const x = PAD + col * COL_W;
-      const y = 40 + row * ROW_H;
-      pos[String(n.id)] = { x, y, w: W, h };
+    const parts = [];
+    parts.push('<defs><marker id="cdlp-arrow" viewBox="0 0 10 10" refX="9" refY="5" '
+      + 'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+      + '<path d="M 0 0 L 10 5 L 0 10 z" fill="#6e7681"/></marker></defs>');
+    parts.push('<rect x="0" y="0" width="100%" height="100%" fill="url(#cdlp-dots)"/>');
+    parts.push('<defs><pattern id="cdlp-dots" width="18" height="18" '
+      + 'patternUnits="userSpaceOnUse">'
+      + '<circle cx="2" cy="2" r="1.1" fill="#2d333b"/></pattern></defs>');
+    const pos = {};
+    let cursorX = 14, cursorY = 26, rowMaxH = 0, maxBottom = 40;
+    nodes.forEach((n) => {
+      const ops = (n.ops || []).slice(0, MAX_OPS_SHOWN);
+      const hidden = (n.ops || []).length - ops.length;
+      const widths = ops.length
+        ? ops.map((o) => Math.max(56, Math.ceil(opLabel(o).length * CHAR_W) + 18))
+        : [Math.max(110, Math.ceil((n.class_type || "").length * CHAR_W) + 24)];
+      const chainW = widths.reduce((a, b) => a + b, 0) + GAP * Math.max(0, widths.length - 1);
+      const w = Math.max(150, Math.ceil(chainW) + PAD_X * 2);
+      const h = TITLE_H + OP_H + PAD_Y * 2;
+      if (cursorX + w > ROW_LIMIT && cursorX > 14) {
+        cursorX = 14;
+        cursorY += rowMaxH + NODE_VGAP;
+        rowMaxH = 0;
+      }
+      const x = cursorX, y = cursorY;
+      pos[String(n.id)] = { x, y, w, h };
+      cursorX += w + 46;
+      rowMaxH = Math.max(rowMaxH, h);
       maxBottom = Math.max(maxBottom, y + h);
-      const stroke = n.status === "rule" ? "#1ABC9C"
-        : n.status === "probed" ? "#2ECC71" : "#7f8c8d";
-      parts.push('<rect x="' + x + '" y="' + y + '" width="' + W + '" height="' + h
-        + '" rx="6" fill="' + (n.status === "rule" ? "#173f3a" : "#2c2f33")
-        + '" stroke="' + stroke + '"/>');
-      parts.push('<text x="' + (x + 8) + '" y="' + (y + 15)
-        + '" class="cdlp-svg-title">' + esc(n.class_type.slice(0, 24))
-        + " #" + esc(String(n.id)) + "</text>");
+      const stroke = strokeFor(n);
+      parts.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h
+        + '" rx="10" fill="rgba(27, 31, 35, 0.72)" stroke="' + stroke
+        + '" stroke-width="1.5"/>');
+      parts.push('<text x="' + (x + 10) + '" y="' + (y + 14)
+        + '" class="cdlp-svg-title" fill="' + stroke + '">'
+        + esc(n.class_type.slice(0, 26)) + " #" + esc(String(n.id)) + "</text>");
+      let ox = x + PAD_X;
+      const oy = y + TITLE_H;
       if (ops.length) {
         ops.forEach((o, i) => {
-          parts.push('<text x="' + (x + 10) + '" y="' + (y + TITLE_H + i * OP_H + 14)
-            + '" class="cdlp-svg-op">' + esc(opLabel(o)) + "</text>");
+          parts.push('<rect x="' + ox + '" y="' + oy + '" width="' + widths[i]
+            + '" height="' + OP_H + '" rx="6" fill="#21262d" stroke="#3d444d"/>');
+          parts.push('<text x="' + (ox + widths[i] / 2) + '" y="' + (oy + 17)
+            + '" text-anchor="middle" class="cdlp-svg-op">'
+            + esc(opLabel(o)) + "</text>");
+          if (i) {
+            parts.push('<path d="M ' + (ox - GAP) + " " + (oy + OP_H / 2)
+              + " L " + (ox - 2) + " " + (oy + OP_H / 2)
+              + '" stroke="#6e7681" stroke-width="1.5" marker-end="url(#cdlp-arrow)"/>');
+          }
+          ox += widths[i] + GAP;
         });
-        const more = (n.ops || []).length - ops.length;
-        if (more > 0) {
-          parts.push('<text x="' + (x + 10) + '" y="' + (y + TITLE_H + ops.length * OP_H + 14)
-            + '" class="cdlp-svg-more">+' + more + "</text>");
+        if (hidden > 0) {
+          parts.push('<text x="' + (ox - chainW + widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1) + 6)
+            + '" y="' + (oy + 17) + '" class="cdlp-svg-more">+' + hidden + "</text>");
         }
       } else {
-        parts.push('<text x="' + (x + 10) + '" y="' + (y + TITLE_H + 14)
+        parts.push('<text x="' + ox + '" y="' + (oy + 17)
           + '" class="cdlp-svg-more">'
           + esc(n.status === "rule" ? t("opgraph_leaf") : (n.error || "\u2014")) + "</text>");
       }
@@ -799,18 +833,17 @@
       Object.values(node.inputs || {}).forEach((v) => {
         if (Array.isArray(v) && v.length === 2 && pos[String(v[0])] && pos[String(target)]) {
           const pa = pos[String(v[0])], pb = pos[String(target)];
-          const x1 = pa.x + pa.w, y1 = pa.y + TITLE_H + 10;
-          const x2 = pb.x, y2 = pb.y + TITLE_H + 10;
+          const x1 = pa.x + pa.w + 2, y1 = pa.y + TITLE_H + OP_H / 2;
+          const x2 = pb.x - 3, y2 = pb.y + TITLE_H + OP_H / 2;
           const mx = (x1 + x2) / 2;
           parts.push('<path d="M ' + x1 + " " + y1 + " C " + mx + " " + y1 + ", "
             + mx + " " + y2 + ", " + x2 + " " + y2
-            + '" fill="none" stroke="#888" stroke-dasharray="4 3"/>');
+            + '" class="cdlp-svg-edge" marker-end="url(#cdlp-arrow)"/>');
         }
       });
     });
-    const svgW = PAD * 2 + Math.min(perRow, nodes.length) * COL_W;
-    return '<div class="cdlp-svg-wrap"><svg width="' + svgW + '" height="'
-      + (maxBottom + 10) + '" xmlns="http://www.w3.org/2000/svg">'
+    return '<div class="cdlp-svg-wrap"><svg width="' + Math.max(ROW_LIMIT, 600)
+      + '" height="' + (maxBottom + 16) + '" xmlns="http://www.w3.org/2000/svg">'
       + parts.join("") + "</svg></div>";
   }
 

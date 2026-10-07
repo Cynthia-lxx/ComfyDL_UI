@@ -347,8 +347,14 @@ def _js_checks() -> None:
         ("cdlp-svg-wrap", "T4z2 svg container + css hook"),
         ("opgraph_zero_flops", "T4z3 zero-flops attribution hint"),
         ("collapsed: { bursts: true", "T4z4 burst log starts collapsed"),
+        ("cdlp-arrow", "T4z5 svg arrow markers (mermaid.live style)"),
+        ("cdlp-svg-edge", "T4z6 smooth connector class"),
     ]:
         check(name, needle in src)
+    # The graph renders for BOTH report kinds (assembled AND dangerous probe).
+    check("T4z7 svg outside the assembled-only branch",
+          src.index("renderEquivalentGraphSvg(og)") > src.index('og.mode === "assembled"')
+          and 'if ((og.nodes || []).length) {' in src)
 
 
 def main() -> int:
