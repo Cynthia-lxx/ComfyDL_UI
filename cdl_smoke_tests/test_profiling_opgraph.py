@@ -228,6 +228,31 @@ def main():
                   data2.get("mode") is None and data2["totals"]["probed"] > 0,
                   json.dumps(data2.get("totals")))
 
+            # P1-fix: the OOM verdict gate refuses red-flagged graphs in
+            # dangerous mode (peak, not raw input size, is the primary gate).
+            # The test host has no device budget (verdict=unknown), so force
+            # the gate by monkeypatching the estimator the route consults.
+            import app.profiling_routes as pr
+            orig_est = pr.estimate_workflow
+
+            def _red_estimate(_prompt, _budget=None, *a, **k):
+                return {"verdict": "red", "peak_bytes": 3_234_161_441_608,
+                        "nodes": [], "totals": {}}
+
+            pr.estimate_workflow = _red_estimate
+            try:
+                resp5 = await client.post("/comfydl/profiling/opgraph",
+                                          json={"prompt": prompt},
+                                          headers={"X-CDL-Profiling-Dangerous": "1"})
+                data5 = await resp5.json()
+                check("route: OOM verdict refuses probe",
+                      data5.get("mode") == "refused"
+                      and "refused" in (data5.get("error") or "")
+                      and data5["totals"]["probed"] == 0,
+                      str(data5.get("error"))[:120])
+            finally:
+                pr.estimate_workflow = orig_est
+
             # P0: a 1MB-style oversized corpus answers instantly as a guard
             # fallback even in dangerous mode (the 2026-10-06 wedge scenario).
             big_prompt = {

@@ -151,7 +151,8 @@
 /* Assumptions */
 .cdlp-assumption { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .cdlp-assumption-key {
-  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   flex: 1;
 }
@@ -376,7 +377,8 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 .cdlp-burst-head { display: flex; align-items: center; gap: 8px; }
 .cdlp-burst-time {
   margin-left: auto;
-  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
   color: #f87171;
 }
 .cdlp-burst-meta, .cdlp-burst-scale {
@@ -396,7 +398,8 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
   border-radius: 999px;
   border: 1px solid var(--border-color, #2a2a2a);
   background: var(--comfy-menu-bg, #1f1f1f);
-  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   transition: opacity 200ms ease;
 }
@@ -420,7 +423,8 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
   width: 100%;
   border-collapse: collapse;
   margin-top: 6px;
-  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
 }
 .cdlp-op-table th, .cdlp-op-table td {

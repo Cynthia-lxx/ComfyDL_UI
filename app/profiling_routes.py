@@ -183,6 +183,38 @@ async def opgraph(request: web.Request) -> web.Response:
             len(prompt) if isinstance(prompt, dict) else 0,
             request=request,
         )
+        # P1-fix (2026-10-07 user feedback): the PRIMARY safety gate is the M1
+        # OOM verdict / peak estimate, not raw input size - a 1MB-corpus LM
+        # graph is dangerous because its formula peak is terabytes (real
+        # execution would OOM), while a 4MB-input / 7 GFLOPs graph is safe to
+        # probe.  The zero-execution formula engine already knows this.
+        gate_verdict, gate_peak = "unknown", 0
+        if isinstance(prompt, dict) and prompt:
+            try:
+                gate_report = estimate_workflow(prompt, budget_from_environment())
+                gate_verdict = str(gate_report.get("verdict") or "unknown")
+                gate_peak = int(gate_report.get("peak_bytes") or 0)
+            except Exception as exc:
+                proflog.log("low", "opgraph: gate estimate failed: %r", exc, request=request)
+        if gate_verdict == "red":
+            proflog.log(
+                "low", "opgraph: probe REFUSED by OOM verdict (peak=%d)", gate_peak,
+                request=request,
+            )
+            return web.json_response({
+                "version": 1,
+                "mode": "refused",
+                "totals": {"nodes": len(prompt), "probed": 0, "fallback": 0,
+                           "flops_formula": 0, "flops_probed": 0, "ratio": None},
+                "nodes": [],
+                "error": (
+                    "probe refused: the formula estimate already flags this "
+                    f"workflow at {gate_peak // (1024 ** 3)} GB peak memory "
+                    "(verdict=red) - real execution would OOM. Use the default "
+                    "zero-execution equivalent graph (dangerous probe off)."
+                ),
+                "disclaimer_key": "opgraphDisclaimer",
+            })
         deadline = time.monotonic() + opgraph.PROBE_DEADLINE_SECONDS
         loop = asyncio.get_running_loop()
         try:

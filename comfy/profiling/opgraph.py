@@ -90,8 +90,8 @@ OPGRAPH_REPORT_VERSION = 1
 # room to spare. The online probe additionally requires the explicit
 # "dangerous mode" acknowledgement (see app/profiling_routes.py); offline
 # sampling (Profiling v2 P1) goes through the same guards deliberately.
-MAX_NODE_INPUT_BYTES = 64 * 1024          # per-node string input cap
-MAX_TOTAL_INPUT_BYTES = 2 * 1024 * 1024   # whole-graph string input cap
+MAX_NODE_INPUT_BYTES = 4 * 1024 * 1024        # per-node string input cap (loose)
+MAX_TOTAL_INPUT_BYTES = 16 * 1024 * 1024      # whole-graph string input cap (loose)
 PROBE_DEADLINE_SECONDS = 60.0             # cooperative whole-analysis deadline
 
 # A node probe recording more ATen calls than this falls back to the formula
