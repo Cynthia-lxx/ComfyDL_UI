@@ -374,14 +374,24 @@ def _js_checks() -> None:
         ('data-col="side"', "T4ah expand toolbar sidebar-only"),
         ("equivalentGraphSvgOnly", "T4ai bare-svg extraction for exports"),
         ("canvas.toBlob", "T4aj png rasterization path"),
-        ("mermaid.live", "T4ak mermaid.live shortcut target"),
-        ('"json", "outline", "mermaid", "svg", "png", "link"',
-         "T4al all six export kinds wired"),
+        ('"json", "outline", "mermaid", "svg", "png"',
+         "T4al all five export kinds wired"),
     ]:
         check(name, needle in src)
     # Column assignment must move nodes, not re-render: appendChild is the
     # mechanism (cards keep their wirePanel bindings and collapse state).
     check("T4am columns populated by DOM move", "appendChild(child)" in src)
+    # P3 fix (user feedback): exported SVG/PNG must carry INLINE styles - the
+    # edge paths especially need fill="none" or standalone viewers paint the
+    # open bezier as solid black wedges ("human excrement" incident).
+    check("T4an edge paths inline fill=none",
+          'class="cdlp-svg-edge" fill="none" stroke="#6e7681" stroke-width="1.5"' in src)
+    check("T4ao svg texts inline fills",
+          'class="cdlp-svg-op" fill="#e6edf3"' in src
+          and 'class="cdlp-svg-more" fill="#8a94a0"' in src)
+    # The mermaid.live shortcut was removed (no pako -> empty editor link).
+    check("T4ap mermaid.live shortcut removed", "mermaid.live" not in src
+          and "export-link" not in src)
 
 
 def main() -> int:

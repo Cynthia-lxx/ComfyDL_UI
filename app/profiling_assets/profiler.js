@@ -210,9 +210,6 @@
       export_mermaid: "Mermaid",
       export_svg: "SVG file",
       export_png: "PNG image",
-      export_link: "mermaid.live",
-      link_copied: "Mermaid text copied - paste it into mermaid.live.",
-      link_copied_file: "Clipboard unavailable - mermaid text downloaded as .mmd instead.",
       export_png_failed: "PNG rasterization failed - try the SVG export.",
       opgraph_leaf: "no ATen ops (pure-Python leaf)",
       opgraph_probe_ms: "probe {ms} ms",
@@ -381,9 +378,6 @@
       export_mermaid: "Mermaid",
       export_svg: "SVG 文件",
       export_png: "PNG 图片",
-      export_link: "mermaid.live",
-      link_copied: "Mermaid 文本已复制——粘贴到 mermaid.live 即可查看。",
-      link_copied_file: "剪贴板不可用——Mermaid 文本已改为下载 .mmd 文件。",
       export_png_failed: "PNG 光栅化失败——请改用 SVG 导出。",
       opgraph_leaf: "无 ATen 算子（纯 Python 叶子节点）",
       opgraph_probe_ms: "探针 {ms} ms",
@@ -702,8 +696,7 @@
         + '<button class="cdlp-button" id="cdlp-export-outline">' + esc(t("export_outline")) + "</button> "
         + '<button class="cdlp-button" id="cdlp-export-mermaid">' + esc(t("export_mermaid")) + "</button> "
         + '<button class="cdlp-button" id="cdlp-export-svg">' + esc(t("export_svg")) + "</button> "
-        + '<button class="cdlp-button" id="cdlp-export-png">' + esc(t("export_png")) + "</button> "
-        + '<button class="cdlp-button" id="cdlp-export-link">' + esc(t("export_link")) + "</button></span></div>";
+        + '<button class="cdlp-button" id="cdlp-export-png">' + esc(t("export_png")) + "</button></span></div>";
     }
     if (state.opgraphStale) html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_stale_hint")) + "</div>";
     // P0: guardrail hits must never be silent - name the blocked nodes and
@@ -774,7 +767,7 @@
     } catch (e) { plog("low", "export failed: " + e); }
   }
 
-  // P1: hand-drawn SVG equivalent graph in the mermaid.live visual style
+  // P1: hand-drawn SVG equivalent graph in the mermaid-editor visual style
   // (rounded per-operator chips chained horizontally inside a colored node
   // frame, dotted canvas, smooth arrowed connectors).  Zero dependencies:
   // the host bundle has no mermaid/d3 and we never add npm packages - a
@@ -825,7 +818,8 @@
         + '" rx="10" fill="rgba(27, 31, 35, 0.72)" stroke="' + stroke
         + '" stroke-width="1.5"/>');
       parts.push('<text x="' + (x + 10) + '" y="' + (y + 14)
-        + '" class="cdlp-svg-title" fill="' + stroke + '">'
+        + '" class="cdlp-svg-title" fill="' + stroke + '"'
+        + ' font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">'
         + esc(n.class_type.slice(0, 26)) + " #" + esc(String(n.id)) + "</text>");
       let ox = x + PAD_X;
       const oy = y + TITLE_H;
@@ -834,7 +828,8 @@
           parts.push('<rect x="' + ox + '" y="' + oy + '" width="' + widths[i]
             + '" height="' + OP_H + '" rx="6" fill="#21262d" stroke="#3d444d"/>');
           parts.push('<text x="' + (ox + widths[i] / 2) + '" y="' + (oy + 17)
-            + '" text-anchor="middle" class="cdlp-svg-op">'
+            + '" text-anchor="middle" class="cdlp-svg-op" fill="#e6edf3"'
+            + ' font-family="Segoe UI, system-ui, sans-serif" font-size="11">'
             + esc(opLabel(o)) + "</text>");
           if (i) {
             parts.push('<path d="M ' + (ox - GAP) + " " + (oy + OP_H / 2)
@@ -845,11 +840,11 @@
         });
         if (hidden > 0) {
           parts.push('<text x="' + (ox - chainW + widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1) + 6)
-            + '" y="' + (oy + 17) + '" class="cdlp-svg-more">+' + hidden + "</text>");
+            + '" y="' + (oy + 17) + '" class="cdlp-svg-more" fill="#8a94a0" font-size="10">+' + hidden + "</text>");
         }
       } else {
         parts.push('<text x="' + ox + '" y="' + (oy + 17)
-          + '" class="cdlp-svg-more">'
+          + '" class="cdlp-svg-more" fill="#8a94a0" font-size="10">'
           + esc(n.status === "rule" ? t("opgraph_leaf") : (n.error || "\u2014")) + "</text>");
       }
     });
@@ -862,7 +857,8 @@
           const mx = (x1 + x2) / 2;
           parts.push('<path d="M ' + x1 + " " + y1 + " C " + mx + " " + y1 + ", "
             + mx + " " + y2 + ", " + x2 + " " + y2
-            + '" class="cdlp-svg-edge" marker-end="url(#cdlp-arrow)"/>');
+            + '" class="cdlp-svg-edge" fill="none" stroke="#6e7681" stroke-width="1.5"'
+            + ' marker-end="url(#cdlp-arrow)"/>');
         }
       });
     });
@@ -992,22 +988,10 @@
     img.src = url;
   }
 
-  // P3: mermaid.live shortcut - copy the mermaid text (no pako dependency to
-  // embed it in the URL) and open the editor in a new tab.
-  async function exportMermaidLink(og) {
-    const text = buildMermaid(og);
-    let copied = false;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        copied = true;
-      }
-    } catch (e) { /* clipboard unavailable: fall through */ }
-    if (!copied) downloadText("equivalent_graph.mmd", text);
-    try { window.open("https://mermaid.live", "_blank"); } catch (e) { /* popup blocked */ }
-    toast("info", t(copied ? "link_copied" : "link_copied_file"));
-    plog("high", "mermaid.live shortcut: copied=" + copied);
-  }
+  // P3 removal note: the mermaid-editor shortcut button was cut after user
+  // feedback - without pako we cannot embed the diagram into the URL, so the
+  // site opened empty and the button did nothing useful. The .mmd export
+  // covers the same need.
 
   function exportAssembled(kind) {
     const og = state.opgraph;
@@ -1024,8 +1008,6 @@
       if (svg) downloadText("equivalent_graph_" + stamp + ".svg", svg);
     } else if (kind === "png") {
       exportGraphPng(og, stamp);
-    } else if (kind === "link") {
-      exportMermaidLink(og);
     }
     plog("high", "exported assembled graph as " + kind);
   }
@@ -1773,7 +1755,7 @@
     });
     const logsRefresh = el.querySelector("#cdlp-logs-refresh");
     if (logsRefresh) logsRefresh.addEventListener("click", () => fetchServerLog());
-    ["json", "outline", "mermaid", "svg", "png", "link"].forEach((kind) => {
+    ["json", "outline", "mermaid", "svg", "png"].forEach((kind) => {
       const btn = el.querySelector("#cdlp-export-" + kind);
       if (btn) btn.addEventListener("click", () => exportAssembled(kind));
     });
