@@ -340,6 +340,15 @@ def _js_checks() -> None:
         check(name, needle in src)
     for key in ("opgraph_assembled", "opgraph_rule_hint", "coverage_line"):
         check(f"T4y zh+en have {key}", src.count(key + ":") >= 2, str(src.count(key + ":")))
+    # 2026-10-07 P1 review fixes: SVG always renders the equivalent graph,
+    # burst log starts collapsed, report-level errors are surfaced.
+    for needle, name in [
+        ("renderEquivalentGraphSvg", "T4z svg equivalent graph renderer"),
+        ("cdlp-svg-wrap", "T4z2 svg container + css hook"),
+        ("opgraph_zero_flops", "T4z3 zero-flops attribution hint"),
+        ("collapsed: { bursts: true", "T4z4 burst log starts collapsed"),
+    ]:
+        check(name, needle in src)
 
 
 def main() -> int:

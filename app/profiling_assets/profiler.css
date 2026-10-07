@@ -442,6 +442,32 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
   justify-content: center;
 }
 .cdlp-overlay.cdlp-overlay-open { display: flex; }
+
+/* P1: hand-drawn equivalent graph (zero-dependency SVG) */
+.cdlp-svg-wrap {
+  overflow-x: auto;
+  margin: 6px 0;
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 6px;
+  background: var(--comfy-menu-bg, #1e1e1e);
+}
+.cdlp-svg-wrap svg { display: block; }
+.cdlp-svg-title {
+  fill: #f0f0f0;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--monospace-font, monospace);
+}
+.cdlp-svg-op {
+  fill: #b9c6d4;
+  font-size: 10px;
+  font-family: var(--monospace-font, monospace);
+}
+.cdlp-svg-more {
+  fill: #8a94a0;
+  font-size: 10px;
+  font-style: italic;
+}
 .cdlp-overlay-inner {
   width: min(1200px, 92vw);
   height: min(860px, 90vh);

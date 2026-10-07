@@ -198,6 +198,7 @@
       danger_confirm: "The profiling probe executes REAL node code with REAL tensors. Very large inputs can consume significant CPU and memory while it runs. Enable the dangerous probe?",
       opgraph_guarded: "Input guardrail blocked {n} node(s) from probing - their string inputs exceed the 64 KB per-node cap, and the probe would otherwise loop over every byte for real: {list}. Shrink the text or feed it through a data node instead.",
       opgraph_assembled: "Equivalent graph assembled from the static rule library - no node was executed.",
+      opgraph_zero_flops: "Total FLOPs is 0 because the formula ledger cannot model some of these nodes (see coverage) - this is a reporting limit, not a zero-cost graph.",
       opgraph_rule_hint: "Operator sequence from the rule library (not executed); FLOPs are the formula estimate for the actual shapes.",
       coverage_line: "Coverage: {covered} rule-derived \u00b7 {driven} formula-derived \u00b7 {unknown} FLOPs unmodelled \u00b7 {missing} no info",
       export_json: "JSON",
@@ -359,6 +360,7 @@
       danger_confirm: "profiling 探针将以真实张量真实执行节点代码。输入很大时可能占用大量 CPU 与内存。确定开启危险模式？",
       opgraph_guarded: "输入护栏拦截了 {n} 个节点——字符串输入超过单节点 64KB 上限（探针会逐字节真实处理）：{list}。请缩小文本，或改用文件 / 数据节点接入。",
       opgraph_assembled: "等效计算图由规则库推定，未执行任何节点。",
+      opgraph_zero_flops: "FLOPs 总量为 0 是因为公式账本无法对其中部分节点建模（见覆盖率）——这是报告能力的边界，不代表图零开销。",
       opgraph_rule_hint: "算子序列来自规则库推定（未真实执行）；FLOPs 为公式按实际 shape 的估算值。",
       coverage_line: "覆盖：{covered} 规则推定 · {driven} 公式推定 · {unknown} FLOPs 无法建模 · {missing} 无信息",
       export_json: "JSON",
@@ -396,7 +398,9 @@
     // UI: collapse state for the two long sections (CPU burst log / per-node
     // breakdown). Kept in state because renderPanel() rebuilds the DOM on every
     // update and would otherwise reset any DOM-only collapsed flag.
-    collapsed: { bursts: false, nodes: false },
+    // Burst log starts collapsed (2026-10-07 user feedback): it is a running
+    // ledger, not the first thing to read.
+    collapsed: { bursts: true, nodes: false },
     // M3: operator-graph probe (manual Analyze button - never auto-run).
     opgraph: null,
     opgraphLoading: false,
@@ -672,6 +676,9 @@
         covered: cov.covered || 0, driven: cov.params_driven || 0,
         unknown: cov.unknown || 0, missing: cov.missing || 0,
       })) + "</div>";
+      // The always-rendered picture (2026-10-07 user feedback): a text export
+      // alone is not the "直观" default the P1 plan promised.
+      html += renderEquivalentGraphSvg(og);
       html += '<div class="cdlp-hint"><span class="cdlp-title-right">'
         + '<button class="cdlp-button" id="cdlp-export-json">' + esc(t("export_json")) + "</button> "
         + '<button class="cdlp-button" id="cdlp-export-outline">' + esc(t("export_outline")) + "</button> "
@@ -688,6 +695,18 @@
         + (guarded.length > 4 ? " \u2026" : "");
       html += '<div class="cdlp-hint cdlp-stale">'
         + esc(t("opgraph_guarded", { n: guarded.length, list })) + "</div>";
+    }
+    // Whole-graph guardrail / other report-level errors: the report carries
+    // the reason in `error` - surface it instead of showing a bare 0 FLOPs.
+    if (og.error && !og.nodes.length && !guarded.length) {
+      html += '<div class="cdlp-hint cdlp-stale">' + esc(String(og.error)) + "</div>";
+    }
+    // P1: in assembled mode a 0 FLOPs total usually means the formula ledger
+    // could not model the (unknown-coverage) nodes - say so explicitly.
+    if (og.mode === "assembled" && !totals.flops_probed
+        && (og.coverage && og.coverage.unknown)) {
+      html += '<div class="cdlp-hint cdlp-stale">'
+        + esc(t("opgraph_zero_flops")) + "</div>";
     }
     // P0: safe/timeout runs carry a mode flag - say so where the user looks.
     if (og.mode === "safe") {
@@ -726,6 +745,73 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     } catch (e) { plog("low", "export failed: " + e); }
+  }
+
+  // P1: hand-drawn SVG equivalent graph (zero dependencies - the host bundle
+  // has no mermaid/d3 and we never add npm packages).  One box per workflow
+  // node (rule-derived = teal border), its ATen op chain stacked inside,
+  // workflow links drawn as dashed connectors.  Mermaid text stays available
+  // as an export; this is the always-rendered picture.
+  function renderEquivalentGraphSvg(og) {
+    const prompt = state.lastPrompt || {};
+    const nodes = og.nodes || [];
+    if (!nodes.length) return "";
+    const COL_W = 230, ROW_H = 310, W = 205, OP_H = 20, TITLE_H = 22, PAD = 8;
+    const perRow = 5;
+    const pos = {};
+    const parts = [];
+    let maxBottom = 40;
+    const opLabel = (o) => o.op.replace(/^aten\./, "").replace(/\.default$/, "")
+      + (o.count > 1 ? " \u00d7" + o.count : "");
+    nodes.forEach((n, idx) => {
+      const col = idx % perRow, row = Math.floor(idx / perRow);
+      const ops = (n.ops || []).slice(0, 6);
+      const h = TITLE_H + (ops.length ? ops.length * OP_H : OP_H) + PAD * 2;
+      const x = PAD + col * COL_W;
+      const y = 40 + row * ROW_H;
+      pos[String(n.id)] = { x, y, w: W, h };
+      maxBottom = Math.max(maxBottom, y + h);
+      const stroke = n.status === "rule" ? "#1ABC9C"
+        : n.status === "probed" ? "#2ECC71" : "#7f8c8d";
+      parts.push('<rect x="' + x + '" y="' + y + '" width="' + W + '" height="' + h
+        + '" rx="6" fill="' + (n.status === "rule" ? "#173f3a" : "#2c2f33")
+        + '" stroke="' + stroke + '"/>');
+      parts.push('<text x="' + (x + 8) + '" y="' + (y + 15)
+        + '" class="cdlp-svg-title">' + esc(n.class_type.slice(0, 24))
+        + " #" + esc(String(n.id)) + "</text>");
+      if (ops.length) {
+        ops.forEach((o, i) => {
+          parts.push('<text x="' + (x + 10) + '" y="' + (y + TITLE_H + i * OP_H + 14)
+            + '" class="cdlp-svg-op">' + esc(opLabel(o)) + "</text>");
+        });
+        const more = (n.ops || []).length - ops.length;
+        if (more > 0) {
+          parts.push('<text x="' + (x + 10) + '" y="' + (y + TITLE_H + ops.length * OP_H + 14)
+            + '" class="cdlp-svg-more">+' + more + "</text>");
+        }
+      } else {
+        parts.push('<text x="' + (x + 10) + '" y="' + (y + TITLE_H + 14)
+          + '" class="cdlp-svg-more">'
+          + esc(n.status === "rule" ? t("opgraph_leaf") : (n.error || "\u2014")) + "</text>");
+      }
+    });
+    Object.entries(prompt).forEach(([target, node]) => {
+      Object.values(node.inputs || {}).forEach((v) => {
+        if (Array.isArray(v) && v.length === 2 && pos[String(v[0])] && pos[String(target)]) {
+          const pa = pos[String(v[0])], pb = pos[String(target)];
+          const x1 = pa.x + pa.w, y1 = pa.y + TITLE_H + 10;
+          const x2 = pb.x, y2 = pb.y + TITLE_H + 10;
+          const mx = (x1 + x2) / 2;
+          parts.push('<path d="M ' + x1 + " " + y1 + " C " + mx + " " + y1 + ", "
+            + mx + " " + y2 + ", " + x2 + " " + y2
+            + '" fill="none" stroke="#888" stroke-dasharray="4 3"/>');
+        }
+      });
+    });
+    const svgW = PAD * 2 + Math.min(perRow, nodes.length) * COL_W;
+    return '<div class="cdlp-svg-wrap"><svg width="' + svgW + '" height="'
+      + (maxBottom + 10) + '" xmlns="http://www.w3.org/2000/svg">'
+      + parts.join("") + "</svg></div>";
   }
 
   function mermaidSafe(s) {
