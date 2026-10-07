@@ -29,3 +29,5 @@ uv.lock
 /.codebuddy/
 # CUDA wheel drops staged for the GPU-side venv rebuild (dual-env rule); never track binaries.
 *.whl
+# Workflow run artifacts dropped at the repo root by profiling/regression runs.
+/*.csv
