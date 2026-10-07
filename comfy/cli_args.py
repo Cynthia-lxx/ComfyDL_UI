@@ -222,6 +222,7 @@ parser.add_argument("--log-stdout", action="store_true", help="Send normal proce
 # Read lazily by comfy/profiling/proflog.py; the frontend can also raise the
 # level per-request via the X-CDL-Profiling-Log header (no restart needed).
 parser.add_argument("--cdl-profiling-log", type=str, default="off", choices=["off", "low", "medium", "high"], help="Verbosity of the ComfyDL profiling backend logs: off / low / medium / high (default: off). The profiling frontend can raise it per-request without a restart.")
+parser.add_argument("--cdl-profiling-disable", action="store_true", help="Hard-disable the whole ComfyDL profiling stack: no watchdog sampling, no run metering, no frontend hooks. Only a restart without this flag can bring profiling back.")
 
 # ComfyDL profiling panel (reform: Profiling v2 P2): record measured per-node
 # FLOPs while workflows really run. count = totals only (default, cheap);

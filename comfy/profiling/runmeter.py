@@ -235,6 +235,11 @@ def persist_run(prompt_id: str, prompt: Dict[str, Any], meter: "RunMeter") -> No
     try:
         if _persistence_hook is None or meter is None:
             return
+        # Master switch (2026-10-07): a soft/hard disabled stack persists nothing.
+        from comfy.profiling.proflog import is_master_enabled
+
+        if not is_master_enabled():
+            return
         snapshot = meter.snapshot()
         if not snapshot.get("nodes"):
             return
@@ -250,8 +255,13 @@ def meter_from_args(args: Any = None) -> Optional[RunMeter]:
     """The meter for this launch from ``--cdl-profiling-record`` (None = off).
 
     Lazy on ``comfy.cli_args`` so unit tests can construct RunMeter directly
-    without the flag machinery.
+    without the flag machinery.  The master switch (soft or hard disable)
+    overrides everything: profiling detached from the run path means no meter.
     """
+    from comfy.profiling.proflog import is_master_enabled
+
+    if not is_master_enabled():
+        return None
     try:
         from comfy import cli_args
 

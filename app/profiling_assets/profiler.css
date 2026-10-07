@@ -419,6 +419,45 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 /* M3: operator graph (Analyze button, stale marker, census table) */
 .cdlp-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
 .cdlp-stale { color: #fbbf24; }
+
+/* Master-switch empty state (2026-10-07): centered icon + title + hint +
+   action, styled after the host Assets panel's empty view - muted palette
+   from host variables, generous spacing, no card chrome. */
+.cdlp-disabled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 56px 20px;
+  min-height: 340px;
+}
+.cdlp-disabled-icon {
+  color: var(--input-text-read-only, #9a9a9a);
+  opacity: 0.6;
+  transition: opacity 200ms ease;
+}
+.cdlp-disabled-icon svg { width: 72px; height: 72px; display: block; }
+.cdlp-disabled-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-color, #e0e0e0);
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+}
+.cdlp-disabled-hint {
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 340px;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+}
+.cdlp-master-enable {
+  margin-top: 8px;
+  padding: 6px 20px;
+  font-size: 12px;
+}
 .cdlp-op-table {
   width: 100%;
   border-collapse: collapse;

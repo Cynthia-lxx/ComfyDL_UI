@@ -82,6 +82,117 @@ def _flag_checks() -> None:
         check("T1d rejects unknown level", False, "SystemExit not raised")
     except SystemExit:
         check("T1d rejects unknown level", True)
+    args = cli_args.parser.parse_args([])
+    check("T1e master switch defaults on",
+          args.cdl_profiling_disable is False, str(args.cdl_profiling_disable))
+    args = cli_args.parser.parse_args(["--cdl-profiling-disable"])
+    check("T1f hard-disable flag parses", args.cdl_profiling_disable is True)
+
+
+# ----------------------------------------------------- T5: master switch --
+
+
+def _master_checks() -> None:
+    """The 2026-10-07 master switch: flag gating + the /enabled endpoint."""
+    from comfy.profiling import runmeter
+    from comfy.profiling.proflog import (
+        is_hard_disabled,
+        is_master_enabled,
+        set_master_enabled,
+    )
+
+    # Soft disable/enable round-trip (default on).
+    was = is_master_enabled()
+    try:
+        check("T5a default is enabled", was is True)
+        check("T5b soft disable", set_master_enabled(False) is False
+              and is_master_enabled() is False)
+        check("T5c meter short-circuits",
+              runmeter.meter_from_args() is None)
+        # persist_run must not reach the hook while disabled, even with a
+        # live meter (the guard sits before the snapshot call).
+        class _M:
+            def snapshot(self):
+                return {"nodes": {"1": {}}}
+
+        called = []
+        orig_hook = runmeter._persistence_hook
+        runmeter._persistence_hook = lambda *a: called.append(a)
+        try:
+            runmeter.persist_run("pid", {}, _M())
+            check("T5d persist short-circuits while disabled", called == [])
+        finally:
+            runmeter._persistence_hook = orig_hook
+        check("T5e soft enable", set_master_enabled(True) is True
+              and is_master_enabled() is True)
+    finally:
+        set_master_enabled(True)
+
+    # Hard disable refuses re-enable (simulate the CLI flag by flipping the
+    # module internals directly - parse_args cannot run inside a live app).
+    try:
+        proflog._hard_checked = True
+        proflog._hard_disabled = True
+        proflog._master_enabled = False
+        check("T5f hard disabled reported", is_hard_disabled() is True)
+        check("T5g hard refuses enable", set_master_enabled(True) is False
+              and is_master_enabled() is False)
+        check("T5h meter stays off under hard disable",
+              runmeter.meter_from_args() is None)
+    finally:
+        proflog._hard_disabled = False
+        proflog._master_enabled = True
+
+    # The /enabled endpoint through a real TestServer.
+    try:
+        from aiohttp import web
+        from aiohttp.test_utils import TestClient, TestServer
+    except ImportError:
+        check("T5i aiohttp available", False, "import failed")
+        return
+
+    from app import profiling_routes
+
+    async def _run_checks():
+        app = web.Application()
+        app.add_routes(profiling_routes.routes)
+        server = TestServer(app)
+        client = TestClient(server)
+        await client.start_server()
+        try:
+            r = await client.get("/comfydl/profiling/enabled")
+            body = await r.json()
+            check("T5j GET /enabled reports state",
+                  r.status == 200 and body.get("enabled") is True
+                  and body.get("hard_disabled") is False, str(body))
+            r = await client.post("/comfydl/profiling/enabled",
+                                  json={"enabled": False})
+            body = await r.json()
+            check("T5k POST disable applies",
+                  r.status == 200 and body.get("enabled") is False, str(body))
+            check("T5l state visible via GET",
+                  (await (await client.get("/comfydl/profiling/enabled")).json())
+                  .get("enabled") is False)
+            r = await client.post("/comfydl/profiling/enabled",
+                                  json={"enabled": True})
+            check("T5m POST enable applies",
+                  r.status == 200
+                  and (await r.json()).get("enabled") is True)
+            r = await client.post("/comfydl/profiling/enabled", json={"enabled": "yes"})
+            check("T5n junk body rejected", r.status == 400)
+            r = await client.post("/comfydl/profiling/enabled", json={"enabled": True})
+            check("T5o POST works when already enabled", r.status == 200)
+        finally:
+            await client.close()
+
+    import asyncio
+
+    try:
+        asyncio.new_event_loop().run_until_complete(_run_checks())
+    except Exception as exc:  # pragma: no cover
+        check("T5p endpoint checks ran", False, repr(exc))
+    finally:
+        set_master_enabled(True)
 
 
 # ------------------------------------------------------------- T2: proflog --
@@ -393,10 +504,29 @@ def _js_checks() -> None:
     check("T4ap mermaid.live shortcut removed", "mermaid.live" not in src
           and "export-link" not in src)
 
+    # Master switch (2026-10-07): the frontend must be able to fully detach
+    # (unpatch + removeEventListener) and show the empty state in both panels.
+    for needle, name in [
+        ("unpatchGraphToPrompt", "T4aq graphToPrompt restore function"),
+        ("app.graphToPrompt === _patchedGTP", "T4ar conservative unpatch guard"),
+        ("removeEventListener", "T4as listeners removable"),
+        ("applyEnabled", "T4at hot-switch entry point"),
+        ("master_title", "T4au empty-state title i18n"),
+        ("cdlp-disabled", "T4av empty-state container class"),
+        ("cdlp-master-enable", "T4aw enable button class"),
+        ('id="cdlp-enable"', "T4ax enable button id"),
+        ("hardDisabled", "T4ay hard-disable handling"),
+        ("ComfyDL.Profiling.Enabled", "T4az master setting id"),
+        ("setBadgeHidden", "T4ba badge/capsule hide path"),
+        ("--cdl-profiling-disable", "T4bb hard-disable flag referenced"),
+    ]:
+        check(name, needle in src)
+
 
 def main() -> int:
     _flag_checks()
     _proflog_checks()
+    _master_checks()
     _route_checks()
     _js_checks()
     failed = 0

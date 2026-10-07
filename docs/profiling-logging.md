@@ -59,3 +59,35 @@
 `renderPanel()` 双容器渲染）；`requestOpgraph()` 全面包进
 `try/finally`（loading 必然复位）。静态断言（T4b/c）已入
 `cdl_smoke_tests/test_profiling_log.py` 防回归。
+
+## Master switch（2026-10-07）
+
+**动机**：多次实测证明 profiling 的存在必然使工作流变慢（前端每次 Run 一次
+estimate 往返 + graphToPrompt 劫持、后端 watchdog 250ms 恒采样、per-run meter
+记账）。给用户一个完全停用 / 一键恢复的开关。
+
+**软开关（热切换，无需重启）**：Settings → ComfyDL → Profiling → Enabled
+（默认 on）。
+
+- 停用（前端）：恢复被劫持的 `graphToPrompt`（保守恢复——仅当当前引用仍是自家
+  patched 函数，防破坏其他扩展的包装链）、移除 graphChanged/executing/executed/
+  execution_error 四个监听、清 auto-estimate 定时器、隐藏顶栏徽章与 watchdog
+  胶囊；侧栏 tab 与 Expand/overlay 切换保留，两面板变为居中空态（图标 +
+  "Profiling currently disabled" + Enable 按钮，风格参考宿主 Assets 空态）。
+- 停用（后端，经 `POST /comfydl/profiling/enabled`）：`watchdog.stop()`；
+  `comfy/profiling/proflog.py` 的 master flag 置 off → `meter_from_args()` 返回
+  None、`persist_run()` 早退（executor 零改动）。
+- 恢复：同一开关切回 on（面板空态的 Enable 按钮走同一 Settings 通道），
+  watchdog 重启、劫持重挂，全部幂等可重入。
+
+**硬关（启动参数）**：`--cdl-profiling-disable`——不启动 watchdog、flag 恒 off
+且 `POST /enabled` 拒绝改回（409），前端空态显示"需去除参数重启"说明而无
+Enable 按钮。`GET /comfydl/profiling/enabled` 返回 `{enabled, hard_disabled}`
+供前端区分。
+
+**分层**：master flag 落 comfy 层（`proflog.py`，stdlib-only）——app 层写、comfy
+层（runmeter）读，符合"comfy 层不得 import app 层"铁律。手动路由
+（estimate/opgraph/history）停用后保留，但空态不发请求。
+
+**测试**：`test_profiling_log.py` T1e-f / T5a-p / T4aq-bb；真启动
+`--cpu --quick-test-for-ci --cdl-profiling-disable` EXIT=0（坑 25）。

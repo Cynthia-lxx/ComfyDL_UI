@@ -284,7 +284,16 @@ class PromptServer():
             self, scale_hint_fn=profiling_routes.scale_hint_for
         )
         profiling_routes.set_watchdog(self.profiling_watchdog)
-        self.profiling_watchdog.start()
+        # Master switch: --cdl-profiling-disable (or a soft-disabled state from
+        # the user settings via POST /enabled) keeps the psutil sampling
+        # thread off; the enabled endpoint starts it back on demand.
+        try:
+            from comfy.profiling.proflog import is_master_enabled
+
+            if is_master_enabled():
+                self.profiling_watchdog.start()
+        except Exception:
+            self.profiling_watchdog.start()
 
         self.on_prompt_handlers = []
 

@@ -107,6 +107,70 @@ def is_enabled(rank: str, request: Any = None) -> bool:
     return _RANK[level_for(request)] >= want
 
 
+# --- master switch (Profiling v2 post-plan, 2026-10-07) ---------------------
+#
+# Repeated measurements showed profiling's mere presence slows every run
+# (frontend graphToPrompt hijack + auto-estimate, backend watchdog sampling,
+# per-run meter bookkeeping), so the user gets a single switch that detaches
+# the whole stack from the run path and re-attaches it on demand. This lives
+# in the comfy layer (stdlib-only) because runmeter.py must consult it while
+# the app layer must write it - the layering rule forbids the reverse.
+#
+# * ``--cdl-profiling-disable`` hard-disables: the flag is set once at import
+#   time from the CLI args and :func:`set_master_enabled` then refuses to
+#   re-enable (only a restart without the flag can).
+# * Soft disable/enable is the hot path used by the Settings toggle: no
+#   restart, executor untouched - meter_from_args()/persist_run() just short-
+#   circuit.
+
+_hard_disabled = False
+_master_enabled = True
+_hard_checked = False
+
+
+def _check_hard_disabled() -> None:
+    """One-time lazy read of ``--cdl-profiling-disable`` (no torch import)."""
+    global _hard_disabled, _hard_checked
+    if _hard_checked:
+        return
+    _hard_checked = True
+    try:
+        from comfy import cli_args
+
+        _hard_disabled = bool(getattr(cli_args.args, "cdl_profiling_disable", False))
+    except Exception:  # pragma: no cover - cli_args always exists in-process
+        _hard_disabled = False
+    if _hard_disabled:
+        _master_enabled = False
+
+
+def is_master_enabled() -> bool:
+    """Whether profiling participates in the run path at all."""
+    _check_hard_disabled()
+    return _master_enabled
+
+
+def is_hard_disabled() -> bool:
+    """True only when ``--cdl-profiling-disable`` is on the command line."""
+    _check_hard_disabled()
+    return _hard_disabled
+
+
+def set_master_enabled(enabled: bool) -> bool:
+    """Soft enable/disable (hot path). Returns the resulting state.
+
+    Refuses to re-enable a hard-disabled process - that needs a restart
+    without ``--cdl-profiling-disable``.
+    """
+    global _master_enabled
+    _check_hard_disabled()
+    if _hard_disabled:
+        return False
+    with _lock:
+        _master_enabled = bool(enabled)
+    return _master_enabled
+
+
 def log(rank: str, message: str, *args: Any, request: Any = None) -> None:
     """Emit ``message % args`` tagged with ``rank`` when verbosity allows.
 

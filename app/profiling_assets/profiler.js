@@ -42,6 +42,9 @@
   // the header is attached per-request only while this flag is true.
   const SETTING_DANGEROUS = "ComfyDL.Profiling.DangerousProbe";
   const DANGEROUS_HEADER = "X-CDL-Profiling-Dangerous";
+  // Master switch (2026-10-07): detach the whole stack from the run path.
+  const SETTING_ENABLED = "ComfyDL.Profiling.Enabled";
+  const ENABLED_URL = "/comfydl/profiling/enabled";
   const LOG_RANKS = { off: 0, low: 1, medium: 2, high: 3 };
 
   // ------------------------------------------------------------------ i18n --
@@ -211,6 +214,10 @@
       export_svg: "SVG file",
       export_png: "PNG image",
       export_png_failed: "PNG rasterization failed - try the SVG export.",
+      master_title: "Profiling currently disabled",
+      master_hint: "Workflow parsing and execution are running untouched. Click Enable to bring the profiling analysis back.",
+      master_hard: "Started with --cdl-profiling-disable. Restart the server without that flag to bring profiling back.",
+      master_enable: "Enable profiling",
       opgraph_leaf: "no ATen ops (pure-Python leaf)",
       opgraph_probe_ms: "probe {ms} ms",
     },
@@ -379,6 +386,10 @@
       export_svg: "SVG 文件",
       export_png: "PNG 图片",
       export_png_failed: "PNG 光栅化失败——请改用 SVG 导出。",
+      master_title: "Profiling 已停用",
+      master_hint: "工作流解析与执行完全未被干预。点击下方按钮即可恢复分析功能。",
+      master_hard: "当前以 --cdl-profiling-disable 启动。去除该启动参数并重启服务后才能恢复。",
+      master_enable: "启用 Profiling",
       opgraph_leaf: "无 ATen 算子（纯 Python 叶子节点）",
       opgraph_probe_ms: "探针 {ms} ms",
     },
@@ -424,6 +435,12 @@
     logLevel: "off",
     // P0: real-execution probe gate (ComfyDL.Profiling.DangerousProbe).
     dangerousProbe: false,
+    // Master switch (2026-10-07): when false the stack is detached from the
+    // run path (no graphToPrompt hijack, no listeners, no auto-estimate) and
+    // the panels show the empty state. hardDisabled = --cdl-profiling-disable.
+    masterEnabled: true,
+    hardDisabled: false,
+    handlers: null,
     // P2: measured-FLOPs run history (from /comfydl/profiling/history).
     history: null,
     serverLog: null,
@@ -595,6 +612,7 @@
   }
 
   function scheduleEstimate() {
+    if (!state.masterEnabled) return; // master switch: no auto-estimate
     if (state.timer) clearTimeout(state.timer);
     markOpgraphStale();
     state.timer = setTimeout(() => requestEstimate(true), 500);
@@ -1013,12 +1031,12 @@
   }
 
   // ------------------------------------------------------------ run guard --
+  let _patchedGTP = null;
   function patchGraphToPrompt() {
     const app = getApp();
     if (!app || typeof app.graphToPrompt !== "function" || app.__cdlpPatched) return;
     originalGTP = app.graphToPrompt.bind(app);
-    app.__cdlpPatched = true;
-    app.graphToPrompt = async function (...args) {
+    _patchedGTP = async function (...args) {
       const result = await originalGTP(...args);
       try {
         if (result && result.output) state.lastPrompt = result.output;
@@ -1028,6 +1046,120 @@
       }
       return result;
     };
+    app.__cdlpPatched = true;
+    app.graphToPrompt = _patchedGTP;
+  }
+
+  // Master switch (2026-10-07): restore the host's original graphToPrompt so
+  // profiling detaches from the run path entirely. Conservative: only unpatch
+  // when OUR patched function is still the current one - if another extension
+  // wrapped it after us, touching it would break their chain.
+  function unpatchGraphToPrompt() {
+    const app = getApp();
+    if (!app || !app.__cdlpPatched) return;
+    if (app.graphToPrompt === _patchedGTP && originalGTP) {
+      app.graphToPrompt = originalGTP;
+      app.__cdlpPatched = false;
+      _patchedGTP = null;
+      plog("high", "graphToPrompt restored to original (master switch off)");
+    }
+  }
+
+  // Named handlers: the master switch must be able to remove them again.
+  function onGraphChanged() { scheduleEstimate(); }
+  function onExecuting(ev) {
+    try { handleExecuting(ev && ev.detail); } catch (e) { /* silent */ }
+  }
+  function onExecuted(ev) {
+    try { handleExecuted(ev && ev.detail); } catch (e) { /* silent */ }
+  }
+  function onExecutionError(ev) {
+    try { handleExecutionError(ev && ev.detail); } catch (e) { /* silent */ }
+    try { handleRunEnded(); } catch (e) { /* silent */ }
+  }
+
+  function attachEvents() {
+    const api = getApi();
+    if (!api || typeof api.addEventListener !== "function") return;
+    state.handlers = {
+      graphChanged: onGraphChanged,
+      executing: onExecuting,
+      executed: onExecuted,
+      execution_error: onExecutionError,
+    };
+    Object.keys(state.handlers).forEach((name) => {
+      api.addEventListener(name, state.handlers[name]);
+    });
+  }
+
+  function detachEvents() {
+    const api = getApi();
+    if (!api || !state.handlers) return;
+    Object.keys(state.handlers).forEach((name) => {
+      try { api.removeEventListener(name, state.handlers[name]); } catch (e) { /* silent */ }
+    });
+    state.handlers = null;
+  }
+
+  // Hide/show the top-bar badge and watchdog capsule without tearing them
+  // down (restoring is just a display flip).
+  function setBadgeHidden(hidden) {
+    try {
+      const b = state.badge || {};
+      [b.button && b.button.element, b.element].filter(Boolean)
+        .forEach((elm) => { elm.style.display = hidden ? "none" : ""; });
+      if (state.liveEl) state.liveEl.classList.toggle("cdlp-live-hidden", hidden);
+    } catch (e) { /* silent */ }
+  }
+
+  // The master switch itself: attach/detach the whole stack, then tell the
+  // backend (watchdog stop/start + runmeter flag). Idempotent; "announce"
+  // controls whether the backend is informed (init's GET-sync must not POST).
+  async function applyEnabled(enabled, announce) {
+    // A hard-disabled server always wins, whatever the setting says.
+    if (state.hardDisabled) enabled = false;
+    state.masterEnabled = enabled;
+    plog("high", "master switch -> " + enabled);
+    if (enabled) {
+      patchGraphToPrompt();
+      attachEvents();
+      setBadgeHidden(false);
+      scheduleEstimate();
+    } else {
+      unpatchGraphToPrompt();
+      detachEvents();
+      if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+      setBadgeHidden(true);
+    }
+    renderPanel();
+    if (announce) {
+      try {
+        const api = getApi();
+        if (api) {
+          const resp = await api.fetchApi(ENABLED_URL, {
+            method: "POST",
+            headers: profHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ enabled: enabled }),
+          });
+          plog("medium", "POST /enabled -> " + resp.status);
+        }
+      } catch (e) {
+        plog("low", "POST /enabled failed: " + (e && e.message ? e.message : e));
+      }
+    }
+  }
+
+  // The empty-state Enable button routes through the Settings store so the
+  // toggle, persistence and this handler stay one source of truth.
+  async function enableProfiling() {
+    try {
+      const em = getApp() && getApp().extensionManager;
+      if (em && em.setting && typeof em.setting.set === "function") {
+        await em.setting.set(SETTING_ENABLED, true); // onChange -> applyEnabled
+        return;
+      }
+    } catch (e) { /* store unavailable: apply directly */ }
+    await applyEnabled(true, true);
   }
 
   async function guardRun() {
@@ -1396,9 +1528,41 @@
     } catch (e) { /* ignore */ }
   }
 
+  // Master-switch empty state, styled after the host's Assets empty view
+  // (centered icon + title + hint + action, muted host-variable palette).
+  function renderDisabledPanel() {
+    const el = state.panelEl;
+    if (!el && !state.overlayEl) return;
+    const icon = '<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<circle cx="32" cy="30" r="18" stroke="currentColor" stroke-width="2.5"/>'
+      + '<path d="M 32 30 L 42 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>'
+      + '<circle cx="32" cy="30" r="2.6" fill="currentColor"/>'
+      + '<path d="M 20 54 L 44 54" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>'
+      + '<path d="M 26 54 C 26 50 29 48 32 48 C 35 48 38 50 38 54" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>'
+      + "</svg>";
+    const btn = state.hardDisabled ? ""
+      : '<button class="cdlp-button cdlp-master-enable" id="cdlp-enable">'
+        + esc(t("master_enable")) + "</button>";
+    const hint = state.hardDisabled ? t("master_hard") : t("master_hint");
+    const html = '<div class="cdlp-panel"><div class="cdlp-disabled">'
+      + '<div class="cdlp-disabled-icon">' + icon + "</div>"
+      + '<div class="cdlp-disabled-title">' + esc(t("master_title")) + "</div>"
+      + '<div class="cdlp-disabled-hint">' + esc(hint) + "</div>"
+      + btn + "</div></div>";
+    if (el) { el.innerHTML = html; wirePanel(el); }
+    if (state.overlayEl) { state.overlayEl.innerHTML = html; wirePanel(state.overlayEl); }
+  }
+
   function renderPanel() {
     const el = state.panelEl;
     if (!el && !state.overlayEl) return;
+    // Master switch: both panels become the same centered empty state (the
+    // sidebar tab and the Expand/overlay switch keep working - only content
+    // changes). No cards, no requests.
+    if (!state.masterEnabled) {
+      renderDisabledPanel();
+      return;
+    }
     const r = state.report;
     const pm = state.postmortem;
     const budget = (r && r.budget) || null;
@@ -1755,6 +1919,9 @@
     });
     const logsRefresh = el.querySelector("#cdlp-logs-refresh");
     if (logsRefresh) logsRefresh.addEventListener("click", () => fetchServerLog());
+    // Master switch empty state: re-enable profiling from either panel.
+    const enableBtn = el.querySelector("#cdlp-enable");
+    if (enableBtn) enableBtn.addEventListener("click", () => { void enableProfiling(); });
     ["json", "outline", "mermaid", "svg", "png"].forEach((kind) => {
       const btn = el.querySelector("#cdlp-export-" + kind);
       if (btn) btn.addEventListener("click", () => exportAssembled(kind));
@@ -1833,26 +2000,37 @@
     const app = getApp();
     if (!app) return;
     state.locale = await detectLocale();
-    patchGraphToPrompt();
-    const api = getApi();
-    if (api && typeof api.addEventListener === "function") {
-      api.addEventListener("graphChanged", scheduleEstimate);
-      api.addEventListener("executing", (event) => {
-        try { handleExecuting(event && event.detail); } catch (e) { /* silent */ }
-      });
-      api.addEventListener("executed", (event) => {
-        try { handleExecuted(event && event.detail); } catch (e) { /* silent */ }
-      });
-      api.addEventListener("execution_error", (event) => {
-        try { handleExecutionError(event && event.detail); } catch (e) { /* silent */ }
-        try { handleRunEnded(); } catch (e) { /* silent */ }
-      });
+    // Master switch: sync with the backend BEFORE touching the run path.
+    // A hard disable (--cdl-profiling-disable) always wins over the setting.
+    try {
+      const api = getApi();
+      if (api) {
+        const resp = await api.fetchApi(ENABLED_URL, { headers: profHeaders() });
+        if (resp.ok) {
+          const body = await resp.json();
+          if (body.hard_disabled) {
+            state.hardDisabled = true;
+            state.masterEnabled = false;
+          } else {
+            state.masterEnabled = body.enabled !== false;
+          }
+        }
+      }
+    } catch (e) { /* backend older than the panel: default on */ }
+    if (state.masterEnabled) {
+      patchGraphToPrompt();
+      attachEvents();
     }
     await waitFor(() => getApp() && getApp().extensionManager);
     try { registerSidebar(); } catch (e) { /* sidebar optional */ }
     try { await mountBadge(); } catch (e) { /* badge optional */ }
     try { mountOverlay(); } catch (e) { /* overlay optional */ }
-    scheduleEstimate();
+    if (state.masterEnabled) {
+      scheduleEstimate();
+    } else {
+      setBadgeHidden(true); // mounted, but hidden while disabled
+    }
+    renderPanel();
   }
 
   function boot() {
@@ -1901,6 +2079,21 @@
               revertDangerous();
             }
             renderPanel();
+          },
+        },
+        {
+          // Master switch (2026-10-07): detach the whole profiling stack
+          // from the run path and back. The backend is informed per-change;
+          // a hard-disabled server refuses the POST and the panels show the
+          // restart hint instead of the Enable button.
+          id: SETTING_ENABLED,
+          name: "ComfyDL profiling enabled (master switch)",
+          type: "boolean",
+          defaultValue: true,
+          onChange: (newVal) => {
+            const enabled = newVal !== false;
+            if (enabled === state.masterEnabled && state.handlers !== null) return;
+            void applyEnabled(enabled, true);
           },
         },
         ],

@@ -82,6 +82,59 @@ def scale_hint_for(node_id: str) -> Optional[dict]:
     return None
 
 
+# --- master switch (2026-10-07) ----------------------------------------------
+# GET  /comfydl/profiling/enabled -> {enabled, hard_disabled}
+# POST /comfydl/profiling/enabled {"enabled": bool}
+#   Soft-disables the stack: watchdog sampling stops, runmeter short-circuits
+#   (comfy/profiling/proflog.py master flag).  Manual routes stay up (the
+#   empty-state panel makes no requests anyway).  --cdl-profiling-disable
+#   makes the POST refuse to re-enable; only a restart can.
+
+def _apply_watchdog(enabled: bool) -> None:
+    """Start/stop the sampling thread to match the master flag (never raises)."""
+    if _WATCHDOG is None:
+        return
+    try:
+        if enabled:
+            _WATCHDOG.start()
+        else:
+            _WATCHDOG.stop()
+    except Exception:
+        pass
+
+
+@routes.get("/comfydl/profiling/enabled")
+async def enabled_get(request: web.Request) -> web.Response:
+    from comfy.profiling.proflog import is_hard_disabled, is_master_enabled
+
+    return web.json_response({
+        "enabled": is_master_enabled(),
+        "hard_disabled": is_hard_disabled(),
+    })
+
+
+@routes.post("/comfydl/profiling/enabled")
+async def enabled_post(request: web.Request) -> web.Response:
+    from comfy.profiling.proflog import (
+        is_hard_disabled, is_master_enabled, set_master_enabled,
+    )
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    if not isinstance(payload, dict) or not isinstance(payload.get("enabled"), bool):
+        return web.json_response({"error": "body must be {enabled: bool}"}, status=400)
+    if is_hard_disabled() and payload["enabled"]:
+        return web.json_response({
+            "error": "profiling is hard-disabled (--cdl-profiling-disable); restart without the flag to re-enable",
+        }, status=409)
+    enabled = set_master_enabled(payload["enabled"])
+    _apply_watchdog(enabled)
+    proflog.log("low", "master switch -> %s", enabled, request=request)
+    return web.json_response({"enabled": enabled, "hard_disabled": is_hard_disabled()})
+
+
 def _budget_from_payload(payload: Dict[str, Any]) -> Optional[DeviceBudget]:
     """The caller-supplied budget, else the live primary-device budget."""
     data = payload.get("budget")
