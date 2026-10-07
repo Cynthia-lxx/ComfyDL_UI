@@ -71,8 +71,8 @@ _UUID_RE = re.compile(
 # "language_model_load_and_chat" reuses the training workflow's screenshot
 # until a dedicated one is captured.
 _THUMBNAIL_FILENAMES: Dict[str, str] = {
-    "language_model_load_and_chat": "language_model_train_and_chat-1.jpg",
-    "regression_model_reuse": "tabular_regression_production-1.jpg",
+    "language_model_load_and_chat": "language_model_train_and_chat-1.png",
+    "regression_model_reuse": "tabular_regression_production-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -112,7 +112,7 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
                 "built entirely from ComfyDL nodes."
             ),
             "mediaType": "image",
-            "mediaSubtype": "jpg",
+            "mediaSubtype": "png",
             "tags": ["language model", "transformer", "training", "nlp"],
             "date": "2026-09-20",
             "openSource": True,
@@ -126,7 +126,7 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
                 "workflow."
             ),
             "mediaType": "image",
-            "mediaSubtype": "jpg",
+            "mediaSubtype": "png",
             "tags": ["language model", "inference", "nlp"],
             "date": "2026-09-20",
             "openSource": True,
@@ -157,7 +157,7 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
                 "CSV / XLSX / DB reader to run your own data."
             ),
             "mediaType": "image",
-            "mediaSubtype": "jpg",
+            "mediaSubtype": "png",
             "tags": ["regression", "dataset", "production", "csv"],
             "date": "2026-10-05",
             "openSource": True,
@@ -173,7 +173,7 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
                 "template once first so output/regression_model.pt exists."
             ),
             "mediaType": "image",
-            "mediaSubtype": "jpg",
+            "mediaSubtype": "png",
             "tags": ["regression", "load", "inference", "csv"],
             "date": "2026-10-05",
             "openSource": True,

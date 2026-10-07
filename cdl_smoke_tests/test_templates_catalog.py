@@ -188,14 +188,16 @@ else:
 # ---------------------------------------------------------------------------
 # T5: overlay asset resolution
 
-for name in sorted(comfydl_names):
+for entry in sorted(curated[0]["templates"], key=lambda t: t["name"]):
+    name = entry["name"]
+    subtype = entry.get("mediaSubtype", "jpg")
     check(
         f"T5a overlay workflow resolvable: {name}",
         (tc.resolve_overlay_asset(f"{name}.json") or Path()).is_file(),
     )
-    thumb = tc.resolve_overlay_asset(f"{name}-1.jpg")
+    thumb = tc.resolve_overlay_asset(f"{name}-1.{subtype}")
     check(
-        f"T5b overlay thumbnail resolvable: {name}-1.jpg",
+        f"T5b overlay thumbnail resolvable: {name}-1.{subtype}",
         (thumb or Path()).is_file()
         and thumb.is_relative_to(tc._EXAMPLE_WORKFLOWS_DIR.resolve()),
         str(thumb),
@@ -317,11 +319,11 @@ async def _route_checks() -> None:
         check("T9b route: handler unquotes percent escapes (%5F)", ok, info)
 
         ok, info, _ = await hit(
-            "/templates/language_model_load_and_chat-1.jpg", 200)
+            "/templates/language_model_load_and_chat-1.png", 200)
         check("T9c route: load-and-chat thumbnail 200 (mapped art)", ok, info)
 
         ok, info, _ = await hit(
-            "/templates/language_model_train_and_chat-1.jpg", 200)
+            "/templates/language_model_train_and_chat-1.png", 200)
         check("T9d route: train-and-chat thumbnail 200", ok, info)
 
         # Regression templates (2026-10-05): JSON + mapped thumbnail art.
@@ -341,7 +343,7 @@ async def _route_checks() -> None:
             "/templates/linear_regression_from_scratch-1.jpg", 200)
         check("T9l route: linear-regression thumbnail 200 (mapped art)", ok, info)
         ok, info, _ = await hit(
-            "/templates/tabular_regression_production-1.jpg", 200)
+            "/templates/tabular_regression_production-1.png", 200)
         check("T9m route: tabular-regression thumbnail 200 (mapped art)", ok, info)
 
         ok, info, body = await hit("/templates/index.json", 200)
