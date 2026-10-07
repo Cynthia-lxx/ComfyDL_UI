@@ -101,6 +101,22 @@ prompt（graphToPrompt 输出）→ engine._topological_order
 - JS 语法自查：剥字符串/注释后括号配平（坑 24 范式）。
 - 全量冒烟 301/33/0 不回退（P/F 双盘）。
 
+### 6.1 P3：三列分区 overlay 与导出矩阵（2026-10-07）
+
+- **三列分区**：expand 全屏 overlay 改为 grid 三列（左 280px estimates 摘要 =
+  verdict/budget/compute/assumptions/postmortem；中自适应 = 等效计算图 SVG 主视区 +
+  per-node breakdown；右 320px = 节点耗时/爆点/实测历史/服务端日志），各列独立滚动，
+  <1100px 窄屏降级单列堆叠（参考 ComfyUI-Manager 分区范式、宿主 CSS 变量取色）。
+- **实现机制**：卡片渲染时打 `data-col` 标记，overlay 写入时把同一份 DOM 节点
+  **appendChild 移动**（非重渲染）进列容器——wirePanel 绑定与折叠状态天然保留；
+  `renderOverlay` 仍只切 class（P0 修复架构，T4b/c 防回归）；Expand 工具栏
+  （`data-col="side"`）仅侧栏渲染。侧栏 tab 维持单列不变。
+- **导出矩阵**：JSON / 文本大纲 / Mermaid（P1 已有）+ **SVG 文件**（从渲染字符串
+  提取 `<svg>` 落 Blob）+ **PNG 图片**（SVG→blob→Image→2x canvas→toBlob，零新依赖，
+  仅点击时光栅化，深色底）+ **mermaid.live 快捷方式**（剪贴板复制 + 打开编辑器，
+  无 pako 依赖不内嵌 URL，剪贴板不可用时降级下载 .mmd）。等效 workflow 导出与
+  .vsdx 维持 backlog（bigplan 既定）。
+
 ## 7. 诚实边界与后置项
 
 - 粒度 = ATen，不到内核；数据依赖控制流（早停）的执行次数以 widget 声明为准（canned

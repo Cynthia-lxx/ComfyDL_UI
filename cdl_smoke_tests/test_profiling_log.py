@@ -359,6 +359,30 @@ def _js_checks() -> None:
           src.index("renderEquivalentGraphSvg(og)") > src.index('og.mode === "assembled"')
           and 'if ((og.nodes || []).length) {' in src)
 
+    # P3: three-column overlay (left estimates / mid graph / right history).
+    # The columns are static DOM in renderPanel; renderOverlay must stay a
+    # class-only toggle (T4b/T4c above guard that) and displayMode must stay
+    # non-persisted (T4j/T4k).
+    for needle, name in [
+        ("cdlp-overlay-cols", "T4aa three-column container class"),
+        ("cdlp-col-left", "T4ab left column (estimates)"),
+        ("cdlp-col-mid", "T4ac mid column (equivalent graph)"),
+        ("cdlp-col-right", "T4ad right column (measured history)"),
+        ('data-col="left"', "T4ae verdict/budget cards tagged left"),
+        ('data-col="mid"', "T4af opgraph/cards tagged mid"),
+        ('data-col="right"', "T4ag history/tags tagged right"),
+        ('data-col="side"', "T4ah expand toolbar sidebar-only"),
+        ("equivalentGraphSvgOnly", "T4ai bare-svg extraction for exports"),
+        ("canvas.toBlob", "T4aj png rasterization path"),
+        ("mermaid.live", "T4ak mermaid.live shortcut target"),
+        ('"json", "outline", "mermaid", "svg", "png", "link"',
+         "T4al all six export kinds wired"),
+    ]:
+        check(name, needle in src)
+    # Column assignment must move nodes, not re-render: appendChild is the
+    # mechanism (cards keep their wirePanel bindings and collapse state).
+    check("T4am columns populated by DOM move", "appendChild(child)" in src)
+
 
 def main() -> int:
     _flag_checks()

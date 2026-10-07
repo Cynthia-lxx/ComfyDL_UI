@@ -208,6 +208,12 @@
       export_json: "JSON",
       export_outline: "Outline",
       export_mermaid: "Mermaid",
+      export_svg: "SVG file",
+      export_png: "PNG image",
+      export_link: "mermaid.live",
+      link_copied: "Mermaid text copied - paste it into mermaid.live.",
+      link_copied_file: "Clipboard unavailable - mermaid text downloaded as .mmd instead.",
+      export_png_failed: "PNG rasterization failed - try the SVG export.",
       opgraph_leaf: "no ATen ops (pure-Python leaf)",
       opgraph_probe_ms: "probe {ms} ms",
     },
@@ -373,6 +379,12 @@
       export_json: "JSON",
       export_outline: "大纲",
       export_mermaid: "Mermaid",
+      export_svg: "SVG 文件",
+      export_png: "PNG 图片",
+      export_link: "mermaid.live",
+      link_copied: "Mermaid 文本已复制——粘贴到 mermaid.live 即可查看。",
+      link_copied_file: "剪贴板不可用——Mermaid 文本已改为下载 .mmd 文件。",
+      export_png_failed: "PNG 光栅化失败——请改用 SVG 导出。",
       opgraph_leaf: "无 ATen 算子（纯 Python 叶子节点）",
       opgraph_probe_ms: "探针 {ms} ms",
     },
@@ -664,7 +676,7 @@
     const btn = '<button class="cdlp-button" id="cdlp-analyze"'
       + (state.opgraphLoading ? " disabled" : "") + ">" + btnLabel + "</button>";
     if (!og) {
-      return '<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>"
+      return '<div class="cdlp-card" data-col="mid"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>"
         + '<div class="cdlp-hint">' + esc(t("opgraph_none")) + "</div>" + btn + "</div>";
     }
     const totals = og.totals || {};
@@ -674,7 +686,7 @@
       probedFlops: fmtFlops(totals.flops_probed),
       ratio: totals.ratio === null || totals.ratio === undefined ? "\u2014" : totals.ratio,
     });
-    let html = '<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>";
+    let html = '<div class="cdlp-card" data-col="mid"><div class="cdlp-card-title">' + esc(t("opgraph_title")) + "</div>";
     html += '<div class="cdlp-flops-total">' + esc(fmtFlops(totals.flops_probed)) + "</div>";
     html += '<div class="cdlp-hint">' + esc(summary) + "</div>";
     // P1: assembled mode badge + honest coverage line + exports.
@@ -688,7 +700,10 @@
       html += '<div class="cdlp-hint"><span class="cdlp-title-right">'
         + '<button class="cdlp-button" id="cdlp-export-json">' + esc(t("export_json")) + "</button> "
         + '<button class="cdlp-button" id="cdlp-export-outline">' + esc(t("export_outline")) + "</button> "
-        + '<button class="cdlp-button" id="cdlp-export-mermaid">' + esc(t("export_mermaid")) + "</button></span></div>";
+        + '<button class="cdlp-button" id="cdlp-export-mermaid">' + esc(t("export_mermaid")) + "</button> "
+        + '<button class="cdlp-button" id="cdlp-export-svg">' + esc(t("export_svg")) + "</button> "
+        + '<button class="cdlp-button" id="cdlp-export-png">' + esc(t("export_png")) + "</button> "
+        + '<button class="cdlp-button" id="cdlp-export-link">' + esc(t("export_link")) + "</button></span></div>";
     }
     if (state.opgraphStale) html += '<div class="cdlp-hint cdlp-stale">' + esc(t("opgraph_stale_hint")) + "</div>";
     // P0: guardrail hits must never be silent - name the blocked nodes and
@@ -926,6 +941,74 @@
     return lines.join("\n");
   }
 
+  // P3: extract the bare <svg>...</svg> payload from the wrapped rendering
+  // (renderEquivalentGraphSvg returns "<div class='cdlp-svg-wrap'><svg…").
+  function equivalentGraphSvgOnly(og) {
+    const wrapped = renderEquivalentGraphSvg(og);
+    const start = wrapped.indexOf("<svg");
+    const end = wrapped.lastIndexOf("</svg>");
+    if (start === -1 || end === -1) return "";
+    return wrapped.slice(start, end + 6);
+  }
+
+  // P3: PNG via SVG -> blob URL -> Image -> 2x canvas -> toBlob. Zero new
+  // dependencies; rasterization happens only on click. Dark background is
+  // painted first because SVG canvas transparency looks wrong in light image
+  // viewers.
+  function exportGraphPng(og, stamp) {
+    const svg = equivalentGraphSvgOnly(og);
+    if (!svg) return;
+    const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = (img.width || 800) * scale;
+        canvas.height = (img.height || 600) * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#0d1117";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "equivalent_graph_" + stamp + ".png";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        }, "image/png");
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      toast("warn", t("export_png_failed"));
+    };
+    img.src = url;
+  }
+
+  // P3: mermaid.live shortcut - copy the mermaid text (no pako dependency to
+  // embed it in the URL) and open the editor in a new tab.
+  async function exportMermaidLink(og) {
+    const text = buildMermaid(og);
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch (e) { /* clipboard unavailable: fall through */ }
+    if (!copied) downloadText("equivalent_graph.mmd", text);
+    try { window.open("https://mermaid.live", "_blank"); } catch (e) { /* popup blocked */ }
+    toast("info", t(copied ? "link_copied" : "link_copied_file"));
+    plog("high", "mermaid.live shortcut: copied=" + copied);
+  }
+
   function exportAssembled(kind) {
     const og = state.opgraph;
     if (!og) return;
@@ -936,6 +1019,13 @@
       downloadText("equivalent_graph_" + stamp + ".txt", buildOutline(og));
     } else if (kind === "mermaid") {
       downloadText("equivalent_graph_" + stamp + ".mmd", buildMermaid(og));
+    } else if (kind === "svg") {
+      const svg = equivalentGraphSvgOnly(og);
+      if (svg) downloadText("equivalent_graph_" + stamp + ".svg", svg);
+    } else if (kind === "png") {
+      exportGraphPng(og, stamp);
+    } else if (kind === "link") {
+      exportMermaidLink(og);
     }
     plog("high", "exported assembled graph as " + kind);
   }
@@ -1334,11 +1424,11 @@
 
     const html = [];
     html.push('<div class="cdlp-panel">');
-    html.push('<div class="cdlp-toolbar"><button class="cdlp-button cdlp-expand" id="cdlp-expand">'
+    html.push('<div class="cdlp-toolbar" data-col="side"><button class="cdlp-button cdlp-expand" id="cdlp-expand">'
       + esc(t("opgraph_expand")) + "</button></div>");
 
     // Verdict header
-    html.push('<div class="cdlp-verdict cdlp-v-' + ((r && r.verdict) || "unknown") + '">');
+    html.push('<div class="cdlp-verdict cdlp-v-' + ((r && r.verdict) || "unknown") + '" data-col="left">');
     html.push('<span class="cdlp-verdict-badge">' + esc(t("verdict_" + ((r && r.verdict) || "unknown"))) + "</span>");
     if (r) {
       html.push('<span class="cdlp-verdict-num">' + esc(fmtBytes(r.peak_bytes)) + "</span>");
@@ -1359,7 +1449,7 @@
 
     // Budget card
     if (budget) {
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("budget_title")) + "</div>");
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("budget_title")) + "</div>");
       html.push('<div class="cdlp-budget">');
       html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("budget_total")) + '</div><div class="cdlp-v">' + esc(fmtBytes(budget.total_bytes)) + "</div></div>");
       html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("budget_free")) + '</div><div class="cdlp-v">' + esc(fmtBytes(budget.free_bytes)) + "</div></div>");
@@ -1373,7 +1463,7 @@
     // Compute ledger (M2)
     const flops = (r && r.flops) || null;
     if (flops && flops.any_estimated) {
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>");
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>");
       html.push('<div class="cdlp-flops-total">' + esc(fmtFlops(flops.total)) + "</div>");
       const byKind = flops.by_kind || {};
       const flopsTotal = Math.max(1, Number(flops.total) || 0);
@@ -1389,14 +1479,14 @@
       html.push('<div class="cdlp-hint">' + esc(t("flops_note")) + "</div>");
       html.push("</div>");
     } else if (r && r.nodes && r.nodes.length) {
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>"
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>"
         + '<div class="cdlp-hint">' + esc(t("flops_none")) + "</div></div>");
     }
 
     // Assumptions
     const usedAssumptions = (r && r.assumptions_used) || [];
     if (usedAssumptions.length) {
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("assumptions_title")) + "</div>");
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("assumptions_title")) + "</div>");
       html.push('<div class="cdlp-hint">' + esc(t("assumptions_hint")) + "</div>");
       usedAssumptions.forEach((a) => {
         html.push('<div class="cdlp-assumption">');
@@ -1411,7 +1501,7 @@
 
     // Post-mortem
     if (pm) {
-      html.push('<div class="cdlp-card cdlp-pm">');
+      html.push('<div class="cdlp-card cdlp-pm" data-col="left">');
       html.push('<div class="cdlp-card-title cdlp-pm-title">' + esc(t("postmortem_title")) + "</div>");
       if (pm.allocation_human) {
         html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_alloc")) + '</span><b>' + esc(pm.allocation_human) + "</b></div>");
@@ -1440,7 +1530,7 @@
       const active = closed.filter((x) => x.end - x.start >= 5)
         .sort((a, b) => (b.end - b.start) - (a.end - a.start));
       const cachedCount = closed.length - active.length;
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>");
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>");
       html.push('<div class="cdlp-timing-total"><span>' + esc(t("timing_total")) + "</span><b>"
         + esc(fmtDuration(totalMs)) + "</b></div>");
       if (active.length) {
@@ -1458,16 +1548,16 @@
       if (!closed.length) html.push('<div class="cdlp-hint">' + esc(t("timing_running")) + "</div>");
       html.push("</div>");
     } else if (state.executing) {
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>"
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>"
         + '<div class="cdlp-hint">' + esc(t("timing_running")) + "</div></div>");
     }
 
     // Execution monitor burst log (M2 / W2)
     if (state.watchdogUnavailable) {
-      html.push('<div class="cdlp-card"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
         + '<div class="cdlp-hint">' + esc(t("watchdog_unavailable")) + "</div></div>");
     } else if (state.bursts && state.bursts.length) {
-      html.push('<div class="cdlp-card cdlp-wd' + (state.collapsed.bursts ? " cdlp-collapsed" : "") + '">'
+      html.push('<div class="cdlp-card cdlp-wd' + (state.collapsed.bursts ? " cdlp-collapsed" : "") + '" data-col="right">'
         + '<div class="cdlp-card-title cdlp-wd-title cdlp-collapsible" data-collapse="bursts">'
         + '<span class="cdlp-collapse-label">' + esc(t("watchdog_bursts")) + "</span>"
         + '<i class="cdlp-chevron"></i></div>'
@@ -1491,7 +1581,7 @@
 
     // P2: measured-FLOPs run history.
     if (state.history !== null) {
-      html.push('<div class="cdlp-card' + (state.collapsed.history ? " cdlp-collapsed" : "") + '">');
+      html.push('<div class="cdlp-card' + (state.collapsed.history ? " cdlp-collapsed" : "") + '" data-col="right">');
       html.push('<div class="cdlp-card-title cdlp-collapsible" data-collapse="history">'
         + '<span class="cdlp-collapse-label">' + esc(t("history_title")) + "</span>"
         + '<i class="cdlp-chevron"></i></div>');
@@ -1516,7 +1606,7 @@
     }
 
     // Per-node breakdown
-    html.push('<div class="cdlp-card' + (state.collapsed.nodes ? " cdlp-collapsed" : "") + '">'
+    html.push('<div class="cdlp-card' + (state.collapsed.nodes ? " cdlp-collapsed" : "") + '" data-col="mid">'
       + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="nodes">'
       + '<span class="cdlp-collapse-label">' + esc(t("table_title")) + "</span>"
       + '<span class="cdlp-title-right">'
@@ -1594,7 +1684,7 @@
 
     // M3+: server-side profiling log tail (visible only when level != off)
     if (state.logLevel !== "off") {
-      html.push('<div class="cdlp-card' + (state.collapsed.serverlog ? " cdlp-collapsed" : "") + '">'
+      html.push('<div class="cdlp-card' + (state.collapsed.serverlog ? " cdlp-collapsed" : "") + '" data-col="right">'
         + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="serverlog">'
         + '<span class="cdlp-collapse-label">' + esc(t("logs_title")) + "</span>"
         + '<span class="cdlp-title-right">'
@@ -1609,15 +1699,42 @@
       html.push("</div></div>");
     }
 
-    html.push('<div class="cdlp-disclaimer">' + esc(t("disclaimer")) + "</div>");
+    html.push('<div class="cdlp-disclaimer" data-col="left">' + esc(t("disclaimer")) + "</div>");
     html.push("</div>");
 
     const htmlString = html.join("");
-    [el, state.overlayEl].forEach((target) => {
-      if (!target) return;
-      target.innerHTML = htmlString;
-      wirePanel(target);
-    });
+    if (el) {
+      el.innerHTML = htmlString;
+      wirePanel(el);
+    }
+    // P3: the overlay gets the SAME cards rearranged into three flat columns
+    // (left estimates / mid equivalent graph / right measured history). The
+    // sidebar markup already carries data-col hints; the overlay moves those
+    // DOM nodes into the column containers (Expand toolbar stays sidebar-only).
+    // renderOverlay still only toggles the open class - untouched architecture.
+    if (state.overlayEl) {
+      const body = state.overlayEl;
+      body.innerHTML = '<div class="cdlp-panel"><div class="cdlp-overlay-cols">'
+        + '<div class="cdlp-col cdlp-col-left"></div>'
+        + '<div class="cdlp-col cdlp-col-mid"></div>'
+        + '<div class="cdlp-col cdlp-col-right"></div></div></div>';
+      const cols = {
+        left: body.querySelector(".cdlp-col-left"),
+        mid: body.querySelector(".cdlp-col-mid"),
+        right: body.querySelector(".cdlp-col-right"),
+      };
+      const scratch = document.createElement("div");
+      scratch.innerHTML = htmlString;
+      Array.from(scratch.querySelector(".cdlp-panel").children).forEach((child) => {
+        const col = child.getAttribute && child.getAttribute("data-col");
+        if (col === "side") return; // Expand button is meaningless inside the overlay
+        (cols[col] || cols.left).appendChild(child);
+      });
+      wirePanel(body);
+      plog("high", "overlay columns populated ("
+        + cols.left.children.length + "/" + cols.mid.children.length + "/"
+        + cols.right.children.length + " cards)");
+    }
   }
 
   function wirePanel(el) {
@@ -1656,7 +1773,7 @@
     });
     const logsRefresh = el.querySelector("#cdlp-logs-refresh");
     if (logsRefresh) logsRefresh.addEventListener("click", () => fetchServerLog());
-    ["json", "outline", "mermaid"].forEach((kind) => {
+    ["json", "outline", "mermaid", "svg", "png", "link"].forEach((kind) => {
       const btn = el.querySelector("#cdlp-export-" + kind);
       if (btn) btn.addEventListener("click", () => exportAssembled(kind));
     });
