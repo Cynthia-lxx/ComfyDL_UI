@@ -35,6 +35,7 @@
   const WATCHDOG_STATUS_URL = "/comfydl/profiling/watchdog/status";
   const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
   const SERVER_LOG_URL = "/internal/logs/raw";
+  const HISTORY_URL = "/comfydl/profiling/history";
   const TAB_ID = "comfydl-profiling";
   const SETTING_LOG_LEVEL = "ComfyDL.Profiling.LogLevel";
   // P0: the real-execution probe is opt-in. The setting alone is not enough -
@@ -198,6 +199,9 @@
       danger_confirm: "The profiling probe executes REAL node code with REAL tensors. Very large inputs can consume significant CPU and memory while it runs. Enable the dangerous probe?",
       opgraph_guarded: "Input guardrail blocked {n} node(s) from probing - their string inputs exceed the 64 KB per-node cap, and the probe would otherwise loop over every byte for real: {list}. Shrink the text or feed it through a data node instead.",
       opgraph_assembled: "Equivalent graph assembled from the static rule library - no node was executed.",
+      history_title: "Measured history",
+      history_empty: "No measured runs yet - run a workflow with recording on (default).",
+      measured_vs_formula: "measured {m} vs formula {f} (ratio {r}, {n} samples)",
       opgraph_zero_flops: "Total FLOPs is 0 because the formula ledger cannot model some of these nodes (see coverage) - this is a reporting limit, not a zero-cost graph.",
       opgraph_rule_hint: "Operator sequence from the rule library (not executed); FLOPs are the formula estimate for the actual shapes.",
       coverage_line: "Coverage: {covered} rule-derived \u00b7 {driven} formula-derived \u00b7 {unknown} FLOPs unmodelled \u00b7 {missing} no info",
@@ -360,6 +364,9 @@
       danger_confirm: "profiling 探针将以真实张量真实执行节点代码。输入很大时可能占用大量 CPU 与内存。确定开启危险模式？",
       opgraph_guarded: "输入护栏拦截了 {n} 个节点——字符串输入超过单节点 64KB 上限（探针会逐字节真实处理）：{list}。请缩小文本，或改用文件 / 数据节点接入。",
       opgraph_assembled: "等效计算图由规则库推定，未执行任何节点。",
+      history_title: "实测历史",
+      history_empty: "暂无实测记录——运行一次工作流（默认开启记录）。",
+      measured_vs_formula: "实测 {m} vs 公式 {f}（比值 {r}，{n} 次样本）",
       opgraph_zero_flops: "FLOPs 总量为 0 是因为公式账本无法对其中部分节点建模（见覆盖率）——这是报告能力的边界，不代表图零开销。",
       opgraph_rule_hint: "算子序列来自规则库推定（未真实执行）；FLOPs 为公式按实际 shape 的估算值。",
       coverage_line: "覆盖：{covered} 规则推定 · {driven} 公式推定 · {unknown} FLOPs 无法建模 · {missing} 无信息",
@@ -400,7 +407,7 @@
     // update and would otherwise reset any DOM-only collapsed flag.
     // Burst log starts collapsed (2026-10-07 user feedback): it is a running
     // ledger, not the first thing to read.
-    collapsed: { bursts: true, nodes: false },
+    collapsed: { bursts: true, nodes: false, history: false },
     // M3: operator-graph probe (manual Analyze button - never auto-run).
     opgraph: null,
     opgraphLoading: false,
@@ -411,6 +418,8 @@
     logLevel: "off",
     // P0: real-execution probe gate (ComfyDL.Profiling.DangerousProbe).
     dangerousProbe: false,
+    // P2: measured-FLOPs run history (from /comfydl/profiling/history).
+    history: null,
     serverLog: null,
     serverLogLoading: false,
     // M3: display mode - "sidebar" (quick view) vs "overlay" (full dashboard).
@@ -1100,6 +1109,7 @@
     state.timingEnd = Date.now();
     stopLivePolling();
     fetchBursts();
+    fetchHistory();  // P2: a run just finished - its measured FLOPs landed.
     renderPanel();
   }
 
@@ -1168,6 +1178,21 @@
         renderPanel();
       }
     } catch (e) { /* silent */ }
+  }
+
+  // P2: measured-FLOPs run history (newest first, per-node details inline).
+  async function fetchHistory() {
+    const api = getApi();
+    if (!api) return;
+    try {
+      const resp = await api.fetchApi(HISTORY_URL + "?limit=8", { headers: profHeaders() });
+      if (resp.ok) {
+        const body = await resp.json();
+        state.history = body.runs || [];
+        plog("high", "History: " + state.history.length + " run(s)");
+        renderPanel();
+      }
+    } catch (e) { plog("low", "History fetch failed: " + e); }
   }
 
   // M3+: pull the app-wide server log ring buffer and keep only the lines
@@ -1464,6 +1489,32 @@
       html.push("</div></div>");
     }
 
+    // P2: measured-FLOPs run history.
+    if (state.history !== null) {
+      html.push('<div class="cdlp-card' + (state.collapsed.history ? " cdlp-collapsed" : "") + '">');
+      html.push('<div class="cdlp-card-title cdlp-collapsible" data-collapse="history">'
+        + '<span class="cdlp-collapse-label">' + esc(t("history_title")) + "</span>"
+        + '<i class="cdlp-chevron"></i></div>');
+      if (!state.history.length) {
+        html.push('<div class="cdlp-hint">' + esc(t("history_empty")) + "</div>");
+      } else {
+        state.history.forEach((run, ri) => {
+          html.push('<details class="cdlp-node"' + (ri === 0 ? " open" : "") + ">");
+          html.push('<summary><span class="cdlp-node-title">'
+            + esc(fmtFlops(run.total_flops)) + "</span>");
+          html.push('<span class="cdlp-node-bytes">' + esc(String(run.total_ops))
+            + " ops \u00b7 " + esc(String(run.node_count)) + " nodes \u00b7 "
+            + esc(String(run.mode || "count")) + "</span></summary>");
+          (run.nodes || []).forEach((s) => {
+            html.push('<div class="cdlp-basis">' + esc("#" + s.node_id + " " + s.class_type)
+              + " \u00b7 " + esc(fmtFlops(s.flops)) + " \u00b7 " + esc(String(s.op_count)) + " ops</div>");
+          });
+          html.push("</details>");
+        });
+      }
+      html.push("</div>");
+    }
+
     // Per-node breakdown
     html.push('<div class="cdlp-card' + (state.collapsed.nodes ? " cdlp-collapsed" : "") + '">'
       + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="nodes">'
@@ -1488,6 +1539,16 @@
         html.push("</span>");
       }
       html.push("</summary>");
+      // P2: measured-vs-formula calibration line (estimate reports attach
+      // measured_flops for class_types with recorded runs).
+      if (n.measured_flops !== undefined && n.measured_flops !== null) {
+        html.push('<div class="cdlp-basis">' + esc(t("measured_vs_formula", {
+          m: fmtFlops(n.measured_flops),
+          f: fmtFlops(n.flops_total),
+          r: n.measured_ratio === undefined ? "\u2014" : n.measured_ratio,
+          n: String(n.measured_samples || 0),
+        })) + "</div>");
+      }
       const basis = basisText(n);
       if (basis) html.push('<div class="cdlp-basis">' + esc(basis) + "</div>");
       if (unknown && n.reason) html.push('<div class="cdlp-basis">' + esc(n.reason) + "</div>");
@@ -1651,6 +1712,7 @@
         renderPanel();
         requestEstimate(true);
         if (state.bursts === null) fetchBursts();
+        if (state.history === null) fetchHistory();
         return () => { state.panelEl = null; };
       },
     });

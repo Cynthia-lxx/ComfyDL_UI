@@ -188,6 +188,44 @@ threshold / cores / data_scale`。`data_scale` 是与 M1 引擎的第一次握�
 > 见 `docs/profiling-m3-opgraph.md`——它为下列 F4（每算子算术强度）与 W3（未融合链检测）
 > 提供数据底座，且让未来新节点族（如 RL）出生即被覆盖。
 
+## 11. P2 实测回流：run 期 FLOPs 落库与校准（2026-10-07）
+
+> 用户原始诉求："FLOPs 测试应成为 run 过程的附属产物……记录进 user database 供纠正
+> estimate 和为用户提供历史记录参考。"实现 = `comfy/profiling/runmeter.py` +
+> `app/database/models.py` 两表 + alembic `0007` + `/comfydl/profiling/history`。
+
+**机制**：`execute_async`（execution.py）在每个 prompt 开始时挂载一个
+`RunMeter`（单层 TorchDispatchMode，flop 算术复用 torch 的
+`flop_registry`——**刻意不嵌套 FlopCounterMode**，双 Python dispatch 层会突破
+5% 开销契约）；每次算子派发经 `CurrentNodeContext` contextvar 归属到当前节点；
+prompt 结束（finally）经 app 层回调写入两表。
+
+**采样语义（关键）**：每个被拦截算子有 ~20-40us 的固定 Python 派发成本，而
+同一节点的每步 FLOPs 恒定——因此采用**采样计量**：每 run 只精确记录前
+`ops_budget=500` 个算子，之后 meter 在节点边界被卸载（`wants_node` 门控 +
+executor 主循环节点间检查），后续图零开销。run 行标 `sampled=1`。代价：
+单个超大训练节点（首测）内部仍付单层转发成本（一次性，~25us/op）；每
+class_type 只测首次出现，后续同类节点零开销。
+
+**口径声明**：
+- flops = **forward+backward 合计**（backward 的 ATen op 同样流经 dispatcher）；
+- fused optimizer 算子（`_foreach_*`）在 flop_registry 无条目 → 记 0
+  （**漏计**，optimizer 开销不计入）；
+- 复合算子可能双计 → 用 M3 探针双口径交叉验证（formula vs probe vs measured）；
+- 节点自建线程内的 torch 调用逃过 meter（与 progress 归属同边界）；
+- `unattributed` 桶：contextvar 缺失时的算子（应接近 0，异常时可见）。
+
+**校准**：estimate 报告为有历史实测的 class_type 附加
+`measured_flops`（均值）/`measured_samples`/`measured_ratio`
+（measured ÷ formula）字段，前端 per-node 区显示"实测 vs 公式"行。
+
+**开关**：`--cdl-profiling-record {off,count,census}` 默认 `count`
+（census 档额外保留 per-op 直方图，供融合分析）；`off` 零写入。
+
+**开销实测**（P 盘 CPU，2000 步训练循环）：单层方案 **31.9%→46%（节点门控后，
+残留为被测节点的单层转发）**；GPU 上派发成本被 launch 队列掩盖，预期 <5%
+（待 F 盘实测确认）。早期嵌套实现实测 119%——已废弃（见 runmeter.py docstring）。
+
 - **W1 静态地雷扫描**：节点成本类标注（python_loop_O(N) 等）+
   数据规模阈值预警（W2 案底做实测校准源）；
 - **W3 优化建议库**：逐节点族的具体修复动作（调哪个参数/如何重组），

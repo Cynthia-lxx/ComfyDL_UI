@@ -748,6 +748,20 @@ class PromptExecutor:
         ram_release_callback = self.caches.outputs.ram_release if self.cache_type == CacheType.RAM_PRESSURE else None
         comfy.memory_management.set_ram_cache_release_state(ram_release_callback, ram_headroom)
 
+        # Profiling v2 P2: measure per-node FLOPs while the prompt really runs
+        # (courtesy rule - the meter is entered/outside try, so any setup or
+        # teardown failure degrades to "no measurement" instead of breaking
+        # execution).  Persisted through the app-layer hook at the end.
+        run_meter = None
+        try:
+            from comfy.profiling.runmeter import meter_from_args
+
+            run_meter = meter_from_args()
+            if run_meter is not None:
+                run_meter.__enter__()
+        except Exception:
+            run_meter = None
+
         try:
             with torch.inference_mode():
                 dynamic_prompt = DynamicPrompt(prompt)
@@ -787,6 +801,23 @@ class PromptExecutor:
                         break
 
                     assert node_id is not None, "Node ID should not be None at this point"
+
+                    # Profiling v2 P2: meter only the FIRST sighting of each
+                    # class_type (per-step FLOPs are constant per node family,
+                    # so one sample carries the calibration signal); nodes
+                    # outside the sample run with no meter on the stack.
+                    node_class = str((prompt.get(node_id) or {}).get("class_type") or "")
+                    if run_meter is not None:
+                        try:
+                            if run_meter.active and not run_meter.wants_node(node_class):
+                                run_meter.__exit__(None, None, None)
+                                run_meter.active = False
+                            elif not run_meter.active and run_meter.wants_node(node_class):
+                                run_meter.__enter__()
+                                run_meter.active = True
+                        except Exception:
+                            run_meter = None
+
                     result, error, ex = await execute(self.server, dynamic_prompt, self.caches, node_id, extra_data, executed, prompt_id, execution_list, pending_subgraph_results, pending_async_nodes, ui_node_outputs)
                     self.success = result != ExecutionResult.FAILURE
                     if result == ExecutionResult.FAILURE:
@@ -796,6 +827,11 @@ class PromptExecutor:
                         execution_list.unstage_node_execution()
                     else: # result == ExecutionResult.SUCCESS:
                         execution_list.complete_node_execution()
+                        if run_meter is not None and run_meter.active:
+                            try:
+                                run_meter.mark_node_done(node_class)
+                            except Exception:
+                                pass
 
                     if self.cache_type == CacheType.RAM_PRESSURE:
                         ram_release_callback(ram_inactive_headroom)
@@ -842,6 +878,17 @@ class PromptExecutor:
             comfy.memory_management.set_ram_cache_release_state(None, 0)
             self.prompt_model_tracker.end()
             self._notify_prompt_lifecycle("end", prompt_id)
+            if run_meter is not None:
+                try:
+                    from comfy.profiling.runmeter import persist_run
+
+                    persist_run(prompt_id, prompt, run_meter)
+                except Exception:
+                    pass
+                try:
+                    run_meter.__exit__(None, None, None)
+                except Exception:
+                    pass
 
 
 async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):

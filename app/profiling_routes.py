@@ -35,6 +35,7 @@ from aiohttp import web
 from comfy.profiling import analyse_oom, estimate_workflow
 from comfy.profiling import proflog
 from comfy.profiling.engine import DeviceBudget, budget_from_environment
+from comfy.profiling.runmeter import set_persistence_hook
 
 #: The panel ships a .ttf font subset under app/profiling_assets/, served by
 #: the static route. Python 3.14 maps .ttf to font/ttf out of the box, 3.12
@@ -112,6 +113,8 @@ async def estimate(request: web.Request) -> web.Response:
     )
     global _LAST_REPORT
     _LAST_REPORT = report
+    nodes = report.get("nodes") or []
+    report = _merge_measured(report)
     nodes = report.get("nodes") or []
     proflog.log(
         "low", "estimate: %d nodes -> verdict=%s peak=%s in %.0fms",
@@ -279,3 +282,161 @@ async def watchdog_log(request: web.Request) -> web.Response:
     events = _WATCHDOG.recent(limit=limit)
     proflog.log("high", "watchdog log: %d events (limit=%d)", len(events), limit, request=request)
     return web.json_response({"events": events})
+
+
+# --------------------------------------------------------------------------
+# P2: measured-FLOPs persistence + history + estimate calibration.
+#
+# The executor (execution.py) attributes dispatched ATen ops to nodes via
+# RunMeter and hands the finished prompt's snapshot to persist_run(); the
+# hook registered below routes it into the user database.  Courtesy rule:
+# nothing here may break a run - every failure degrades to "no data".
+
+
+def _persist_measurement(prompt_id: str, prompt: dict, snapshot: dict) -> None:
+    """App-layer callback for ``runmeter.set_persistence_hook``."""
+    import uuid
+
+    from app.database import db as app_db
+    from app.database.models import ProfilingNodeStat, ProfilingRun
+
+    if not app_db.can_create_session():
+        return
+    if not (snapshot.get("nodes") or {}):
+        return  # nothing measured (e.g. a run with no dispatchable ops)
+    run_id = str(uuid.uuid4())
+    nodes_snap = snapshot.get("nodes") or {}
+    with app_db.create_session() as session:
+        session.add(ProfilingRun(
+            id=run_id,
+            prompt_id=str(prompt_id)[:36],
+            mode=str(snapshot.get("mode") or "count"),
+            total_flops=int(snapshot.get("total_flops") or 0),
+            total_ops=int(snapshot.get("total_ops") or 0),
+            node_count=len(nodes_snap),
+            unattributed_flops=int(
+                (snapshot.get("unattributed") or {}).get("flops") or 0),
+            sampled=bool(snapshot.get("sampled")),
+            suppressed_errors=int(snapshot.get("suppressed_errors") or 0),
+        ))
+        for node_id, data in nodes_snap.items():
+            node = prompt.get(str(node_id)) or {}
+            session.add(ProfilingNodeStat(
+                id=str(uuid.uuid4()),
+                run_id=run_id,
+                node_id=str(node_id)[:64],
+                class_type=str(node.get("class_type") or "")[:128],
+                flops=int(data.get("flops") or 0),
+                op_count=int(data.get("op_count") or 0),
+                ops=data.get("ops") if snapshot.get("mode") == "census" else None,
+                demoted=bool(data.get("demoted")),
+            ))
+        session.commit()
+    proflog.log(
+        "low", "history: run %s stored (%d nodes, %s flops)",
+        run_id[:8], len(nodes_snap), snapshot.get("total_flops"),
+    )
+
+
+set_persistence_hook(_persist_measurement)
+
+
+def _measured_average_by_class_type() -> Dict[str, Dict[str, Any]]:
+    """Per-class_type measured-FLOPs averages over recorded runs.
+
+    Empty dict when the database is unavailable - the estimate merge then
+    simply adds no measured fields.
+    """
+    from sqlalchemy import func, select
+
+    from app.database import db as app_db
+    from app.database.models import ProfilingNodeStat
+
+    if not app_db.can_create_session():
+        return {}
+    try:
+        with app_db.create_session() as session:
+            rows = session.execute(
+                select(
+                    ProfilingNodeStat.class_type,
+                    func.avg(ProfilingNodeStat.flops),
+                    func.count(ProfilingNodeStat.id),
+                )
+                .group_by(ProfilingNodeStat.class_type)
+            ).all()
+        return {
+            str(row[0]): {"measured_avg": float(row[1] or 0), "samples": int(row[2] or 0)}
+            for row in rows
+        }
+    except Exception as exc:  # noqa: BLE001 - calibration is a courtesy
+        proflog.log("low", "history: measured averages unavailable: %r", exc)
+        return {}
+
+
+def _merge_measured(report: dict) -> dict:
+    """Attach measured_flops / measured_ratio to nodes with history."""
+    measured = _measured_average_by_class_type()
+    if not measured:
+        return report
+    for node in report.get("nodes") or []:
+        entry = measured.get(str(node.get("class_type")))
+        if not entry or not entry["samples"]:
+            continue
+        node["measured_flops"] = entry["measured_avg"]
+        node["measured_samples"] = entry["samples"]
+        formula = node.get("flops_total")
+        if isinstance(formula, (int, float)) and formula > 0 and entry["measured_avg"] > 0:
+            node["measured_ratio"] = round(entry["measured_avg"] / formula, 4)
+    return report
+
+
+@routes.get("/comfydl/profiling/history")
+async def history(request: web.Request) -> web.Response:
+    """Recent measured runs (newest first) with their per-node stats."""
+    try:
+        limit = max(1, min(100, int(request.query.get("limit", "10"))))
+    except ValueError:
+        limit = 10
+    from sqlalchemy import select
+
+    from app.database import db as app_db
+    from app.database.models import ProfilingNodeStat, ProfilingRun
+
+    if not app_db.can_create_session():
+        return web.json_response({"runs": [], "available": False})
+    try:
+        with app_db.create_session() as session:
+            run_rows = session.execute(
+                select(ProfilingRun)
+                .order_by(ProfilingRun.started_at.desc(), ProfilingRun.id)
+                .limit(limit)
+            ).scalars().all()
+            runs = []
+            for run in run_rows:
+                stats = session.execute(
+                    select(ProfilingNodeStat)
+                    .where(ProfilingNodeStat.run_id == run.id)
+                    .order_by(ProfilingNodeStat.node_id)
+                ).scalars().all()
+                runs.append({
+                    "id": run.id,
+                    "prompt_id": run.prompt_id,
+                    "started_at": run.started_at.isoformat() if run.started_at else None,
+                    "mode": run.mode,
+                    "total_flops": run.total_flops,
+                    "total_ops": run.total_ops,
+                    "node_count": run.node_count,
+                    "unattributed_flops": run.unattributed_flops,
+                    "nodes": [{
+                        "node_id": s.node_id,
+                        "class_type": s.class_type,
+                        "flops": s.flops,
+                        "op_count": s.op_count,
+                        "demoted": s.demoted,
+                    } for s in stats],
+                })
+    except Exception as exc:  # noqa: BLE001 - history is a courtesy
+        proflog.log("low", "history: query failed: %r", exc)
+        return web.json_response({"runs": [], "available": False}, status=200)
+    proflog.log("low", "history: %d run(s) served", len(runs), request=request)
+    return web.json_response({"runs": runs, "available": True})

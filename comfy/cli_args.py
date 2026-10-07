@@ -223,6 +223,13 @@ parser.add_argument("--log-stdout", action="store_true", help="Send normal proce
 # level per-request via the X-CDL-Profiling-Log header (no restart needed).
 parser.add_argument("--cdl-profiling-log", type=str, default="off", choices=["off", "low", "medium", "high"], help="Verbosity of the ComfyDL profiling backend logs: off / low / medium / high (default: off). The profiling frontend can raise it per-request without a restart.")
 
+# ComfyDL profiling panel (reform: Profiling v2 P2): record measured per-node
+# FLOPs while workflows really run. count = totals only (default, cheap);
+# census = also keep the per-op histogram; off = no recording. Results land
+# in the user database (profiling_runs/profiling_node_stats) after a prompt
+# finishes and feed the measured-vs-formula calibration display.
+parser.add_argument("--cdl-profiling-record", type=str, default="count", choices=["off", "count", "census"], help="Record measured per-node FLOPs while workflows execute: off / count / census (default: count). Results are stored in the user database and power the history card and estimate calibration.")
+
 
 # The default built-in provider hosted under web/
 DEFAULT_VERSION_STRING = "comfyanonymous/ComfyUI@latest"
