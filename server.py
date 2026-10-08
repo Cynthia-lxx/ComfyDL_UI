@@ -43,6 +43,8 @@ from comfy.comfy_api_env import get_environment_overrides
 import node_helpers
 from comfyui_version import __version__
 from app import profiling_routes, profiling_watchdog
+from app.crashsite import provider as crashsite_provider
+from app.crashsite import routes as crashsite_routes
 from app.frontend_management import FrontendManager, parse_version
 from app.frontend_patch import apply_frontend_patches
 from comfy_api.internal import _ComfyNodeInternal
@@ -272,6 +274,11 @@ class PromptServer():
         for route in profiling_routes.routes:
             if isinstance(route, web.RouteDef):
                 routes.route(route.method, route.path)(route.handler, **route.kwargs)
+        # ComfyDL Crash site (execution snapshots / breakpoint recovery):
+        # same merge idiom, same /api twin treatment.
+        for route in crashsite_routes.routes:
+            if isinstance(route, web.RouteDef):
+                routes.route(route.method, route.path)(route.handler, **route.kwargs)
         self.last_node_id = None
         self.last_prompt_id = None
         self.client_id = None
@@ -294,6 +301,27 @@ class PromptServer():
                 self.profiling_watchdog.start()
         except Exception:
             self.profiling_watchdog.start()
+
+        # ComfyDL Crash site M1: register the snapshot CacheProvider (hard
+        # disabled by --cdl-profiling-disable; independent of the profiling
+        # master switch otherwise - data safety is not an analysis feature)
+        # and hand the routes their queue/server references.  The /free
+        # memory flag resets caches but the provider is stateless w.r.t. the
+        # local cache: on_lookup reads the snapshot databases directly.
+        try:
+            from comfy.profiling.proflog import is_hard_disabled
+
+            crashsite_hard_off = is_hard_disabled()
+        except Exception:
+            crashsite_hard_off = False
+        self.crashsite_provider = crashsite_provider.SnapshotProvider(
+            enabled=not crashsite_hard_off, queue=self.prompt_queue)
+        crashsite_routes.set_snapshot_provider(self.crashsite_provider)
+        crashsite_routes.set_prompt_queue(self.prompt_queue, self)
+        if not crashsite_hard_off:
+            from comfy_execution.cache_provider import register_cache_provider
+
+            register_cache_provider(self.crashsite_provider)
 
         self.on_prompt_handlers = []
 
@@ -1285,6 +1313,12 @@ class PromptServer():
         )
         if os.path.isdir(profiling_assets):
             self.app.add_routes([web.static('/comfydl/profiling', profiling_assets)])
+
+        crashsite_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "crashsite_assets"
+        )
+        if os.path.isdir(crashsite_assets):
+            self.app.add_routes([web.static('/comfydl/crashsite', crashsite_assets)])
 
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True

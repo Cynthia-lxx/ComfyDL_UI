@@ -1,0 +1,98 @@
+/* ComfyDL Crash site panel - M1 minimal UI.
+   Host-variable palette, sans-first typography (monospace never first),
+   flat cards matching the profiling panel's visual system. */
+
+.cs-host { padding: 0; }
+
+.cs-panel { display: flex; flex-direction: column; gap: 10px; }
+
+.cs-incremental {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--input-text-read-only, #9a9a9a);
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--comfy-input-bg, rgba(0, 0, 0, 0.2));
+}
+
+.cs-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cs-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-color, #e0e0e0);
+}
+
+.cs-list { display: flex; flex-direction: column; gap: 8px; }
+
+.cs-card {
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--comfy-menu-bg, #1f1f1f);
+}
+
+.cs-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cs-time {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-color, #e0e0e0);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-tag {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  color: var(--input-text-read-only, #9a9a9a);
+}
+
+.cs-tag-completed { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
+.cs-tag-open { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
+
+.cs-meta {
+  font-size: 11px;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-note {
+  font-size: 11px;
+  color: var(--fg-color, #e0e0e0);
+  opacity: 0.8;
+}
+
+.cs-hint {
+  font-size: 11px;
+  color: var(--input-text-read-only, #9a9a9a);
+}
+
+.cs-button {
+  font-family: var(--font-family, "Segoe UI", system-ui, sans-serif);
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-input-bg, #2a2a2a);
+  color: var(--fg-color, #e0e0e0);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.cs-button:hover { border-color: var(--fg-color, #e0e0e0); }
+.cs-button:disabled { opacity: 0.5; cursor: default; }
+
+.cs-resume { align-self: flex-start; }

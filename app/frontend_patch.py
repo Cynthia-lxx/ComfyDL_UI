@@ -55,6 +55,13 @@ PROFILING_LOADER_TAG = (
 )
 PROFILING_LOADER_MARK = "<!--ComfyDL_UI:profiling-loader-->"
 
+# The Crash site panel loader: same index.html injection pattern.
+CRASHSITE_LOADER_TAG = (
+    '<!--ComfyDL_UI:crashsite-loader-->'
+    '<script type="module" src="/comfydl/crashsite/crashsite.js"></script>'
+)
+CRASHSITE_LOADER_MARK = "<!--ComfyDL_UI:crashsite-loader-->"
+
 # Marker comments written into the patched assets: they document who changed the
 # file and double as the idempotency check.
 LOCALE_MARK = "/*ComfyDL_UI:locale*/"
@@ -108,6 +115,13 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("profiling loader")
     except Exception as exc:
         logging.warning(f"{TAG} profiling loader not applied: {exc}")
+
+    # The Crash site loader likewise lives in index.html.
+    try:
+        if _patch_crashsite_loader(Path(web_root)):
+            applied.append("crashsite loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} crashsite loader not applied: {exc}")
 
     # One summary line per startup, so an operator can tell a fresh install (some
     # patches just applied) from a warm one (everything was already in place).
@@ -408,6 +422,26 @@ def _patch_profiling_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", PROFILING_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} profiling panel loader injected into {path.name}")
+    return True
+
+
+def _patch_crashsite_loader(web_root: Path) -> bool:
+    """Inject the Crash site panel's module loader into ``index.html``.
+
+    Same pattern as :func:`_patch_profiling_loader`: the panel's JS/CSS are
+    repository assets served by ``server.py`` from ``/comfydl/crashsite/``,
+    and this patch only adds the one ``<script>`` tag before ``</body>``.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if CRASHSITE_LOADER_MARK in text:
+        logging.debug(f"{TAG} crashsite loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", CRASHSITE_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} crashsite panel loader injected into {path.name}")
     return True
 
 
