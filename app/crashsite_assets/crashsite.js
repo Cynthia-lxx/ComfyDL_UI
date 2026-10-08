@@ -79,6 +79,11 @@
 
   const getApp = () => window.comfyAPI && window.comfyAPI.app;
 
+  // Temporary instrumentation (M1 acceptance debugging, 2026-10-08): trace
+  // every stage so a silent failure localizes itself in the console.
+  const csTrace = (msg) => { try { console.log("[CrashSite] " + msg); } catch (e) { /* */ } };
+  csTrace("module evaluated");
+
   async function fetchSnapshots() {
     const app = getApp();
     if (!app || !app.api || typeof app.api.fetchApi !== "function") return;
@@ -177,9 +182,14 @@
   }
 
   function registerSidebar() {
+    csTrace("registerSidebar called");
     const app = getApp();
     const em = app && app.extensionManager;
-    if (!em || typeof em.registerSidebarTab !== "function") return;
+    if (!em || typeof em.registerSidebarTab !== "function") {
+      csTrace("NO extensionManager.registerSidebarTab - aborting tab registration");
+      return;
+    }
+    csTrace("registerSidebarTab about to be called");
     em.registerSidebarTab({
       id: TAB_ID,
       icon: "pi pi-replay",
@@ -195,11 +205,13 @@
         return () => { state.panelEl = null; };
       },
     });
+    csTrace("registerSidebarTab returned without error");
   }
 
   async function init() {
+    csTrace("init called");
     const app = getApp();
-    if (!app) return;
+    if (!app) { csTrace("init: no app"); return; }
     try {
       const settings = app.extensionManager && app.extensionManager.setting;
       if (settings && typeof settings.get === "function") {
@@ -213,6 +225,7 @@
   }
 
   function boot() {
+    csTrace("boot called");
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = CSS_URL;
@@ -220,11 +233,22 @@
 
     const start = () => {
       const app = getApp();
-      if (!app || typeof app.registerExtension !== "function") return false;
+      if (!app || typeof app.registerExtension !== "function") {
+        csTrace("start: app/registerExtension not ready yet");
+        return false;
+      }
+      // settings/commands arrays kept explicit: the host iterates extension
+      // fields and an undefined field must never be its problem here.
       app.registerExtension({
         name: "ComfyDL.CrashSite",
-        async setup() { await init(); },
+        settings: [],
+        commands: [],
+        async setup() {
+          csTrace("setup called (host accepted the extension)");
+          await init();
+        },
       });
+      csTrace("registerExtension returned");
       return true;
     };
     if (!start()) {
