@@ -77,7 +77,13 @@
     return isNaN(d.getTime()) ? "-" : d.toLocaleString();
   };
 
-  const getApp = () => window.comfyAPI && window.comfyAPI.app;
+  // ROOT CAUSE (2026-10-08): comfyAPI.app is a NAMESPACE - the real app
+  // instance sits one level deeper (comfyAPI.app.app), same for api.api.
+  // A single-level read yields an object without registerExtension, which
+  // made start() pollute forever with "not ready yet" (profiler.js:457 had
+  // it right all along).
+  const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
+  const getApi = () => (window.comfyAPI && window.comfyAPI.api && window.comfyAPI.api.api) || null;
 
   // Temporary instrumentation (M1 acceptance debugging, 2026-10-08): trace
   // every stage so a silent failure localizes itself in the console.
@@ -85,12 +91,12 @@
   csTrace("module evaluated");
 
   async function fetchSnapshots() {
-    const app = getApp();
-    if (!app || !app.api || typeof app.api.fetchApi !== "function") return;
+    const api = getApi();
+    if (!api || typeof api.fetchApi !== "function") return;
     state.loading = true;
     render();
     try {
-      const resp = await app.api.fetchApi(SNAPSHOTS_URL);
+      const resp = await api.fetchApi(SNAPSHOTS_URL);
       if (resp.ok) {
         const body = await resp.json();
         state.snapshots = body.snapshots || [];
@@ -101,12 +107,12 @@
   }
 
   async function resume(id, btn) {
-    const app = getApp();
-    if (!app || !app.api) return;
+    const api = getApi();
+    if (!api) return;
     state.resuming = id;
     render();
     try {
-      const resp = await app.api.fetchApi(RESUME_URL, {
+      const resp = await api.fetchApi(RESUME_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -127,9 +133,9 @@
 
   function showToast(msg, isWarn) {
     try {
-      const app = getApp();
-      if (app && app.extensionManager && app.extensionManager.toast) {
-        app.extensionManager.toast.add({
+      const em = getApp() && getApp().extensionManager;
+      if (em && em.toast) {
+        em.toast.add({
           severity: isWarn ? "warn" : "info", summary: "Crash Site",
           detail: msg, life: 5000,
         });
