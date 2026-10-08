@@ -17,7 +17,10 @@
   const RESUME_URL = "/comfydl/crashsite/resume";
   const TAB_ID = "comfydl-crashsite";
 
-  const state = { snapshots: null, loading: false, resuming: null };
+  const state = {
+    snapshots: null, loading: false, resuming: null,
+    initialized: false, topbarButton: null,
+  };
 
   const I18N = {
     en: {
@@ -195,7 +198,6 @@
       csTrace("NO extensionManager.registerSidebarTab - aborting tab registration");
       return;
     }
-    csTrace("registerSidebarTab about to be called");
     em.registerSidebarTab({
       id: TAB_ID,
       icon: "pi pi-replay",
@@ -214,7 +216,52 @@
     csTrace("registerSidebarTab returned without error");
   }
 
+  // Second entry point: a topbar button docked next to Run/Jobs (same
+  // settingsGroup anchor and ComfyButton/ComfyButtonGroup pattern as the
+  // profiler badge - user-requested so the panel is reachable without the
+  // sidebar at all).
+  async function mountTopbarButton() {
+    const app = getApp();
+    const anchor = app && app.menu && app.menu.settingsGroup
+      && app.menu.settingsGroup.element;
+    if (!anchor || !anchor.before) return;
+    if (state.topbarButton) return;
+    const capi = window.comfyAPI || {};
+    let ComfyButtonGroup = capi.buttonGroup && capi.buttonGroup.ComfyButtonGroup;
+    let ComfyButton = capi.button && capi.button.ComfyButton;
+    if (!ComfyButtonGroup || !ComfyButton) {
+      try {
+        ComfyButtonGroup = (await import("/scripts/ui/components/buttonGroup.js")).ComfyButtonGroup;
+        ComfyButton = (await import("/scripts/ui/components/button.js")).ComfyButton;
+      } catch (e) { return; }
+    }
+    try {
+      const button = new ComfyButton({
+        icon: "pi pi-replay",
+        tooltip: t("tab_tooltip"),
+        action: openSidebarPanel,
+      });
+      const group = new ComfyButtonGroup(button.element);
+      anchor.before(group.element || group);
+      state.topbarButton = button;
+      csTrace("topbar button mounted");
+    } catch (e) {
+      csTrace("topbar button failed: " + e);
+    }
+  }
+
+  function openSidebarPanel() {
+    try {
+      const em = getApp() && getApp().extensionManager;
+      if (em && typeof em.toggleSidebarTab === "function") {
+        if (em.activeSidebarTabId !== TAB_ID) em.toggleSidebarTab(TAB_ID);
+      }
+    } catch (e) { /* silent */ }
+  }
+
   async function init() {
+    if (state.initialized) return; // setup hook + manual call: idempotent
+    state.initialized = true;
     csTrace("init called");
     const app = getApp();
     if (!app) { csTrace("init: no app"); return; }
@@ -227,40 +274,64 @@
     } catch (e) { /* default */ }
     if (locale !== "zh") locale = "en";
     registerSidebar();
+    mountTopbarButton();
     fetchSnapshots();
   }
 
-  function boot() {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Profiler-style polling: try/catch INSIDE the loop - the host's
+  // registerExtension wraps a pinia store and THROWS while the Vue services
+  // are still warming up ("Cannot read properties of undefined (reading
+  // '_s')"); an unhandled throw here killed the whole retry loop before.
+  async function waitFor(fn, limit = 30000, step = 200) {
+    const start = Date.now();
+    while (Date.now() - start < limit) {
+      try { if (fn()) return true; } catch (e) { /* host not ready: retry */ }
+      await sleep(step || 100);
+    }
+    return false;
+  }
+
+  async function boot() {
     csTrace("boot called");
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = CSS_URL;
     document.head.appendChild(css);
 
-    const start = () => {
+    const ready = await waitFor(() => {
       const app = getApp();
-      if (!app || typeof app.registerExtension !== "function") {
-        csTrace("start: app/registerExtension not ready yet");
-        return false;
+      return app && typeof app.registerExtension === "function";
+    }, 30000, 200);
+    if (!ready) { csTrace("host app never became ready (30s)"); return; }
+
+    // registerExtension can still throw while the extension-service pinia
+    // store initializes; retry until it lands.  init() is called manually
+    // as well as from setup(): depending on the race, the host's setup sweep
+    // may already be over when we finally register.
+    let registered = false;
+    let attempts = 0;
+    while (!registered) {
+      attempts++;
+      try {
+        getApp().registerExtension({
+          name: "ComfyDL.CrashSite",
+          settings: [],
+          commands: [],
+          async setup() {
+            csTrace("setup called (host accepted the extension)");
+            await init();
+          },
+        });
+        registered = true;
+        csTrace("registerExtension returned after " + attempts + " attempt(s)");
+      } catch (e) {
+        csTrace("registerExtension threw (services warming): " + e);
+        await sleep(300);
       }
-      // settings/commands arrays kept explicit: the host iterates extension
-      // fields and an undefined field must never be its problem here.
-      app.registerExtension({
-        name: "ComfyDL.CrashSite",
-        settings: [],
-        commands: [],
-        async setup() {
-          csTrace("setup called (host accepted the extension)");
-          await init();
-        },
-      });
-      csTrace("registerExtension returned");
-      return true;
-    };
-    if (!start()) {
-      const wait = () => { if (!start()) setTimeout(wait, 200); };
-      wait();
     }
+    await init(); // setup() may or may not fire after a late registration
   }
 
   boot();
