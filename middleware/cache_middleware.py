@@ -35,6 +35,15 @@ async def cache_control(
         response.headers.setdefault("Cache-Control", "no-store")
         return response
 
+    # ComfyDL_UI (2026-10-08): index.html must always revalidate.  Without an
+    # explicit header the browser applies heuristic caching to the bare "/"
+    # response, and a stale index.html keeps serving the OLD patch loader
+    # tags after a frontend patch changes - newly added panels (e.g. crash
+    # site) silently never load until a manual hard refresh.
+    if request.path in ("/", "/index.html") or request.path.endswith(".html"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
     # Early return for non-image files - no cache headers needed
     if not request.path.lower().endswith(IMG_EXTENSIONS):
         return response

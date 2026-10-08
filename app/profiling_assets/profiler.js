@@ -1409,7 +1409,10 @@
     state.serverLogLoading = true;
     renderPanel();
     try {
-      const resp = await api.fetchApi(SERVER_LOG_URL, { headers: profHeaders() });
+      // NOTE: /internal is a subapp mounted OUTSIDE the /api twin loop, so
+      // fetchApi (which prepends /api) 404s here - use a plain same-origin
+      // fetch instead (2026-10-08 fix, the server-log card never worked).
+      const resp = await fetch(SERVER_LOG_URL, { headers: profHeaders() });
       if (resp.ok) {
         const body = await resp.json();
         const lines = (body.entries || [])
