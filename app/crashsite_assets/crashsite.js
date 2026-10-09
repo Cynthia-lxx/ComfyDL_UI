@@ -33,6 +33,7 @@
       resume: "Resume",
       resuming: "Resuming...",
       nodes: "nodes",
+      skipped_nodes: "skipped (non-serializable)",
       status_completed: "completed",
       status_open: "running",
       resume_ok: "Re-queued - finished nodes will be skipped automatically.",
@@ -48,6 +49,7 @@
       resume: "恢复",
       resuming: "恢复中...",
       nodes: "节点",
+      skipped_nodes: "跳过（不可序列化）",
       status_completed: "已完成",
       status_open: "进行中",
       resume_ok: "已重新入队——已完成的节点将自动跳过。",
@@ -169,7 +171,11 @@
               + '<span class="cs-tag cs-tag-' + esc(s.status || "completed")
               + '">' + esc(statusText) + "</span></div>"
               + '<div class="cs-meta">' + esc(String(s.nodes || 0)) + " "
-              + esc(t("nodes")) + " · " + esc(fmtBytes(s.size_bytes)) + "</div>"
+              + esc(t("nodes")) + " · " + esc(fmtBytes(s.size_bytes))
+              + (Number(s.skipped_nodes) > 0
+                ? " · " + esc(String(s.skipped_nodes)) + " "
+                  + esc(t("skipped_nodes")) : "")
+              + (s.format_version !== 2 ? " · legacy" : "") + "</div>"
               + (s.note ? '<div class="cs-note">' + esc(s.note) + "</div>" : "")
               + '<button class="cs-button cs-resume" data-id="'
               + esc(s.id) + '"'

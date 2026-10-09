@@ -48,6 +48,7 @@ class SnapshotProvider(CacheProvider):
         self._queue = queue  # PromptQueue: on_prompt_start grabs the prompt
         self._active: Optional[Any] = None  # active snapshot db path
         self._active_prompt_id: str = ""
+        self._skipped = 0  # unrescuable node count for the active prompt
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ api
@@ -67,6 +68,7 @@ class SnapshotProvider(CacheProvider):
             with self._lock:
                 self._active = path
                 self._active_prompt_id = prompt_id
+                self._skipped = 0
             _logger.info("crash site: snapshot %s opened (prompt %s)",
                          path.stem, prompt_id)
         except Exception as exc:  # noqa: BLE001 - capture must never break runs
@@ -90,9 +92,11 @@ class SnapshotProvider(CacheProvider):
             path = self._active
             self._active = None
             self._active_prompt_id = ""
+            skipped = self._skipped
+            self._skipped = 0
         if path is not None:
             try:
-                store.mark_status(path, "completed")
+                store.mark_status(path, "completed", skipped=skipped)
             except Exception as exc:  # noqa: BLE001
                 _logger.warning("crash site: failed to close snapshot (%s)", exc)
 
@@ -106,6 +110,8 @@ class SnapshotProvider(CacheProvider):
         try:
             ok = not serialize.has_exotic_leaves(value.outputs)
             if not ok:
+                with self._lock:
+                    self._skipped += 1
                 proflog(
                     "medium", "crash site: node %s (%s) skipped - unrescuable"
                     " output, resume will re-execute it",
@@ -162,7 +168,11 @@ class SnapshotProvider(CacheProvider):
         try:
             # Scan every snapshot db for this hash (M1: stateless scan; the
             # library count is small and this keeps resume flow simple).
+            # Snapshots with a foreign format version are skipped: mixed-
+            # version rows would rehydrate garbage (the "got str" incident).
             for path in store.snapshots_root().glob("*.db"):
+                if store.format_version_of(path) != store.FORMAT_VERSION:
+                    continue
                 rows = store.get_outputs_by_hash(path, context.cache_key_hash)
                 if not rows:
                     continue

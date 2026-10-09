@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS snapshots (
     prompt_id   TEXT,
     prompt_json TEXT,
     note        TEXT,
-    status      TEXT
+    status      TEXT,
+    format_version INTEGER,
+    skipped_nodes  INTEGER
 );
 CREATE TABLE IF NOT EXISTS node_outputs (
     cache_key_hash TEXT,
@@ -62,6 +64,13 @@ def _connect(path: Path) -> sqlite3.Connection:
     return conn
 
 
+#: Snapshot on-disk format version.  Bumped when serialization semantics
+#: change: on_lookup refuses snapshots whose version differs (mixed-version
+#: rows would rehydrate garbage - the 2026-10-09 "got str" incident, where
+#: pre-fix databases held flattened custom objects).
+FORMAT_VERSION = 2
+
+
 def create_snapshot(prompt: Dict[str, Any], prompt_id: str = "",
                     note: str = "") -> Path:
     """Create a fresh snapshot database for one prompt execution."""
@@ -73,17 +82,39 @@ def create_snapshot(prompt: Dict[str, Any], prompt_id: str = "",
         now = int(time.time())
         conn.execute(
             "INSERT INTO snapshots (id, created_at, updated_at, prompt_id,"
-            " prompt_json, note, status) VALUES (?,?,?,?,?,?,?)",
+            " prompt_json, note, status, format_version) VALUES (?,?,?,?,?,?,?,?)",
             (snap_id, now, now, prompt_id,
-             json.dumps(prompt, default=str), note, "open"))
+             json.dumps(prompt, default=str), note, "open", FORMAT_VERSION))
         conn.commit()
     finally:
         conn.close()
     return path
 
 
+def format_version_of(path: Path) -> Optional[int]:
+    """The stored format version, or None for a foreign/legacy file."""
+    try:
+        conn = _connect(path)
+        try:
+            row = conn.execute(
+                "SELECT format_version FROM snapshots WHERE id=?",
+                (path.stem,)).fetchone()
+        finally:
+            conn.close()
+        return int(row[0]) if row and row[0] is not None else None
+    except Exception:  # noqa: BLE001 - unreadable file = unusable anyway
+        return None
+
+
 def _init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
+    # Legacy databases (format_version < 1) predate the column; add it so
+    # format_version_of returns a comparable value instead of raising.
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(snapshots)")]
+    if "format_version" not in cols:
+        conn.execute("ALTER TABLE snapshots ADD COLUMN format_version INTEGER")
+    if "skipped_nodes" not in cols:
+        conn.execute("ALTER TABLE snapshots ADD COLUMN skipped_nodes INTEGER")
     conn.commit()
 
 
@@ -107,11 +138,17 @@ def upsert_node_output(path: Path, cache_key_hash: str, node_id: str,
         conn.close()
 
 
-def mark_status(path: Path, status: str) -> None:
+def mark_status(path: Path, status: str, skipped: Optional[int] = None) -> None:
     conn = _connect(path)
     try:
-        conn.execute("UPDATE snapshots SET status=?, updated_at=? WHERE id=?",
-                     (status, int(time.time()), path.stem))
+        if skipped is None:
+            conn.execute("UPDATE snapshots SET status=?, updated_at=? WHERE id=?",
+                         (status, int(time.time()), path.stem))
+        else:
+            conn.execute(
+                "UPDATE snapshots SET status=?, skipped_nodes=?, updated_at=?"
+                " WHERE id=?", (status, int(skipped), int(time.time()),
+                                path.stem))
         conn.commit()
     finally:
         conn.close()
@@ -146,8 +183,9 @@ def list_snapshots() -> List[Dict[str, Any]]:
             conn = _connect(path)
             try:
                 row = conn.execute(
-                    "SELECT id, created_at, prompt_id, note, status FROM"
-                    " snapshots WHERE id=?", (path.stem,)).fetchone()
+                    "SELECT id, created_at, prompt_id, note, status,"
+                    " format_version, skipped_nodes FROM snapshots"
+                    " WHERE id=?", (path.stem,)).fetchone()
                 n_nodes = conn.execute(
                     "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM"
                     " node_outputs").fetchone()
@@ -158,6 +196,7 @@ def list_snapshots() -> List[Dict[str, Any]]:
             out.append({
                 "id": row[0], "created_at": row[1], "prompt_id": row[2],
                 "note": row[3], "status": row[4],
+                "format_version": row[5], "skipped_nodes": row[6] or 0,
                 "nodes": n_nodes[0], "size_bytes": n_nodes[1],
                 "file": path.name,
             })
