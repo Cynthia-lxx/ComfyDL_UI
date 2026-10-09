@@ -51,7 +51,18 @@ def is_unsupported(obj: Any) -> bool:
         return True
     # A DataLoader cannot round-trip; its node is marked unrescuable in the
     # UI and rebuilt from its DATASET upstream instead.
-    return type(obj).__name__ in ("DataLoader", "cdlDataloader")
+    if type(obj).__name__ in ("DataLoader", "cdlDataloader"):
+        return True
+    # CdlDataset has a complete dedicated round-trip despite being a
+    # dataclass - never flag it (S5).
+    if all(hasattr(obj, a) for a in ("features", "feature_names")):
+        return False
+    return has_exotic_leaves(obj)
+
+
+def has_exotic_leaves(obj: Any) -> bool:
+    """Public: would flattening this output turn custom objects into strings?"""
+    return _has_exotic_leaves(obj, set())
 
 
 def _cpu(t: torch.Tensor) -> torch.Tensor:
@@ -96,6 +107,27 @@ def _torch_save_bytes(obj: Any) -> bytes:
     return buf.getvalue()
 
 
+_PRIMITIVES = (int, float, str, bool, type(None))
+
+
+def _has_exotic_leaves(value: Any, seen: set) -> bool:
+    """True when the subtree contains anything JSON/plain-tensor can't hold.
+
+    Used BEFORE serialization: a container of exotic objects must be marked
+    unrescuable rather than flattened (flattening turns custom objects into
+    repr strings and the resumed run would feed garbage downstream).
+    """
+    if isinstance(value, torch.Tensor) or isinstance(value, _PRIMITIVES):
+        return False
+    if id(value) in seen:
+        return False  # cycles: treat back-references as safe
+    if isinstance(value, (dict, list, tuple)):
+        seen = seen | {id(value)}
+        items = value.values() if isinstance(value, dict) else value
+        return any(_has_exotic_leaves(v, seen) for v in items)
+    return True  # unknown leaf type
+
+
 def serialize_output(obj: Any) -> Tuple[str, bytes, str]:
     """Serialize one node output object -> (format_tag, blob, meta_json).
 
@@ -108,21 +140,9 @@ def serialize_output(obj: Any) -> Tuple[str, bytes, str]:
             _flatten(obj, "v", tensors, meta)
             return "st", _st_save(tensors), json.dumps(meta)
 
-        if isinstance(obj, (dict, list, tuple)):
-            tensors, meta = {}, {}
-            _flatten(obj, "root", tensors, meta)
-            if tensors:
-                tag = "dict-st" if isinstance(obj, dict) else "list-st"
-                return tag, _st_save(tensors), json.dumps(meta)
-            # Wrap like every other json row - deserialize_output unpacks
-            # {"v": ...}; a bare row broke list outputs with "list indices
-            # must be integers" on lookup (2026-10-09).
-            return "json", json.dumps({"v": obj}, default=str).encode("utf-8"), "{}"
-
-        if isinstance(obj, (int, float, str, bool)) or obj is None:
-            return "json", json.dumps({"v": obj}).encode("utf-8"), "{}"
-
         # ComfyDL CdlDataset (duck-typed: avoids importing the node package).
+        # Checked BEFORE the exotic-leaf gate: it has a complete dedicated
+        # round-trip despite being a dataclass.
         if all(hasattr(obj, a) for a in ("features", "feature_names")):
             tensors, meta = {}, {}
             _flatten(obj.features, "features", tensors, meta)
@@ -134,10 +154,32 @@ def serialize_output(obj: Any) -> Tuple[str, bytes, str]:
             return ("dataset-st", _st_save(tensors),
                     json.dumps(meta, default=str))
 
-        if isinstance(obj, torch.nn.Module):
-            return "pt", _torch_save_bytes(obj.state_dict()), "{}"
+        if isinstance(obj, (dict, list, tuple)):
+            tensors, meta = {}, {}
+            _flatten(obj, "root", tensors, meta)
+            if tensors:
+                tag = "dict-st" if isinstance(obj, dict) else "list-st"
+                return tag, _st_save(tensors), json.dumps(meta)
+            # Tensor-less containers are safe to rebuild from JSON alone.
+            return "json", json.dumps({"v": obj}, default=str).encode("utf-8"), "{}"
 
-        # Generic fallback for unknown small objects.
+        if isinstance(obj, (int, float, str, bool)) or obj is None:
+            return "json", json.dumps({"v": obj}).encode("utf-8"), "{}"
+
+        # Containers with EXOTIC leaves (a LanguageModel dataclass inside a
+        # list, custom objects in a dict, nn.Modules...) must NOT fall
+        # through to a lossy branch: _flatten would repr() them into strings
+        # and a rehydrated "model" would be str - the LM template's "got str"
+        # bug (2026-10-09). Mark the node output as unrescuable instead:
+        # on_lookup skips it, the host re-executes the node on resume (honest
+        # and safe).
+        if _has_exotic_leaves(obj, set()):
+            raise UnsupportedOutputError(
+                f"output contains non-serializable objects "
+                f"({type(obj).__name__} subtree)")
+
+        # Generic fallback for unknown small objects (unreachable in
+        # practice - exotic leaves raise above).
         return "pickle", _torch_save_bytes(obj), "{}"
     except UnsupportedOutputError:
         raise

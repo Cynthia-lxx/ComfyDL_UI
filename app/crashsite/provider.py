@@ -29,24 +29,15 @@ import asyncio
 import hashlib
 import logging
 import threading
+import traceback
 from typing import Any, Dict, Optional
 
 from comfy_api.latest._caching import CacheContext, CacheProvider, CacheValue
 
 from app.crashsite import serialize, store
+from comfy.profiling.proflog import log as proflog
 
 _logger = logging.getLogger(__name__)
-
-
-def _contains_unsupported(obj: Any) -> bool:
-    """Recursive check: any unrescuable object inside this output subtree?"""
-    if serialize.is_unsupported(obj):
-        return True
-    if isinstance(obj, dict):
-        return any(_contains_unsupported(v) for v in obj.values())
-    if isinstance(obj, (list, tuple)):
-        return any(_contains_unsupported(v) for v in obj)
-    return False
 
 
 class SnapshotProvider(CacheProvider):
@@ -113,7 +104,13 @@ class SnapshotProvider(CacheProvider):
         if value is None:  # lookup phase: always let the db be asked
             return True
         try:
-            return not _contains_unsupported(value.outputs)
+            ok = not serialize.has_exotic_leaves(value.outputs)
+            if not ok:
+                proflog(
+                    "medium", "crash site: node %s (%s) skipped - unrescuable"
+                    " output, resume will re-execute it",
+                    context.node_id, context.class_type, request=None)
+            return ok
         except Exception:  # noqa: BLE001 - never break execution
             return False
 
@@ -140,7 +137,7 @@ class SnapshotProvider(CacheProvider):
                     value: CacheValue) -> None:
         try:
             for slot, obj in enumerate(value.outputs or []):
-                if _contains_unsupported(obj):
+                if serialize.has_exotic_leaves(obj):
                     continue
                 format_tag, blob, meta_json = serialize.serialize_output(obj)
                 store.upsert_node_output(
@@ -149,6 +146,14 @@ class SnapshotProvider(CacheProvider):
                     class_type=context.class_type,
                     output_type=type(obj).__name__,
                     format_tag=format_tag, blob=blob, meta_json=meta_json)
+                proflog(
+                    "medium", "crash site: captured %s (%s) slot %s -> %s,"
+                    " %d bytes", context.node_id, context.class_type, slot,
+                    format_tag, len(blob), request=None)
+        except serialize.UnsupportedOutputError as exc:
+            # Should have been caught by should_cache; belt and braces.
+            _logger.warning("crash site: node %s output unrescuable (%s)",
+                            context.node_id, exc)
         except Exception as exc:  # noqa: BLE001
             _logger.warning("crash site: on_store failed for node %s (%s)",
                             context.node_id, exc)
@@ -167,7 +172,17 @@ class SnapshotProvider(CacheProvider):
                     obj = serialize.deserialize_output(
                         row["format"], row["data"], row["meta_json"])
                     outputs[row["slot"]] = obj
+                proflog(
+                    "medium", "crash site: rehydrated node %s (%s) from"
+                    " snapshot (%d slot(s), formats=%s)",
+                    context.node_id, context.class_type, len(rows),
+                    [r["format"] for r in rows], request=None)
                 return CacheValue(outputs=outputs, ui={})
         except Exception as exc:  # noqa: BLE001
-            _logger.warning("crash site: on_lookup failed (%s)", exc)
+            import traceback
+
+            # Full trace once per failure - "list indices" style bugs are
+            # impossible to place from the message alone (2026-10-09).
+            _logger.warning("crash site: on_lookup failed for node %s\n%s",
+                            context.node_id, traceback.format_exc())
         return None

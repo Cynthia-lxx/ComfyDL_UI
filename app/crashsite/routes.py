@@ -20,6 +20,7 @@ from typing import Any, Dict
 from aiohttp import web
 
 from app.crashsite import store
+from comfy.profiling.proflog import log as proflog
 
 _logger = logging.getLogger(__name__)
 
@@ -99,5 +100,9 @@ async def _resume_impl(request: web.Request) -> web.Response:
                        valid[2], {}))
     _logger.info("crash site: resumed snapshot %s as prompt %s",
                  snapshot_id, prompt_id)
+    proflog(
+        "low", "crash site: resume requested - snapshot=%s prompt=%s"
+        " (%d node(s) in stored workflow)", snapshot_id, prompt_id,
+        len(prompt), request=request)
     return web.json_response({"resumed": True, "prompt_id": prompt_id,
                               "snapshot": manifest["id"]})
