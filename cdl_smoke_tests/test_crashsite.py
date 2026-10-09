@@ -9,7 +9,10 @@ Covers (2026-10-08):
   on_store(s) -> on_prompt_end -> later on_lookup, including a miss;
 * routes through a real aiohttp TestServer: list / resume with a live
   PromptQueue mock and a prompt that passes validate_prompt (the 2026-10-07
-  spike's 3-node chain, promoted to a permanent regression).
+  spike's 3-node chain, promoted to a permanent regression);
+* M2 explainability (2026-10-09): on_node_cached accounting, the resume
+  statistics note (completed + interrupted endings), and the capture
+  summary on the list/resume responses.
 
 Run:  penv\\Scripts\\python.exe cdl_smoke_tests\\test_crashsite.py
 """
@@ -178,6 +181,68 @@ def _provider_checks() -> None:
           and mine[0]["status"] == "completed"
           and mine[0]["nodes"] == 1)
 
+    # 2026-10-09: a run that dies mid-flight must be filed "interrupted",
+    # not "completed" (the executor notifies on_prompt_error before the
+    # finally-block's on_prompt_end).
+    provider.on_prompt_start("pid-err")
+    provider.on_prompt_error("pid-err")
+    provider.on_prompt_end("pid-err")
+    listed = store.list_snapshots()
+    mine = [s for s in listed if s["prompt_id"] == "pid-err"]
+    check("P5 failed run marked interrupted", len(mine) == 1
+          and mine[0]["status"] == "interrupted",
+          json.dumps(mine)[:120])
+    # A stray error for an unknown prompt must be a harmless no-op.
+    provider.on_prompt_error("pid-nobody")
+    check("P6 stray on_prompt_error ignored", True)
+
+    # ---- M2: node-cached accounting + the resume statistics note ---------
+    prompt3 = {
+        "1": {"class_type": "A"},
+        "2": {"class_type": "B"},
+        "3": {"class_type": "C"},
+    }
+
+    class _Q3:
+        currently_running = {"1.0": (1.0, "pid-r", prompt3, {}, ["3"], {})}
+
+    rprovider = SnapshotProvider(queue=_Q3())
+    rprovider.mark_resume("pid-r", "src-snap")
+    rprovider.on_prompt_start("pid-r")
+    rprovider._rehydrated.add("1")  # as if on_lookup rehydrated node 1
+    rprovider.on_node_cached("pid-r", "1", "A")
+    rprovider.on_node_cached("pid-r", "1", "A")  # duplicate id: deduped
+    rprovider.on_node_cached("pid-r", "2", "B")
+    rprovider.on_node_cached("pid-other", "9", "X")  # stray: ignored
+    rprovider.on_prompt_end("pid-r")
+    listed = store.list_snapshots()
+    mine = [s for s in listed if s["prompt_id"] == "pid-r"]
+    note = mine[0]["note"] if mine else ""
+    check("P7 resume note: skip/re-run split", len(mine) == 1
+          and "skipped 2/3" in note
+          and "1 snapshot + 1 local cache" in note
+          and "re-executed 1" in note,
+          note)
+
+    # An interrupted resume writes the same statistics on its note.
+    class _Q4:
+        currently_running = {"1.0": (1.0, "pid-ri", prompt3, {}, ["3"], {})}
+
+    riprovider = SnapshotProvider(queue=_Q4())
+    riprovider.mark_resume("pid-ri", "src2")
+    riprovider.on_prompt_start("pid-ri")
+    riprovider.on_node_cached("pid-ri", "1", "A")
+    riprovider.on_prompt_error("pid-ri")
+    riprovider.on_prompt_end("pid-ri")  # no-op: already closed
+    listed = store.list_snapshots()
+    mine = [s for s in listed if s["prompt_id"] == "pid-ri"]
+    note = mine[0]["note"] if mine else ""
+    check("P8 interrupted resume note", len(mine) == 1
+          and mine[0]["status"] == "interrupted"
+          and "resume of src2" in note
+          and "skipped 1/3" in note,
+          note)
+
 
 # ------------------------------------------------- T4: routes integration --
 def _route_checks() -> None:
@@ -281,6 +346,9 @@ def _route_checks() -> None:
     class MockServer:
         number = 100.0
 
+        def queue_updated(self):
+            MockServer.queue_refreshed = True
+
     async def _run():
         app = web.Application()
         app.add_routes(routes.routes)
@@ -311,9 +379,52 @@ def _route_checks() -> None:
             check("R4 queue received the stored prompt",
                   len(queued) == 1 and queued[0][1] == "pid-crash"
                   and queued[0][2] == PROMPT and queued[0][4] == ["3"])
+            # 2026-10-09: client_id must reach extra_data - without it the
+            # executor suppresses every websocket event and the resumed run
+            # is invisible to the frontend (the "no continuation" bug).
+            check("R9 list includes captured summary",
+                  isinstance(crashed[0].get("captured"), list)
+                  and len(crashed[0]["captured"]) == 2
+                  and crashed[0]["captured"][0]["size_bytes"]
+                  >= crashed[0]["captured"][1]["size_bytes"],
+                  json.dumps(crashed[0].get("captured"))[:120])
+            r = await client.post("/comfydl/crashsite/resume",
+                                  json={"id": crashed[0]["id"],
+                                        "client_id": "cid-test"})
+            body = await r.json()
+            check("R5 resume 200 with client_id", r.status == 200
+                  and body.get("resumed") is True,
+                  json.dumps(body)[:120])
+            check("R6 client_id passed to executor extra_data",
+                  len(queued) == 2
+                  and queued[1][3].get("client_id") == "cid-test")
+            check("R7 queue refresh broadcast", MockServer.queue_refreshed
+                  is True)
+            check("R8 resume response carries capture summary",
+                  body.get("captured_nodes") == 2
+                  and isinstance(body.get("captured"), list)
+                  and len(body["captured"]) == 2,
+                  json.dumps(body)[:160])
+            check("R10 mark_resume handed to provider",
+                  len(mock_provider.resume_calls) == 2
+                  and mock_provider.resume_calls[-1]
+                  == ("pid-crash", crashed[0]["id"]),
+                  str(mock_provider.resume_calls))
         finally:
             await client.close()
 
+    # M2: a mock provider records the resume flag so the route test can
+    # assert the mark_resume handoff (the real provider consumes it at
+    # on_prompt_start on the worker side).
+    class MockProvider:
+        def __init__(self):
+            self.resume_calls = []
+
+        def mark_resume(self, prompt_id, source):
+            self.resume_calls.append((prompt_id, source))
+
+    mock_provider = MockProvider()
+    routes.set_snapshot_provider(mock_provider)
     routes.set_prompt_queue(MockQueue(), MockServer())
     asyncio.new_event_loop().run_until_complete(_run())
 

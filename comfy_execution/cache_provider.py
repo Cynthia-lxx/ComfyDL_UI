@@ -53,6 +53,29 @@ def _clear_cache_providers() -> None:
         _providers_snapshot = ()
 
 
+def notify_node_cached(prompt_id: str, node_id: str, class_type: str) -> None:
+    """Notify providers that a node's output was served from a cache.
+
+    Called from the executor's cached branch (execution.py ``execute()``) —
+    the single funnel where BOTH local-RAM hits and provider-rehydrated
+    entries land, so it is the authoritative "this node was skipped" signal
+    for resume accounting (crash site M2).  Optional protocol: providers
+    without ``on_node_cached`` are skipped; failures never propagate.
+    """
+    if not _providers_snapshot:
+        return
+    for provider in _providers_snapshot:
+        on_cached = getattr(provider, "on_node_cached", None)
+        if not callable(on_cached):
+            continue
+        try:
+            on_cached(prompt_id, node_id, class_type)
+        except Exception as e:
+            _logger.warning(
+                f"Cache provider {provider.__class__.__name__} error on"
+                f" node-cached notification: {e}")
+
+
 def _canonicalize(obj: Any) -> Any:
     # Convert to canonical JSON-serializable form with deterministic ordering.
     # Frozensets have non-deterministic iteration order between Python sessions.

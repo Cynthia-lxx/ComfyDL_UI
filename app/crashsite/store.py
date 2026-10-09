@@ -154,6 +154,41 @@ def mark_status(path: Path, status: str, skipped: Optional[int] = None) -> None:
         conn.close()
 
 
+def set_note(path: Path, note: str) -> None:
+    """Overwrite the snapshot note (crash site M2 resume statistics)."""
+    conn = _connect(path)
+    try:
+        conn.execute("UPDATE snapshots SET note=?, updated_at=? WHERE id=?",
+                     (note, int(time.time()), path.stem))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def captured_nodes(path: Path, limit: int = 0) -> List[Dict[str, Any]]:
+    """Per-node capture summary, one row per node_id, largest output first.
+
+    What: aggregates ``node_outputs`` by node (slots + total bytes) for the
+          snapshot card's captured-node list (M2 explainability).
+    In:   ``path`` — snapshot db; ``limit`` — keep only the ``limit`` largest
+          (0 = all).
+    Out:  list of {node_id, class_type, slots, size_bytes}, size-descending.
+    """
+    conn = _connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT node_id, class_type, COUNT(*), COALESCE(SUM(size_bytes),0)"
+            " FROM node_outputs GROUP BY node_id, class_type"
+            " ORDER BY 4 DESC, node_id").fetchall()
+    finally:
+        conn.close()
+    out = [{"node_id": r[0], "class_type": r[1], "slots": r[2],
+            "size_bytes": r[3]} for r in rows]
+    if limit and len(out) > limit:
+        out = out[:limit]
+    return out
+
+
 def get_outputs_by_hash(path: Path, cache_key_hash: str) -> List[Dict[str, Any]]:
     """All slot rows for one node execution (provider.on_lookup)."""
     conn = _connect(path)
@@ -199,6 +234,9 @@ def list_snapshots() -> List[Dict[str, Any]]:
                 "format_version": row[5], "skipped_nodes": row[6] or 0,
                 "nodes": n_nodes[0], "size_bytes": n_nodes[1],
                 "file": path.name,
+                # M2 explainability: per-node captured summary (capped - the
+                # panel renders 4 rows + a "+n more" expander anyway).
+                "captured": captured_nodes(path, limit=20),
             })
         except Exception:  # noqa: BLE001 - a broken db must not kill the list
             continue

@@ -18,7 +18,7 @@
   const TAB_ID = "comfydl-crashsite";
 
   const state = {
-    snapshots: null, loading: false, resuming: null,
+    snapshots: null, loading: false, refreshQueued: false, resuming: null,
     initialized: false, topbarButton: null,
   };
 
@@ -34,9 +34,12 @@
       resuming: "Resuming...",
       nodes: "nodes",
       skipped_nodes: "skipped (non-serializable)",
+      captured_title: "captured",
+      more: "+{n} more",
       status_completed: "completed",
       status_open: "running",
-      resume_ok: "Re-queued - finished nodes will be skipped automatically.",
+      status_interrupted: "interrupted",
+      resume_ok: "Re-queued - finished nodes will be skipped automatically. Skip/re-run statistics appear on the new snapshot card when the run ends.",
       resume_fail: "Resume failed: ",
     },
     zh: {
@@ -50,9 +53,12 @@
       resuming: "恢复中...",
       nodes: "节点",
       skipped_nodes: "跳过（不可序列化）",
+      captured_title: "已捕获",
+      more: "另有 {n} 个",
       status_completed: "已完成",
       status_open: "进行中",
-      resume_ok: "已重新入队——已完成的节点将自动跳过。",
+      status_interrupted: "已打断",
+      resume_ok: "已重新入队——已完成的节点将自动跳过。运行结束后在新快照卡片查看跳过/重跑统计。",
       resume_fail: "恢复失败：",
     },
   };
@@ -98,6 +104,7 @@
   async function fetchSnapshots() {
     const api = getApi();
     if (!api || typeof api.fetchApi !== "function") return;
+    if (state.loading) { state.refreshQueued = true; return; }
     state.loading = true;
     renderPanel();
     try {
@@ -109,6 +116,9 @@
     } catch (e) { /* silent: the panel is a courtesy */ }
     state.loading = false;
     renderPanel();
+    // A refresh was requested while this one was in flight - run once more
+    // so the panel always reflects the latest state.
+    if (state.refreshQueued) { state.refreshQueued = false; fetchSnapshots(); }
   }
 
   async function resume(id, btn) {
@@ -120,7 +130,11 @@
       const resp = await api.fetchApi(RESUME_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        // client_id is MANDATORY for a visible resume: the executor only
+        // emits websocket events (executing/executed/execution_start) when
+        // extra_data carries it; without it the whole resumed run runs
+        // silently (2026-10-09 "no continuation" incident).
+        body: JSON.stringify({ id, client_id: api.clientId || null }),
       });
       if (resp.ok) {
         showToast(t("resume_ok"));
@@ -165,6 +179,30 @@
             const statusKey = "status_" + (s.status || "completed");
             const statusText = I18N[locale] && I18N[locale][statusKey]
               ? t(statusKey) : (s.status || "-");
+            // M2: per-node captured list - first 4 rows inline, the rest
+            // behind a native <details> expander so long lists can't blow
+            // up the sidebar.
+            const cap = Array.isArray(s.captured) ? s.captured : [];
+            const capRow = (c) => '<div class="cs-cap-row">'
+              + '<span class="cs-cap-name">'
+              + esc(String(c.class_type || "?") + " #"
+                + String(c.node_id === undefined || c.node_id === null
+                  ? "?" : c.node_id))
+              + '</span><span class="cs-cap-size">'
+              + esc(fmtBytes(c.size_bytes)) + "</span></div>";
+            let capHtml = "";
+            if (cap.length) {
+              capHtml = '<div class="cs-cap"><div class="cs-cap-title">'
+                + esc(t("captured_title")) + " (" + esc(String(cap.length))
+                + ")</div>"
+                + cap.slice(0, 4).map(capRow).join("");
+              if (cap.length > 4) {
+                capHtml += '<details class="cs-cap-more"><summary>'
+                  + esc(t("more", { n: cap.length - 4 })) + "</summary>"
+                  + cap.slice(4).map(capRow).join("") + "</details>";
+              }
+              capHtml += "</div>";
+            }
             return '<div class="cs-card">'
               + '<div class="cs-card-head"><span class="cs-time">'
               + esc(fmtTime(s.created_at)) + "</span>"
@@ -176,6 +214,7 @@
                 ? " · " + esc(String(s.skipped_nodes)) + " "
                   + esc(t("skipped_nodes")) : "")
               + (s.format_version !== 2 ? " · legacy" : "") + "</div>"
+              + capHtml
               + (s.note ? '<div class="cs-note">' + esc(s.note) + "</div>" : "")
               + '<button class="cs-button cs-resume" data-id="'
               + esc(s.id) + '"'
@@ -282,6 +321,17 @@
     registerSidebar();
     mountTopbarButton();
     fetchSnapshots();
+    // M2: refresh the library as executions start and end (a new snapshot
+    // opens as "running", the resume statistics note lands on completion)
+    // so nobody has to click Refresh to see the result.
+    const api = getApi();
+    if (api && typeof api.addEventListener === "function") {
+      ["execution_start", "execution_success", "execution_error",
+        "execution_interrupted"].forEach((ev) => {
+        try { api.addEventListener(ev, () => fetchSnapshots()); }
+        catch (e) { /* the panel is a courtesy */ }
+      });
+    }
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -13,6 +13,11 @@ Registered once at server startup; the host then drives everything:
 * ``should_cache`` - rejects what cannot round-trip (ModelPatcher,
   DataLoaders) before it ever reaches the store.
 * ``on_prompt_start/end`` - opens/closes the per-prompt snapshot database.
+* ``on_prompt_error`` - optional host "error" lifecycle event; marks the
+  snapshot "interrupted" instead of "completed" when the run died mid-flight.
+* ``on_node_cached`` - optional host notification when a node is served from
+  a cache (local RAM hit or rehydration both funnel there) - the
+  authoritative skip signal behind the M2 resume statistics note.
 
 Bridging note: the lifecycle hooks receive the prompt_id while on_store only
 sees the CacheContext.  Execution is single-worker serial (main.py prompt
@@ -49,6 +54,10 @@ class SnapshotProvider(CacheProvider):
         self._active: Optional[Any] = None  # active snapshot db path
         self._active_prompt_id: str = ""
         self._skipped = 0  # unrescuable node count for the active prompt
+        self._cached_nodes: Dict[str, str] = {}  # node_id -> class_type
+        self._rehydrated: set = set()  # node_ids served from snapshot dbs
+        self._resume_source: Optional[str] = None  # snapshot id we resumed
+        self._pending_resume: Optional[Dict[str, str]] = None
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ api
@@ -57,6 +66,17 @@ class SnapshotProvider(CacheProvider):
 
     def is_enabled(self) -> bool:
         return self._enabled
+
+    def mark_resume(self, prompt_id: str, source_snapshot_id: str) -> None:
+        """Flag the next prompt start as a resume of ``source_snapshot_id``.
+
+        Called by the resume route BEFORE re-queueing (execution is single-
+        worker serial, so a pending pointer is safe - same model as
+        on_store's active pointer).
+        """
+        with self._lock:
+            self._pending_resume = {"prompt_id": prompt_id,
+                                    "source": source_snapshot_id}
 
     # ------------------------------------------------- prompt lifecycle ----
     def on_prompt_start(self, prompt_id: str) -> None:
@@ -69,8 +89,17 @@ class SnapshotProvider(CacheProvider):
                 self._active = path
                 self._active_prompt_id = prompt_id
                 self._skipped = 0
-            _logger.info("crash site: snapshot %s opened (prompt %s)",
-                         path.stem, prompt_id)
+                self._cached_nodes = {}
+                self._rehydrated = set()
+                pending = self._pending_resume
+                self._resume_source = (
+                    pending["source"]
+                    if pending is not None and pending["prompt_id"] == prompt_id
+                    else None)
+                self._pending_resume = None
+            _logger.info("crash site: snapshot %s opened (prompt %s)%s",
+                         path.stem, prompt_id,
+                         " [resume]" if self._resume_source else "")
         except Exception as exc:  # noqa: BLE001 - capture must never break runs
             _logger.warning("crash site: failed to open snapshot (%s)", exc)
 
@@ -94,11 +123,104 @@ class SnapshotProvider(CacheProvider):
             self._active_prompt_id = ""
             skipped = self._skipped
             self._skipped = 0
+            cached_nodes = self._cached_nodes
+            rehydrated = set(self._rehydrated)
+            resume_source = self._resume_source
+            self._cached_nodes = {}
+            self._rehydrated = set()
+            self._resume_source = None
         if path is not None:
             try:
                 store.mark_status(path, "completed", skipped=skipped)
             except Exception as exc:  # noqa: BLE001
                 _logger.warning("crash site: failed to close snapshot (%s)", exc)
+        if path is not None and resume_source is not None:
+            self._write_resume_note(path, resume_source, cached_nodes,
+                                    rehydrated)
+
+    def on_prompt_error(self, prompt_id: str) -> None:
+        """The run died mid-flight (node error or user interrupt).
+
+        Host-driven via the optional "error" lifecycle event (execution.py
+        notifies this only when the prompt actually failed).  Marks the
+        active snapshot "interrupted" instead of letting the subsequent
+        on_prompt_end file it under "completed" - a crashed scene labelled
+        as a finished run misled users during the 2026-10-09 resume
+        debugging.  on_prompt_end afterwards becomes a no-op (path None).
+        """
+        with self._lock:
+            if self._active is None or self._active_prompt_id != prompt_id:
+                return  # not ours (missed start / late event): ignore
+            path = self._active
+            skipped = self._skipped
+            self._active = None
+            self._active_prompt_id = ""
+            self._skipped = 0
+            cached_nodes = self._cached_nodes
+            rehydrated = set(self._rehydrated)
+            resume_source = self._resume_source
+            self._cached_nodes = {}
+            self._rehydrated = set()
+            self._resume_source = None
+        try:
+            store.mark_status(path, "interrupted", skipped=skipped)
+        except Exception as exc:  # noqa: BLE001 - never break execution
+            _logger.warning("crash site: failed to mark snapshot interrupted"
+                            " (%s)", exc)
+        if resume_source is not None:
+            self._write_resume_note(path, resume_source, cached_nodes,
+                                    rehydrated)
+
+    def on_node_cached(self, prompt_id: str, node_id: str,
+                       class_type: str) -> None:
+        """A node was SKIPPED this run (host cached-branch notification).
+
+        The authoritative skip signal for resume statistics: fires for both
+        local-RAM cache hits and provider-rehydrated entries, since both
+        funnel through execution.py's cached branch.  Stray events for
+        non-active prompts are ignored (same pattern as on_prompt_error).
+        """
+        with self._lock:
+            if self._active is None or self._active_prompt_id != prompt_id:
+                return
+            self._cached_nodes[node_id] = class_type
+
+    def _write_resume_note(self, path, source: str,
+                           cached_nodes: Dict[str, str],
+                           rehydrated: set) -> None:
+        """Write the authoritative skip/re-run statistics onto the snapshot.
+
+        What: summarises one resumed run - how many of the prompt's nodes
+              were served from cache (split snapshot-rehydration vs local
+              RAM cache) and how many actually re-executed.
+        In:   ``path`` — the resumed run's snapshot db; ``source`` — the
+              snapshot id it was resumed from; ``cached_nodes`` /
+              ``rehydrated`` — the per-run counters.
+        """
+        try:
+            manifest = store.load_manifest(path)
+            total = 0
+            if manifest is not None:
+                prompt = manifest.get("prompt")
+                if isinstance(prompt, dict):
+                    total = len(prompt)
+            skipped = len(cached_nodes)
+            from_snap = len([n for n in rehydrated if n in cached_nodes])
+            local = skipped - from_snap
+            reran = max(total - skipped, 0)
+            if total > 0:
+                note = (f"resume of {source}: skipped {skipped}/{total}"
+                        f" ({from_snap} snapshot + {local} local cache),"
+                        f" re-executed {reran}")
+            else:
+                note = (f"resume of {source}: {skipped} node(s) served from"
+                        f" cache")
+            store.set_note(path, note)
+            proflog("medium", "crash site: resume note written - %s", note,
+                    request=None)
+        except Exception as exc:  # noqa: BLE001 - cosmetic, never raise
+            _logger.warning("crash site: failed to write resume note (%s)",
+                            exc)
 
     # ------------------------------------------------------------- gating --
     def should_cache(self, context: CacheContext,
@@ -187,6 +309,9 @@ class SnapshotProvider(CacheProvider):
                     " snapshot (%d slot(s), formats=%s)",
                     context.node_id, context.class_type, len(rows),
                     [r["format"] for r in rows], request=None)
+                with self._lock:
+                    if self._active is not None:
+                        self._rehydrated.add(context.node_id)
                 return CacheValue(outputs=outputs, ui={})
         except Exception as exc:  # noqa: BLE001
             import traceback

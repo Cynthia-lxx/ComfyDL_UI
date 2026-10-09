@@ -93,16 +93,56 @@ async def _resume_impl(request: web.Request) -> web.Response:
             {"error": "stored prompt no longer valid",
              "node_errors": valid[3]}, status=409)
 
+    # VISIBILITY FIX (2026-10-09): without client_id the executor sets
+    # server.client_id = None for the whole run, which suppresses EVERY
+    # executing/executed/execution_start/success websocket event - the
+    # resumed run executed silently (frontend saw nothing but our own
+    # toast).  Echo the requester's client_id back so the resume behaves
+    # like a run submitted from that same browser tab.
+    client_id = (payload or {}).get("client_id")
+    if not isinstance(client_id, str) or not client_id:
+        client_id = None
+
+    # M2 explainability: flag the next prompt start as a resume of this
+    # snapshot so the provider can write the skip/re-run statistics note.
+    # MUST happen BEFORE put() - the prompt worker may pick the job up and
+    # fire on_prompt_start immediately.
+    provider = _SNAPSHOT_PROVIDER
+    if provider is not None:
+        try:
+            provider.mark_resume(prompt_id, snapshot_id)
+        except Exception:  # noqa: BLE001 - cosmetic only
+            pass
+
     number = float(_SERVER.number)
     _SERVER.number += 1
     extra_data: Dict[str, Any] = {"create_time": int(time.time() * 1000)}
+    if client_id is not None:
+        extra_data["client_id"] = client_id
     _PROMPT_QUEUE.put((number, prompt_id, prompt, extra_data,
                        valid[2], {}))
+    # Same as POST /prompt: refresh the frontend's Job Queue so the resumed
+    # prompt shows up as an active job instead of running invisibly.
+    try:
+        _SERVER.queue_updated()
+    except Exception:  # noqa: BLE001 - cosmetic only
+        pass
     _logger.info("crash site: resumed snapshot %s as prompt %s",
                  snapshot_id, prompt_id)
     proflog(
         "low", "crash site: resume requested - snapshot=%s prompt=%s"
         " (%d node(s) in stored workflow)", snapshot_id, prompt_id,
         len(prompt), request=request)
-    return web.json_response({"resumed": True, "prompt_id": prompt_id,
-                              "snapshot": manifest["id"]})
+    try:
+        captured = store.captured_nodes(path, limit=20)
+    except Exception:  # noqa: BLE001 - cosmetic only
+        captured = []
+    return web.json_response({
+        "resumed": True, "prompt_id": prompt_id,
+        "snapshot": manifest["id"],
+        # M2: source snapshot's capture summary for immediate frontend
+        # feedback (authoritative skip/re-run stats arrive later on the NEW
+        # snapshot's note, once the resumed run finishes).
+        "captured_nodes": len(captured),
+        "captured": captured,
+    })

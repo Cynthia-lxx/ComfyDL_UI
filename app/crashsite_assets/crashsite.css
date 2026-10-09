@@ -71,6 +71,7 @@
 
 .cs-tag-completed { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
 .cs-tag-open { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
+.cs-tag-interrupted { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
 
 .cs-meta {
   font-size: 11px;
@@ -82,6 +83,41 @@
   font-size: 11px;
   color: var(--fg-color, #e0e0e0);
   opacity: 0.8;
+}
+
+/* M2: per-node captured list on the snapshot card. */
+.cs-cap {
+  margin-top: 2px;
+  min-width: 0;
+}
+.cs-cap-title {
+  font-size: 10px;
+  color: var(--input-text-read-only, #9a9a9a);
+  opacity: 0.8;
+}
+.cs-cap-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--input-text-read-only, #9a9a9a);
+  min-width: 0;
+}
+.cs-cap-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-cap-size {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.cs-cap-more summary {
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  color: var(--input-text-read-only, #9a9a9a);
+  opacity: 0.85;
 }
 
 .cs-hint {

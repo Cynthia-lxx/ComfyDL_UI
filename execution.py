@@ -46,7 +46,7 @@ from comfy_execution.utils import CurrentNodeContext
 from comfy_execution.asset_enrichment import enrich_output_with_assets
 from comfy_api.internal import _ComfyNodeInternal, _NodeOutputInternal, first_real_override, is_class, make_locked_method_func
 from comfy_api.latest import io, _io
-from comfy_execution.cache_provider import _has_cache_providers, _get_cache_providers, _logger as _cache_logger
+from comfy_execution.cache_provider import _has_cache_providers, _get_cache_providers, notify_node_cached, _logger as _cache_logger
 
 
 class ExecutionResult(Enum):
@@ -446,6 +446,11 @@ async def execute(server, dynprompt, caches, current_item, extra_data, executed,
     cached = await caches.outputs.get(unique_id)
     if cached is not None:
         _send_cached_ui(server, unique_id, display_node_id, cached, prompt_id, ui_outputs)
+        # Crash-site M2 accounting: this node was SKIPPED (served from the
+        # local RAM cache or rehydrated by a provider) - the authoritative
+        # skip signal for resume statistics.  No-op without providers.
+        if _has_cache_providers():
+            notify_node_cached(prompt_id, unique_id, class_type)
         get_progress_state().finish_progress(unique_id)
         execution_list.cache_update(unique_id, cached)
         return (ExecutionResult.SUCCESS, None, None)
@@ -722,6 +727,14 @@ class PromptExecutor:
                     provider.on_prompt_start(prompt_id)
                 elif event == "end":
                     provider.on_prompt_end(prompt_id)
+                elif event == "error":
+                    # Crash-site hook: the run died mid-flight (node error or
+                    # user interrupt).  Only providers that implement it are
+                    # called - the comfy_api CacheProvider protocol only
+                    # knows start/end.
+                    on_error = getattr(provider, "on_prompt_error", None)
+                    if callable(on_error):
+                        on_error(prompt_id)
             except Exception as e:
                 _cache_logger.warning(f"Cache provider {provider.__class__.__name__} error on {event}: {e}")
 
@@ -762,6 +775,11 @@ class PromptExecutor:
         except Exception:
             run_meter = None
 
+        # Crash-site lifecycle: did this prompt die mid-flight?  Checked in
+        # the finally block to notify providers with "error" instead of "end"
+        # so snapshots of interrupted/crashed runs are marked honestly.
+        lifecycle_failed = False
+
         try:
             with torch.inference_mode():
                 dynamic_prompt = DynamicPrompt(prompt)
@@ -798,6 +816,7 @@ class PromptExecutor:
                     node_id, error, ex = await execution_list.stage_node_execution()
                     if error is not None:
                         self.handle_execution_error(prompt_id, dynamic_prompt.original_prompt, current_outputs, executed, error, ex)
+                        lifecycle_failed = True
                         break
 
                     assert node_id is not None, "Node ID should not be None at this point"
@@ -822,6 +841,7 @@ class PromptExecutor:
                     self.success = result != ExecutionResult.FAILURE
                     if result == ExecutionResult.FAILURE:
                         self.handle_execution_error(prompt_id, dynamic_prompt.original_prompt, current_outputs, executed, error, ex)
+                        lifecycle_failed = True
                         break
                     elif result == ExecutionResult.PENDING:
                         execution_list.unstage_node_execution()
@@ -877,7 +897,7 @@ class PromptExecutor:
                 detail("RAM cache evictions: prompt=%s active=%s full=%s", prompt_id, self.caches.outputs.active_evictions, self.caches.outputs.full_evictions)
             comfy.memory_management.set_ram_cache_release_state(None, 0)
             self.prompt_model_tracker.end()
-            self._notify_prompt_lifecycle("end", prompt_id)
+            self._notify_prompt_lifecycle("error" if lifecycle_failed else "end", prompt_id)
             if run_meter is not None:
                 try:
                     from comfy.profiling.runmeter import persist_run
