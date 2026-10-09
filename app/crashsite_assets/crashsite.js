@@ -97,7 +97,7 @@
     const api = getApi();
     if (!api || typeof api.fetchApi !== "function") return;
     state.loading = true;
-    render();
+    renderPanel();
     try {
       const resp = await api.fetchApi(SNAPSHOTS_URL);
       if (resp.ok) {
@@ -106,14 +106,14 @@
       }
     } catch (e) { /* silent: the panel is a courtesy */ }
     state.loading = false;
-    render();
+    renderPanel();
   }
 
   async function resume(id, btn) {
     const api = getApi();
     if (!api) return;
     state.resuming = id;
-    render();
+    renderPanel();
     try {
       const resp = await api.fetchApi(RESUME_URL, {
         method: "POST",
@@ -131,7 +131,7 @@
       showToast(t("resume_fail") + e, true);
     }
     state.resuming = null;
-    render();
+    renderPanel();
   }
 
   function showToast(msg, isWarn) {

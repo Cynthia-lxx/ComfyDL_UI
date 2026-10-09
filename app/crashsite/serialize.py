@@ -114,7 +114,10 @@ def serialize_output(obj: Any) -> Tuple[str, bytes, str]:
             if tensors:
                 tag = "dict-st" if isinstance(obj, dict) else "list-st"
                 return tag, _st_save(tensors), json.dumps(meta)
-            return "json", json.dumps(obj, default=str).encode("utf-8"), "{}"
+            # Wrap like every other json row - deserialize_output unpacks
+            # {"v": ...}; a bare row broke list outputs with "list indices
+            # must be integers" on lookup (2026-10-09).
+            return "json", json.dumps({"v": obj}, default=str).encode("utf-8"), "{}"
 
         if isinstance(obj, (int, float, str, bool)) or obj is None:
             return "json", json.dumps({"v": obj}).encode("utf-8"), "{}"
@@ -186,7 +189,12 @@ def deserialize_output(format_tag: str, blob: bytes,
     meta = json.loads(meta_json or "{}")
 
     if format_tag == "json":
-        return json.loads(blob.decode("utf-8"))["v"]
+        data = json.loads(blob.decode("utf-8"))
+        # {"v": ...} is the wrapped form; legacy rows written before the
+        # 2026-10-09 fix were bare - accept both.
+        if isinstance(data, dict) and set(data.keys()) == {"v"}:
+            return data["v"]
+        return data
 
     if format_tag == "st":
         return _unflatten("v", _st_load(blob), meta)

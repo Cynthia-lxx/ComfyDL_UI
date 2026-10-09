@@ -94,6 +94,16 @@ def _serialize_checks() -> None:
     check("S4 scalar round-trip", tag == "json"
           and serialize.deserialize_output(tag, blob, meta) == "hello")
 
+    # 2026-10-09 fix: tensor-less lists/dicts used to serialize as BARE json
+    # while deserialize unpacked {"v": ...} - lists crashed on_lookup with
+    # "list indices must be integers or slices, not str".
+    tag, blob, meta = serialize.serialize_output(["a", "b"])
+    check("S4b tensor-less list round-trip", tag == "json"
+          and serialize.deserialize_output(tag, blob, meta) == ["a", "b"])
+    tag, blob, meta = serialize.serialize_output({"k": "val"})
+    check("S4c tensor-less dict round-trip", tag == "json"
+          and serialize.deserialize_output(tag, blob, meta) == {"k": "val"})
+
     try:
         from comfydl.nodes.data_types import CdlDataset
 
