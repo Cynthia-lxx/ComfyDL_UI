@@ -4,10 +4,7 @@
 
 **Deep Learning is just a few clicks away!**
 
-The GUI build of [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) — a deep-learning-focused
-fork of ComfyUI.
-
-</div>
+![Cover](assets/cover_v2_HD.png)
 
 ## What's This?
 
@@ -20,24 +17,18 @@ connecting nodes in a graph, not by writing code. It hosts the
 (tensors, layers, optimizers, training loops, NLP pipelines, data utilities and
 visualizations) on top of a trimmed ComfyUI runtime.
 
-It is **not** the complete original ComfyUI: this repository is a dehydrated fork
-(see [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)) that keeps the node-graph
-engine, server and basic image IO, and drops the diffusion-generation stack. If you want the
-original ComfyUI, get it from <https://github.com/comfyanonymous/ComfyUI>.
+> It is **not** the complete original ComfyUI: this repository is a dehydrated fork
+> (see [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)) that keeps the node-graph
+> engine, server and basic image IO, and drops the diffusion-generation stack. If you want the
+> original ComfyUI, get it from <https://github.com/comfyanonymous/ComfyUI>.
 
 ## What it looks like
 
-A production-grade tabular regression workflow — Formula Data Gen → Inspect the table →
-Train & Monitor → Export predictions — running end to end inside the graph. Every trainer
-streams its loss curve **under itself while it trains**, and the status corners report the
-run's live cost (elapsed time, I/O, node count):
+A production-grade tabular regression workflow looks like:
 
 ![Tabular regression workflow in ComfyDL_UI](assets/tabular_regression_workflow.png)
 
-Language models tell the same story: the whole pipeline — Vocab Build → Text Encode →
-Sliding Window → Transformer Blocks → Train → Generate — lives in the graph, and the
-`Language Model Train` node streams its cross-entropy curve **under itself** while the top
-bar tracks overall progress:
+Language models tell the same story: 
 
 ![Language Model Train streaming its cross-entropy curve under the node](assets/language_model_train_running.png)
 
@@ -46,15 +37,15 @@ bar tracks overall progress:
 
 ## Features
 
-ComfyDL_UI's headline capabilities each get their own section below — the visual editor, the
+`ComfyDL_UI`'s headline capabilities each get their own section below — the visual editor, the
 built-in node pack, live progress, full profiling, and the Crash Site save & resume net. The
 everyday basics:
 
-- Efficient local execution with asynchronous queueing and partial graph re-execution — only
-  the parts of the graph that changed are re-run.
+- Efficient local execution with asynchronous queueing and partial graph re-execution (only
+  the parts of the graph that changed are re-run).
 - Smart VRAM/RAM management with automatic CPU fallback when no GPU backend is available.
-- Runs fully offline: the core downloads nothing unless you ask it to.
-- Still compatible with third-party custom nodes via `custom_nodes/`.
+- Runs fully offline, downloads nothing unless you ask it to.
+- Compatible with third-party custom nodes.
 - Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).
 
 ### Visual node-graph editor
@@ -65,7 +56,7 @@ plain JSON (a generated PNG reloads the workflow — seeds included — that pro
 
 ### Most deep-learning operators, built in
 
-You already know deep learning — here, most of it is a node away. Tensors and shape ops,
+You already know deep learning (don't you?) — here, most of it is a node away. Tensors and shape ops,
 linear / conv / norm / attention layers, losses, optimizers with gradient clipping, LR
 schedulers, training loops with early stopping, dataset readers and writers (CSV / Excel /
 DB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and
@@ -75,11 +66,7 @@ The catalog at a glance:
 
 ![Network & Layers: all 75 nodes grouped by category](assets/network_layers_catalog.svg)
 
-An **interactive version** — click any node for its description and source — ships at
-[`docs/network-and-layers.html`](docs/network-and-layers.html). GitHub strips scripts from
-READMEs, so it can't run inline: view it rendered via
-[htmlpreview](https://htmlpreview.github.io/?https://github.com/Cynthia-lxx/ComfyDL_UI/blob/master/docs/network-and-layers.html)
-or open the file locally.
+An **interactive version** — click any node for its description and source — ships at [`docs/network-and-layers.html`](docs/network-and-layers.html). View it rendered via [htmlpreview](https://htmlpreview.github.io/?https://github.com/Cynthia-lxx/ComfyDL_UI/blob/master/docs/network-and-layers.html) or open the file locally.
 
 ### Live progress & previews
 
