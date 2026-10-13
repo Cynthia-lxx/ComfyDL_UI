@@ -31,6 +31,13 @@ run's live cost (elapsed time, I/O, node count):
 
 ![Tabular regression workflow in ComfyDL_UI](assets/tabular_regression_workflow.png)
 
+Language models tell the same story: the whole pipeline — Vocab Build → Text Encode →
+Sliding Window → Transformer Blocks → Train → Generate — lives in the graph, and the
+`Language Model Train` node streams its cross-entropy curve **under itself** while the top
+bar tracks overall progress:
+
+![Language Model Train streaming its cross-entropy curve under the node](assets/language_model_train_running.png)
+
 > More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule
 > README ([中文](comfydl/README_zh.md), [FUNCTIONS.md](comfydl/FUNCTIONS.md)).
 
@@ -68,18 +75,28 @@ the language-model nodes, and the top bar tracks each run's cost as it goes.
 
 ### Profiling — memory, compute & operators
 
-ComfyDL_UI profiles everything a graph costs, before and during the run:
+ComfyDL_UI profiles everything a graph costs, before and during the run. One panel holds the
+whole story — the traffic-light memory verdict, the device budget, the compute estimate, the
+per-node breakdown, the measured history and the ATen operator graph:
 
-- **Memory** — peak estimation from parameters and data flow with a per-node breakdown
-  (params / activations / optimizer state), graded green / amber / red against the device
-  budget; red is **certain OOM** and warns before queueing; a failed allocation is matched
-  back to its tensor after the fact, with a value that fits.
+<p align="center">
+  <img src="assets/profiling_operator_panel.png" alt="Expanded profiling panel: SAFE memory verdict, device budget, 18.90 TFLOPs compute estimate, per-node breakdown, measured history and CPU burst log" width="720" />
+</p>
 
-  ![Profiling sidebar: device budget, a CERTAIN OOM verdict and the per-node breakdown](assets/profiling_memory_verdict.png)
+- **Memory** — peak estimation from parameters and data flow, graded green / amber / red
+  against the device budget; red is **certain OOM** and warns before queueing. The breakdown
+  goes down to tensor families — parameters, gradients, attention scores, FFN, logits — each
+  with its byte count and largest single tensor, right next to the node it analyzes:
 
-  Pressing Run on a red graph warns first and can be overridden:
   <p align="center">
-    <img src="assets/profiling_memory_warning.png" alt="Memory warning dialog shown when queueing a graph graded certain-OOM" width="620" />
+    <img src="assets/profiling_memory_breakdown_table.png" alt="Per-tensor-family memory breakdown table beside the Language Model Train node it analyzes" width="620" />
+  </p>
+
+  Pressing Run on a red graph warns with the numbers behind the verdict — and can be
+  overridden:
+
+  <p align="center">
+    <img src="assets/profiling_oom_warning.png" alt="Memory warning dialog: estimated peak 2.94 TB vs 2.16 GB free, with Cancel and Confirm" width="620" />
   </p>
 
 - **Compute load** — a FLOPs ledger per node family (attention / FFN / logits / conv …) and
