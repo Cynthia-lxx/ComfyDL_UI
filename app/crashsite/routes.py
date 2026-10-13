@@ -48,6 +48,72 @@ async def snapshots_list(request: web.Request) -> web.Response:
     return web.json_response({"snapshots": store.list_snapshots()})
 
 
+@routes.get("/comfydl/crashsite/snapshots/{snapshot_id}/detail")
+async def snapshot_detail_route(request: web.Request) -> web.Response:
+    """Full capture detail for the scene-export summary table (git-fire M2).
+
+    Unlike the capped list endpoint, this returns EVERY captured (node, slot)
+    row annotated with export formats/candidates, plus the stored workflow
+    prompt.  No payloads - metadata only.
+    """
+    path = store.find_snapshot_file(request.match_info["snapshot_id"])
+    if path is None:
+        return web.json_response({"error": "snapshot not found"}, status=404)
+    detail = store.snapshot_detail(path)
+    if detail is None:
+        return web.json_response({"error": "snapshot unreadable"}, status=500)
+    from app.crashsite import export as export_mod
+
+    detail["rows"] = export_mod.annotate_rows(detail.get("rows") or [])
+    return web.json_response(detail)
+
+
+@routes.post("/comfydl/crashsite/export")
+async def export_route(request: web.Request) -> web.Response:
+    """Write selected captured outputs (+ optional prompt JSON) to files.
+
+    Body: {"id": <snapshot id>, "include_prompt": bool,
+           "items": [{"node_id": "...", "format": "...", "class_type": "..."}]}
+    Files land in output/comfydl/scene_export/<snapshot id>/ (user decision
+    2026-10-13: output directory, so exports surface in Results assets).
+    Per-row failures are reported, never fatal.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    payload = payload or {}
+    snapshot_id = str(payload.get("id") or "")
+    path = store.find_snapshot_file(snapshot_id)
+    if path is None:
+        return web.json_response({"error": "snapshot not found"}, status=404)
+    items = payload.get("items")
+    include_prompt = bool(payload.get("include_prompt"))
+    if not isinstance(items, list) or (not items and not include_prompt):
+        return web.json_response(
+            {"error": "no export items selected"}, status=400)
+    items = [i for i in items if isinstance(i, dict) and i.get("node_id")]
+
+    import asyncio
+    from pathlib import Path as _Path
+
+    import folder_paths
+    from app.crashsite import export as export_mod
+
+    out_dir = (_Path(folder_paths.get_output_directory()) / "comfydl"
+               / "scene_export" / store.os_path_safe(snapshot_id))
+    loop = asyncio.get_running_loop()
+    # Deserialization + disk writes happen OFF the event loop (GB-scale
+    # payloads possible - same courtesy as provider.on_store).
+    result = await loop.run_in_executor(
+        None, export_mod.export_selections, path, items, out_dir,
+        include_prompt)
+    proflog("low", "crash site: exported %d file(s) from snapshot %s to %s"
+            " (%d failed row(s))", result["count"], snapshot_id,
+            result["dir"], len(result["failed"]), request=request)
+    return web.json_response(result)
+
+
 @routes.post("/comfydl/crashsite/resume")
 async def resume(request: web.Request) -> web.Response:
     """Re-queue a snapshot's original prompt; the host skips finished nodes."""

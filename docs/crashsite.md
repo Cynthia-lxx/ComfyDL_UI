@@ -53,6 +53,32 @@ The panel now answers "what did resume actually do":
 
 The resume toast also points at the new snapshot card for the statistics.
 
+## Scene export (git-fire M2, 2026-10-13)
+
+After an interrupt (or any time, via the per-card button on interrupted
+snapshots), the panel shows a **Scene export** summary table: every
+recoverable node output of the snapshot (class_type #node_id · slots · size)
+plus a workflow-prompt JSON row.  Each row is pre-checked with a sensible
+default export format and a dropdown to override:
+
+| serialize tag | default export | candidates |
+|---|---|---|
+| st (Tensor) | .safetensors | safetensors, png (image-shaped only) |
+| dict-st / list-st | .safetensors (+meta sidecar) | safetensors, json |
+| json (scalar) | .json | json, txt |
+| dataset-st | .db (self-describing sqlite) | db, json |
+| pt / pickle | .pt | pt, safetensors |
+
+Selected files are written to `output/comfydl/scene_export/<snapshot id>/`
+so they surface in Results assets; the prompt row becomes `*_prompt.json`.
+Per-row failures never abort the scene - they are reported in the response
+and counted in the toast.  A chosen format that doesn't fit a slot falls
+back to that slot's own default.  Endpoints: `GET .../snapshots/{id}/detail`
+(full annotated capture rows), `POST .../export`.
+
+Auto-nudge: on `execution_error`/`execution_interrupted` the panel opens
+itself with the newest interrupted snapshot's export table and a toast.
+
 Resume semantics (M1): **node-level memoization, not mid-node continuation.**
 Finished nodes are skipped; the interrupted node re-executes from scratch
 with the ORIGINAL stored widget values (edits made after the interrupt do
@@ -88,6 +114,7 @@ user interrupts both land here).
 
 `cdl_smoke_tests/test_crashsite.py` — serialization round-trips, store
 CRUD, the provider lifecycle (start → store → end → lookup, plus the
-error→interrupted filing), and the routes through a real TestServer with a
-crashed 3-node scene (including the client_id passthrough regression);
-plus a real-startup smoke (`--quick-test-for-ci`).
+error→interrupted filing), scene export (format matrix, png/db writers,
+fallbacks, per-row isolation), and the routes through a real TestServer
+with a crashed 3-node scene (client_id passthrough, capture summaries,
+detail/export endpoints); plus a real-startup smoke (`--quick-test-for-ci`).

@@ -85,6 +85,59 @@
   opacity: 0.8;
 }
 
+/* git-fire M2: scene-export summary table. */
+.cs-export {
+  margin: 6px 0;
+  padding: 8px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 8px;
+  background: var(--comfy-input-bg, #2a2a2a);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cs-x-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+.cs-x-check,
+#cs-x-prompt {
+  flex-shrink: 0;
+  accent-color: var(--fg-color, #e0e0e0);
+}
+.cs-x-name {
+  color: var(--fg-color, #e0e0e0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cs-x-meta {
+  flex-shrink: 0;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.cs-x-fmt {
+  flex-shrink: 0;
+  max-width: 110px;
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  background: var(--comfy-input-bg, #2a2a2a);
+  color: var(--fg-color, #e0e0e0);
+}
+.cs-x-run {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
 /* M2: per-node captured list on the snapshot card. */
 .cs-cap {
   margin-top: 2px;

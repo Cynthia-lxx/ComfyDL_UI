@@ -155,6 +155,79 @@ def _store_checks() -> None:
           and manifest["prompt"].get("1", {}).get("class_type") == "X")
 
 
+# ------------------------------------------------- T2b: scene export -------
+def _export_checks() -> None:
+    from comfydl.nodes.data_types import CdlDataset
+
+    from app.crashsite import export as export_mod
+
+    path = store.create_snapshot({"1": {"class_type": "X"}},
+                                 prompt_id="pid-x", note="export")
+    tag, blob, meta = serialize.serialize_output(T(2, 3))
+    store.upsert_node_output(path, "h1", "1", 0, "X", "Tensor", tag, blob, meta)
+    tag, blob, meta = serialize.serialize_output(3.14)
+    store.upsert_node_output(path, "h2", "2", 0, "Y", "float", tag, blob, meta)
+    ds = CdlDataset(features=T(4, 2), labels=T(4),
+                    feature_names=["a", "b"], target_name="y",
+                    meta={"source": "unit"})
+    tag, blob, meta = serialize.serialize_output(ds)
+    store.upsert_node_output(path, "h3", "3", 0, "Z", "CdlDataset", tag,
+                             blob, meta)
+    tag, blob, meta = serialize.serialize_output(torch.rand(1, 8, 8, 3))
+    store.upsert_node_output(path, "h4", "4", 0, "IMAGE", "Tensor", tag,
+                             blob, meta)
+
+    out = Path(tempfile.mkdtemp(prefix="cdl_export_"))
+    res = export_mod.export_selections(
+        path,
+        [{"node_id": "1", "format": "safetensors", "class_type": "X"},
+         {"node_id": "2", "format": "txt", "class_type": "Y"},
+         {"node_id": "3", "format": "db", "class_type": "Z"},
+         {"node_id": "4", "format": "png", "class_type": "IMAGE"}],
+        out, include_prompt=True)
+    check("X1 export writes all rows + prompt",
+          res["count"] == 5 and not res["failed"], json.dumps(res)[:240])
+    check("X2 safetensors default for tensors",
+          (out / "X_1_s0.safetensors").is_file())
+    check("X3 txt override on scalar",
+          (out / "Y_2_s0.txt").is_file()
+          and (out / "Y_2_s0.txt").read_text(encoding="utf-8") == "3.14")
+    import sqlite3 as _sq
+
+    conn = _sq.connect(str(out / "Z_3_s0.db"))
+    try:
+        row = conn.execute("SELECT payload, meta FROM dataset").fetchone()
+    finally:
+        conn.close()
+    check("X4 db export holds blob+meta",
+          row is not None and len(row[0]) > 0
+          and "feature_names" in row[1])
+    check("X5 prompt json exported",
+          (out / (path.stem + "_prompt.json")).is_file())
+    check("X6 png export for image tensor",
+          (out / "IMAGE_4_s0.png").is_file())
+    check("X7 candidates matrix",
+          export_mod.default_format("st") == "safetensors"
+          and export_mod.candidates("json") == ["json", "txt"]
+          and export_mod.candidates("failed") == []
+          and export_mod.default_format("failed") is None)
+    # An unknown node id is reported, never fatal.
+    res2 = export_mod.export_selections(
+        path, [{"node_id": "999", "format": "json", "class_type": "Nope"}],
+        out)
+    check("X8 missing node reported as failed",
+          len(res2["failed"]) == 1 and res2["count"] == 0,
+          json.dumps(res2)[:160])
+    # A chosen format outside the slot's candidates falls back to the slot
+    # default instead of failing (safetensors not offered for a json row).
+    res3 = export_mod.export_selections(
+        path, [{"node_id": "2", "format": "safetensors", "class_type": "Y"}],
+        out)
+    check("X9 format fallback to slot default",
+          res3["count"] == 1 and (out / "Y_2_s0.json").is_file(),
+          json.dumps(res3)[:160])
+
+
 # --------------------------------------------------------- T3: provider ----
 def _provider_checks() -> None:
     provider = SnapshotProvider()
@@ -410,6 +483,39 @@ def _route_checks() -> None:
                   and mock_provider.resume_calls[-1]
                   == ("pid-crash", crashed[0]["id"]),
                   str(mock_provider.resume_calls))
+            # M2 scene export: detail + export endpoints.
+            r = await client.get(
+                f"/comfydl/crashsite/snapshots/{crashed[0]['id']}/detail")
+            body = await r.json()
+            check("R11 detail rows annotated, no payloads", r.status == 200
+                  and isinstance(body.get("rows"), list) and body["rows"]
+                  and all("export_default" in row and "export_formats" in row
+                          and "data" not in row for row in body["rows"]),
+                  json.dumps(body)[:200])
+            r = await client.get("/comfydl/crashsite/snapshots/nope/detail")
+            check("R12 detail 404 on unknown id", r.status == 404)
+            r = await client.post("/comfydl/crashsite/export",
+                                  json={"id": "nope",
+                                        "items": [{"node_id": "1"}]})
+            check("R13 export 404 on unknown id", r.status == 404)
+            r = await client.post("/comfydl/crashsite/export",
+                                  json={"id": crashed[0]["id"], "items": []})
+            check("R14 export 400 on empty selection", r.status == 400)
+            r = await client.post("/comfydl/crashsite/export", json={
+                "id": crashed[0]["id"], "include_prompt": True,
+                "items": [{"node_id": "1", "format": "safetensors",
+                           "class_type": "SpikeSource"}]})
+            body = await r.json()
+            out_dir = Path(body.get("dir", ""))
+            check("R15 export writes files (fallback json)",
+                  r.status == 200 and body.get("count", 0) >= 1
+                  and out_dir.is_dir()
+                  and all((out_dir / f).is_file() for f in body["files"]),
+                  json.dumps(body)[:240])
+            check("R16 prompt json included",
+                  any(f.endswith("_prompt.json")
+                      for f in body.get("files", [])),
+                  str(body.get("files")))
         finally:
             await client.close()
 
@@ -432,6 +538,7 @@ def _route_checks() -> None:
 def main() -> int:
     _serialize_checks()
     _store_checks()
+    _export_checks()
     _provider_checks()
     _route_checks()
     return report()

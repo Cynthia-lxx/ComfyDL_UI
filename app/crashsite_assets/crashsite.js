@@ -15,11 +15,17 @@
   const CSS_URL = "/comfydl/crashsite/crashsite.css";
   const SNAPSHOTS_URL = "/comfydl/crashsite/snapshots";
   const RESUME_URL = "/comfydl/crashsite/resume";
+  const EXPORT_URL = "/comfydl/crashsite/export";
+  const DETAIL_URL = (id) =>
+    "/comfydl/crashsite/snapshots/" + encodeURIComponent(id) + "/detail";
   const TAB_ID = "comfydl-crashsite";
 
   const state = {
     snapshots: null, loading: false, refreshQueued: false, resuming: null,
     initialized: false, topbarButton: null,
+    // Scene export (git-fire M2): the summary table for one snapshot.
+    exportFor: null, exportDetail: null, exportBusy: false,
+    exportSel: {}, exportFormats: {}, promptSel: true,
   };
 
   const I18N = {
@@ -40,6 +46,17 @@
       status_open: "running",
       status_interrupted: "interrupted",
       resume_ok: "Re-queued - finished nodes will be skipped automatically. Skip/re-run statistics appear on the new snapshot card when the run ends.",
+      export_title: "Scene export",
+      export_hint: "Pick what to keep from this snapshot; files are written to output/comfydl/scene_export/.",
+      export_prompt: "Workflow prompt (JSON)",
+      export_run: "Export selected",
+      export_busy: "Exporting...",
+      export_dismiss: "Dismiss",
+      export_open: "Scene export",
+      export_done: "Exported {n} file(s) to {dir}",
+      export_fail: "{n} row(s) failed - see server log.",
+      export_fail_msg: "Export failed: ",
+      export_nudge: "Workflow interrupted - scene export is ready in the Crash Site panel.",
       resume_fail: "Resume failed: ",
     },
     zh: {
@@ -59,6 +76,17 @@
       status_open: "进行中",
       status_interrupted: "已打断",
       resume_ok: "已重新入队——已完成的节点将自动跳过。运行结束后在新快照卡片查看跳过/重跑统计。",
+      export_title: "现场导出",
+      export_hint: "勾选要保留的内容，文件将写入 output/comfydl/scene_export/。",
+      export_prompt: "工作流 prompt（JSON）",
+      export_run: "导出所选项",
+      export_busy: "导出中...",
+      export_dismiss: "关闭",
+      export_open: "现场导出",
+      export_done: "已导出 {n} 个文件到 {dir}",
+      export_fail: "{n} 行失败，详见服务端日志。",
+      export_fail_msg: "导出失败：",
+      export_nudge: "工作流已打断——现场导出已在「事故现场」面板就绪。",
       resume_fail: "恢复失败：",
     },
   };
@@ -150,6 +178,135 @@
     renderPanel();
   }
 
+  // ------------------------- scene export (git-fire M2) -------------------
+  // Group per-slot detail rows into one row per node for the summary table.
+  // Format dropdown = union of the node's slot candidates; default comes
+  // from the first slot that has one.  Per-slot fallbacks happen server-side.
+  function groupRows(rows) {
+    const map = new Map();
+    (rows || []).forEach((r) => {
+      const g = map.get(r.node_id)
+        || { node_id: r.node_id, class_type: r.class_type, slots: 0,
+             size: 0, formats: [], defaultFormat: null };
+      g.slots += 1;
+      g.size += Number(r.size_bytes) || 0;
+      (r.export_formats || []).forEach((f) => {
+        if (!g.formats.includes(f)) g.formats.push(f);
+      });
+      if (!g.defaultFormat && r.export_default) g.defaultFormat = r.export_default;
+      map.set(r.node_id, g);
+    });
+    return Array.from(map.values());
+  }
+
+  async function loadExport(id) {
+    const api = getApi();
+    if (!api) return;
+    try {
+      const resp = await api.fetchApi(DETAIL_URL(id));
+      if (resp.ok) {
+        state.exportDetail = await resp.json();
+        state.exportFor = id;
+        state.exportSel = {};
+        state.exportFormats = {};
+        state.promptSel = true;
+        renderPanel();
+        openSidebarPanel();
+      } else {
+        showToast(t("export_fail_msg") + resp.status, true);
+      }
+    } catch (e) {
+      showToast(t("export_fail_msg") + e, true);
+    }
+  }
+
+  async function runExport() {
+    const api = getApi();
+    if (!api || !state.exportDetail || state.exportBusy) return;
+    state.exportBusy = true;
+    renderPanel();
+    const items = groupRows(state.exportDetail.rows || [])
+      .filter((g) => state.exportSel[g.node_id] !== false)
+      .map((g) => ({ node_id: g.node_id,
+                     format: state.exportFormats[g.node_id] || g.defaultFormat,
+                     class_type: g.class_type }));
+    try {
+      const resp = await api.fetchApi(EXPORT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: state.exportFor,
+          include_prompt: state.promptSel !== false,
+          items,
+        }),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        const nFailed = (body.failed || []).length;
+        showToast(t("export_done", { n: body.count || 0, dir: body.dir || "" })
+          + (nFailed ? " " + t("export_fail", { n: nFailed }) : ""),
+          nFailed > 0);
+        state.exportDetail = null;
+        state.exportFor = null;
+        fetchSnapshots();
+      } else {
+        showToast(t("export_fail_msg") + (body.error || resp.status), true);
+      }
+    } catch (e) {
+      showToast(t("export_fail_msg") + e, true);
+    }
+    state.exportBusy = false;
+    renderPanel();
+  }
+
+  // Auto-nudge (user decision 2026-10-13): after a failure/interrupt the
+  // panel opens itself with the newest interrupted snapshot's export table.
+  async function nudgeExport() {
+    await sleep(500); // let the server-side lifecycle mark the snapshot
+    await fetchSnapshots();
+    const target = (state.snapshots || []).find((s) => s.status === "interrupted");
+    if (!target) return;
+    openSidebarPanel();
+    showToast(t("export_nudge"));
+    await loadExport(target.id);
+  }
+
+  function renderExportSection() {
+    if (!state.exportDetail) return "";
+    const groups = groupRows(state.exportDetail.rows || []);
+    const row = (g) => {
+      const checked = state.exportSel[g.node_id] !== false;
+      const fmt = state.exportFormats[g.node_id] || g.defaultFormat || "";
+      const opts = g.formats.map((f) =>
+        '<option value="' + esc(f) + '"' + (f === fmt ? " selected" : "") + ">"
+        + esc(f) + "</option>").join("");
+      return '<div class="cs-x-row">'
+        + '<input type="checkbox" class="cs-x-check" data-id="'
+        + esc(g.node_id) + '"' + (checked ? " checked" : "") + ">"
+        + '<span class="cs-x-name">'
+        + esc(String(g.class_type || "?") + " #" + String(g.node_id))
+        + '</span><span class="cs-x-meta">' + esc(String(g.slots)
+          + " slot · " + fmtBytes(g.size))
+        + '</span><select class="cs-x-fmt" data-id="' + esc(g.node_id) + '">'
+        + opts + "</select></div>";
+    };
+    const promptChecked = state.promptSel !== false;
+    return '<div class="cs-export">'
+      + '<div class="cs-title-row"><span class="cs-title">'
+      + esc(t("export_title")) + '</span><button class="cs-button" id="cs-x-dismiss">'
+      + esc(t("export_dismiss")) + "</button></div>"
+      + '<div class="cs-hint">' + esc(t("export_hint")) + "</div>"
+      + groups.map(row).join("")
+      + '<div class="cs-x-row"><input type="checkbox" id="cs-x-prompt"'
+      + (promptChecked ? " checked" : "") + ">"
+      + '<span class="cs-x-name">' + esc(t("export_prompt"))
+      + '</span><span class="cs-x-meta">JSON</span></div>'
+      + '<button class="cs-button cs-x-run" id="cs-x-run"'
+      + (state.exportBusy ? " disabled" : "") + ">"
+      + esc(state.exportBusy ? t("export_busy") : t("export_run"))
+      + "</button></div>";
+  }
+
   function showToast(msg, isWarn) {
     try {
       const em = getApp() && getApp().extensionManager;
@@ -169,6 +326,7 @@
     if (!el) return;
     const html = '<div class="cs-panel">'
       + '<div class="cs-hint cs-incremental">' + esc(t("incremental")) + "</div>"
+      + renderExportSection()
       + '<div class="cs-title-row"><span class="cs-title">' + esc(t("title"))
       + '</span><button class="cs-button" id="cs-refresh">' + esc(t("refresh")) + "</button></div>"
       + '<div class="cs-list">'
@@ -220,7 +378,12 @@
               + esc(s.id) + '"'
               + (state.resuming === s.id ? " disabled" : "") + ">"
               + esc(state.resuming === s.id ? t("resuming") : t("resume"))
-              + "</button></div>";
+              + "</button>"
+              + (s.status === "interrupted"
+                ? '<button class="cs-button cs-export-open" data-id="'
+                  + esc(s.id) + '">' + esc(t("export_open")) + "</button>"
+                : "")
+              + "</div>";
           }).join(""))
       + "</div></div>";
     el.innerHTML = html;
@@ -232,6 +395,30 @@
     if (refresh) refresh.addEventListener("click", () => fetchSnapshots());
     el.querySelectorAll(".cs-resume").forEach((btn) => {
       btn.addEventListener("click", () => resume(btn.getAttribute("data-id"), btn));
+    });
+    el.querySelectorAll(".cs-export-open").forEach((btn) => {
+      btn.addEventListener("click", () => loadExport(btn.getAttribute("data-id")));
+    });
+    // Scene export controls (rendered only when a detail is loaded).
+    el.querySelectorAll(".cs-x-check").forEach((box) => {
+      box.addEventListener("change", () => {
+        state.exportSel[box.getAttribute("data-id")] = box.checked;
+      });
+    });
+    el.querySelectorAll(".cs-x-fmt").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        state.exportFormats[sel.getAttribute("data-id")] = sel.value;
+      });
+    });
+    const prompt = el.querySelector("#cs-x-prompt");
+    if (prompt) prompt.addEventListener("change", () => { state.promptSel = prompt.checked; });
+    const run = el.querySelector("#cs-x-run");
+    if (run) run.addEventListener("click", () => runExport());
+    const dismiss = el.querySelector("#cs-x-dismiss");
+    if (dismiss) dismiss.addEventListener("click", () => {
+      state.exportDetail = null;
+      state.exportFor = null;
+      renderPanel();
     });
   }
 
@@ -326,9 +513,17 @@
     // so nobody has to click Refresh to see the result.
     const api = getApi();
     if (api && typeof api.addEventListener === "function") {
+      const onExecEvent = (ev) => {
+        fetchSnapshots();
+        // git-fire M2 auto-nudge: failures/interrupts open the scene-export
+        // summary automatically (user decision 2026-10-13).
+        if (ev === "execution_error" || ev === "execution_interrupted") {
+          nudgeExport();
+        }
+      };
       ["execution_start", "execution_success", "execution_error",
         "execution_interrupted"].forEach((ev) => {
-        try { api.addEventListener(ev, () => fetchSnapshots()); }
+        try { api.addEventListener(ev, () => onExecEvent(ev)); }
         catch (e) { /* the panel is a courtesy */ }
       });
     }

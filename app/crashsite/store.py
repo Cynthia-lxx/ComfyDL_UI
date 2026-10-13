@@ -18,7 +18,7 @@ import sqlite3
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -187,6 +187,74 @@ def captured_nodes(path: Path, limit: int = 0) -> List[Dict[str, Any]]:
     if limit and len(out) > limit:
         out = out[:limit]
     return out
+
+
+def _dedupe_latest_slot_rows(rows) -> Dict[Tuple[str, int], Dict[str, Any]]:
+    """Latest row per (node_id, slot); rowid order = insertion order, so the
+    last write of a re-executed node wins (same rule the host cache uses)."""
+    latest: Dict[Tuple[str, int], Dict[str, Any]] = {}
+    for r in rows:
+        latest[(r[0], r[1])] = {
+            "node_id": r[0], "slot": r[1], "class_type": r[2],
+            "output_type": r[3], "format": r[4], "size_bytes": r[5] or 0,
+            "cache_key_hash": r[6],
+        }
+    return latest
+
+
+def snapshot_detail(path: Path) -> Optional[Dict[str, Any]]:
+    """Manifest + the FULL captured row list for the scene-export summary.
+
+    Unlike :func:`list_snapshots` (whose ``captured`` is capped at 20), this
+    returns every (node_id, slot) row so the export UI can list all
+    recoverable outputs.  Rows carry their serialize format tag; the routes
+    layer annotates them with export formats/candidates.
+    """
+    manifest = load_manifest(path)
+    if manifest is None:
+        return None
+    conn = _connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT node_id, slot, class_type, output_type, format,"
+            " size_bytes, cache_key_hash FROM node_outputs ORDER BY rowid"
+        ).fetchall()
+    finally:
+        conn.close()
+    latest = _dedupe_latest_slot_rows(rows)
+    manifest["rows"] = sorted(latest.values(),
+                              key=lambda d: (d["node_id"], d["slot"]))
+    return manifest
+
+
+def get_node_rows(path: Path, node_id: str, with_payload: bool = True
+                  ) -> List[Dict[str, Any]]:
+    """All (deduped, latest-write-wins) slot rows for one node.
+
+    ``with_payload=True`` includes the raw ``data`` blob and ``meta_json``
+    (the export path); False returns metadata only (API responses must not
+    ship gigabyte payloads to the frontend).
+    """
+    conn = _connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT node_id, slot, class_type, output_type, format,"
+            " size_bytes, cache_key_hash, meta_json, data FROM node_outputs"
+            " WHERE node_id=? ORDER BY rowid", (node_id,)).fetchall()
+    finally:
+        conn.close()
+    latest: Dict[Tuple[str, int], Dict[str, Any]] = {}
+    for r in rows:
+        entry = {
+            "node_id": r[0], "slot": r[1], "class_type": r[2],
+            "output_type": r[3], "format": r[4], "size_bytes": r[5] or 0,
+            "cache_key_hash": r[6],
+        }
+        if with_payload:
+            entry["meta_json"] = r[7] or "{}"
+            entry["data"] = bytes(r[8]) if r[8] is not None else b""
+        latest[(r[0], r[1])] = entry
+    return sorted(latest.values(), key=lambda d: d["slot"])
 
 
 def get_outputs_by_hash(path: Path, cache_key_hash: str) -> List[Dict[str, Any]]:
