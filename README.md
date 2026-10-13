@@ -11,6 +11,9 @@ fork of ComfyUI.
 
 ## What's This?
 
+**Hardcore-overhauled by AI art software, this is a modular Deep Learning Toolbox GUI, API
+and backend with a graph/nodes interface.**
+
 `ComfyDL_UI` lets you build deep learning workflows — from CNNs to language models — by
 connecting nodes in a graph, not by writing code. It hosts the
 [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) node pack as a built-in set of nodes
