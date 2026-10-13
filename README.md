@@ -4,6 +4,8 @@
 
 **Deep Learning is just a few clicks away!**
 
+</div>
+
 ![Cover](assets/cover_v2_HD.png)
 
 ## What's This?

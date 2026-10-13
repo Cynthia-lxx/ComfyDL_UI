@@ -1,5 +1,3 @@
-<div align="center">
-
 # ComfyDL_UI
 
 ![Cover](assets/cover_v2_HD.png)
@@ -229,4 +227,3 @@ python main.py
 <p align="center">
   <img src="assets/dev_2333.png" alt="橘雪莉牛逼" />
 </p>
-
