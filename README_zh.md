@@ -2,82 +2,150 @@
 
 # ComfyDL_UI
 
-**Deep Learning is just a few clicks away!**
+**深度学习，触手可及！**
 
-[ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) 的图形界面版本 —— 一个为深度学习特化改装的
-ComfyUI 分支。
+![Cover](assets/cover_v2_HD.png)
 
-[English](README.md)
+## 这是什么？
 
-</div>
+**由 AI 绘画软件硬核爆改而成的模块化深度学习工具箱——图形 / 节点界面的 GUI、API 与后端。**
 
-## 这是什么
+`ComfyDL_UI` 让你用连线代替写代码来搭建深度学习工作流——从 CNN 到语言模型。它将
+[ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) 节点包以内置节点形式注册（张量、网络层、
+优化器、训练循环、NLP 流水线、数据工具与可视化），运行在精简后的 ComfyUI 运行时之上。
 
-`ComfyDL_UI` 让你**用连线代替写代码**来搭建深度学习工作流——从 CNN 到语言模型。它托管
-[ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) 节点包并以内置节点形式注册（张量、网络层、
-可学习参数、优化器、训练循环、NLP 流水线、数据工具与可视化），运行在精简后的 ComfyUI 运行时之上。
+> 它**不是**完整的原版 ComfyUI：本仓库是脱水（dehydrated）分支
+> （见 [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)），只保留节点图引擎、
+> 服务层与基础图像 IO，删去了扩散生成栈。若想使用原版 ComfyUI，请走官方仓库：
+> <https://github.com/comfyanonymous/ComfyUI>。
 
-它**不是完整的原版 ComfyUI**：本仓库是脱水（dehydrated）分支，只保留节点图引擎、服务层与基础
-图像 IO，删去了扩散模型生成栈；脱水清单见 [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)。
-若想使用原版 ComfyUI，请走官方仓库下载：<https://github.com/comfyanonymous/ComfyUI>。
+## 效果一览
 
-## 效果预览
+生产级表格回归工作流：
 
-在图内端到端训练一个小语言模型——Vocab Build → Text Encode → Sliding Window → Language Model
-流水线 → Generate → Save。`Language Model Train` 节点在训练的同时会把 cross-entropy 曲线
-**实时刷在自己节点下方**（节点下方那张预览卡片）：
+![ComfyDL_UI 中的表格回归工作流](assets/tabular_regression_workflow.png)
 
-![ComfyDL_UI 中的语言模型训练工作流](assets/languange_model_train_workflow.png)
+语言模型也是同一个故事：
 
-<p align="center">
-  <img src="assets/language_model_train_node_focus.png" alt="Language Model Train 节点与其实时 loss 曲线预览" width="440" />
-</p>
+![Language Model Train 在节点下方实时铺开交叉熵曲线](assets/language_model_train_running.png)
 
 > 更多示例与完整节点参考见 [`comfydl/`](comfydl/) 子模块说明
 > （[English](comfydl/README.md)、[FUNCTIONS_zh.md](comfydl/FUNCTIONS_zh.md)）。
 
 ## 特性
 
-- 可视化节点图，无需写代码即可搭建、复用深度学习工作流。
-- 完整内置 [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) 节点包：张量运算、网络层、可学习
-  参数、优化器、带实时 loss 曲线预览的训练循环、语言模型训练与生成、数据集与可视化节点。
-- 高效本地执行：异步队列 + 部分重执行——只有变化过的子图会重新运行。
-- 智能显存/内存管理；无任何 GPU 后端时自动回退 CPU。
-- 运行中节点下方的实时进度与预览卡片（loss 曲线、生成文本快照），经内置 WebSocket 通道推送。
-- 内置内存分析：峰值估算、三色判定、入队前的超限警告，以及分配失败后的事后归因。
-- 事故现场（Crash Site）：惰性捕获的执行快照（正常运行零开销）、一键恢复自动跳过已完成节点，
-  以及训练节点断点续训——被打断的万步训练从断点步继续，而不是从头再来。
-- 工作流以 JSON 保存与加载。
-- 完全离线运行：除非你主动要求，核心不会下载任何东西。
-- 仍可通过 `custom_nodes/` 兼容第三方自定义节点包。
-- 可通过 [`extra_model_paths.yaml`](extra_model_paths.yaml.example) 配置额外的模型目录。
+`ComfyDL_UI` 的几大核心能力在下方各占一节——可视化编辑器、内置节点包、实时进度、全量
+Profiling，以及 Crash Site 保存与恢复。日常基础项：
 
-### 内存分析
+- 高效本地执行：异步队列 + 部分图重执行（只重跑变化过的部分）。
+- 智能显存/内存管理；无 GPU 后端时自动回退 CPU。
+- 完全离线运行：不主动下载任何东西，除非你要求。
+- 兼容第三方自定义节点。
+- 通过 [`extra_model_paths.yaml`](extra_model_paths.yaml.example) 配置额外模型目录。
 
-任何东西入队之前，ComfyDL_UI 会根据当前图的参数与数据流估算峰值内存，与设备预算比对并给出
-绿 / 黄 / 红三色判定，放不下的图会在入队前先警告。
+### 可视化节点图编辑器
 
-![Profiling 侧栏：设备预算、CERTAIN OOM 判定与按节点分解](assets/profiling_memory_verdict.png)
+用连线代替写代码来搭建深度学习工作流：拖拽、连线、分组、静音、旁路、折叠；只重跑变化过
+的部分；工作流以纯 JSON 保存与分享（把生成的 PNG 拖回页面即可还原产出它的工作流——含
+种子）。
 
-- **边改边估**：500ms 防抖后重新估算；侧栏给出设备预算、估算峰值、最大单张量，以及按节点分解（参数/激活/优化器状态）。
-- **三色判定**：绿=放得下；黄=吃紧（只弹 toast）；红=一定 OOM，入队前先警告。
-- **事后分析**：分配失败会把字节数反查回对应张量，并给出可行的取值建议。
-- **对未知诚实**：未覆盖的节点类型标为 `unknown`。
-- **双语**：面板、徽章、确认框与事后分析卡片均跟随界面语言。
+### 大部分深度学习算子，开箱即用
 
-红色图按 Run 会先弹警告，并允许覆盖：
+你已经懂深度学习（不是吗？）——在这里，大部分内容都只是一个节点的距离。张量与形状操作、
+linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化器、LR 调度器、带早停的
+训练循环、数据集读写（CSV / Excel / DB / JSON / TXT）、分词器与语言模型块、目标检测、
+分割与可视化——128 个节点、21 个分类，连线代替手写。
+
+目录一览：
+
+![Network & Layers：75 个节点按门类分组](assets/network_layers_catalog.svg)
+
+**交互式版本**——点击任意节点即可查看描述与源码——位于
+[`docs/network-and-layers.html`](docs/network-and-layers.html)。GitHub 会剥除 README 里的
+脚本，无法内嵌运行：请通过
+[htmlpreview](https://htmlpreview.github.io/?https://github.com/Cynthia-lxx/ComfyDL_UI/blob/master/docs/network-and-layers.html)
+查看渲染效果，或在本地直接打开该文件。
+
+### 实时进度与预览
+
+每个长耗时节点都通过内置 WebSocket 通道逐步上报进度——语言模型节点边生成边在节点下方
+显示文本，顶栏同步跟踪每次运行的开销。
+
+### Profiling——内存、算力与算子
+
+`ComfyDL_UI` 对一张图运行前后的全部开销做剖析。一个面板装下整个故事——三色内存判定、
+设备预算、算力估算、逐节点拆解、实测历史与 ATen 算子图：
 
 <p align="center">
-  <img src="assets/profiling_memory_warning.png" alt="对判定为一定 OOM 的图入队时弹出的内存警告框" width="620" />
+  <img src="assets/profiling_operator_panel.png" alt="展开的 Profiling 面板：SAFE 内存判定、设备预算、18.90 TFLOPs 算力估算、逐节点拆解、实测历史与 CPU 突发日志" width="720" />
 </p>
 
-公式、阈值与验收清单见 [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md)。
+- **内存** — 基于参数与数据流的峰值估算，并按设备预算给出绿 / 黄 / 红三色判定；红色即
+  **必然 OOM**，入队前即警告。拆解深入到张量族——参数、梯度、注意力分数、FFN、logits——
+  每一族都给出字节数与最大单张量，就贴在它分析的节点旁边：
+
+  <p align="center">
+    <img src="assets/profiling_memory_breakdown_table.png" alt="逐张量族的内存拆解表，与它所分析的 Language Model Train 节点合影" width="620" />
+  </p>
+
+  在红图上按 Run 会带着判定背后的数字先发出警告——并且可以坚持继续：
+
+  <p align="center">
+    <img src="assets/profiling_oom_warning.png" alt="内存警告对话框：估算峰值 2.94 TB 对比剩余 2.16 GB，带取消与确认" width="620" />
+  </p>
+
+- **算力负载** — 按节点族（attention / FFN / logits / conv…）维护 FLOPs 账本，并统计逐
+  节点实际耗时；运行时顶栏实时指示。
+- **算子拆解** — 每个节点都被展开成它真正执行的 ATen 算子（`aten.mm`、`aten._softmax`、
+  `aten.conv2d`…）；算子级账本与公式估算交叉验证，偏差会被标记而不是隐藏。
+- **看门狗** — 采样到的 CPU / RSS 事实归属到正在执行的节点，抓住运行中独占机器的节点。
+- **诚实面对未知** — 未覆盖的节点类型如实报告 `unknown`；探针失败则回退到公式值并明确
+  标注 `fallback`。面板、徽章与对话框跟随 UI 语言。
+
+设计文档：[`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md)、
+[`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md)、
+[`docs/profiling-m3-estimator-families.md`](docs/profiling-m3-estimator-families.md)、
+[`docs/profiling-m3-opgraph.md`](docs/profiling-m3-opgraph.md)。
+
+### 事故现场（Crash Site）——保存与恢复
+
+被打断运行的安尽全力网，**正常运行时零开销**：
+
+- **惰性捕获** — 工作流全速运行时不写任何东西；被打断或失败的那一刻，缓存中幸存的输出
+  立即写入快照库。
+- **一键恢复** — 重新入队存储的提示词并跳过所有已完成节点；跳过 / 重跑统计会在运行结束
+  后出现在新快照卡片上。
+- **现场导出** — 逐节点勾选要保留的内容，并按行选择格式（safetensors / png / json / db /
+  pt），外加工作流提示词；文件落入 output 目录并进入 Results assets。
+- **断点续训** — 训练节点（Regression Train、Training Loop、Language Model Train）在被打
+  断的瞬间保存完整状态；恢复时从断点步继续，而不是把万步训练从头再来。
+
+侧栏中的快照库——每次运行都会连同捕获的节点一起归档；被打断的现场提供现场导出：
+
+<p align="center">
+  <img src="assets/crashsite_snapshot_library.png" alt="Crash Site 侧栏：附带捕获节点与现场导出入口的快照库" width="440" />
+</p>
+
+现场导出表——勾选要保留的内容并选择格式：
+
+<p align="center">
+  <img src="assets/crashsite_scene_export.png" alt="Crash Site 现场导出：逐节点勾选框、格式下拉与工作流提示词行" width="520" />
+</p>
+
+### 实时 loss map
+
+每个训练器都在节点正下方的卡片上实时绘制 loss map——原始步损失与平滑曲线并列，随运行
+推进刷新——收敛还是发散一眼可见，无需打开任何东西：
+
+<p align="center">
+  <img src="assets/loss_map_focus.png" alt="训练节点下方的实时 loss map 预览卡，同时展示原始与平滑损失曲线" width="520" />
+</p>
 
 ## 安装
 
-需要 Python 3.12+（推荐 3.13），任何有可用 PyTorch 版本的系统均可运行。
+需要 Python 3.12+（推荐 3.13）。任何有受支持 PyTorch 构建的操作系统均可。
 
-建议先创建虚拟环境以隔离依赖——避免与你机器上其他位置安装的包发生冲突：
+先创建虚拟环境以隔离依赖——避免与机器上其他包冲突：
 
 ```bash
 git clone https://github.com/Cynthia-lxx/ComfyDL_UI
@@ -95,18 +163,18 @@ pip install -r requirements.txt
 python main.py
 ```
 
-打开提示的地址即可：ComfyDL 节点已作为内置节点注册，无需再放进 `custom_nodes`。
+打开它打印的地址。ComfyDL 节点已注册为内置——无需往 `custom_nodes` 放任何东西。
 
 ### GPU 加速
 
-纯 CPU 机器开箱即用。若要 GPU 加速，请在同一环境中安装匹配硬件的 PyTorch 版本：
+纯 CPU 机器开箱即用。如需 GPU 加速，请为同一环境安装与硬件匹配的 PyTorch 构建：
 
 - **NVIDIA**：`pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130`
-- **AMD（Linux，ROCm）**：`pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2`
+- **AMD（Linux, ROCm）**：`pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2`
 - **Intel Arc**：`pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/xpu`
-- **Apple 芯片**：参见 Apple 官方指南 [Accelerated PyTorch training on Mac](https://developer.apple.com/metal/pytorch/)。
+- **Apple Silicon**：参考 [Accelerated PyTorch training on Mac](https://developer.apple.com/metal/pytorch/) 指南。
 
-若报 "Torch not compiled with CUDA enabled"，先 `pip uninstall torch`，再按上面的对应命令重装。
+若出现 "Torch not compiled with CUDA enabled"，`pip uninstall torch` 后按上述对应命令重装。
 
 ## 运行
 
@@ -114,76 +182,79 @@ python main.py
 python main.py
 ```
 
-常用参数（完整列表见 `python main.py --help`）：
+常用参数（全部见 `python main.py --help`）：
 
-- `--cpu` —— 强制 CPU 执行。
-- `--port 8188` —— 修改监听端口。
-- `--tls-keyfile key.pem --tls-certfile cert.pem` —— 以 HTTPS 而非 HTTP 提供服务。
+- `--cpu` — 强制 CPU 执行。
+- `--port 8188` — 更换监听端口。
+- `--tls-keyfile key.pem --tls-certfile cert.pem` — 以 HTTPS 代替 HTTP 提供服务。
 
-AMD 显卡未被 ROCm 正式支持时，可尝试 `HSA_OVERRIDE_GFX_VERSION=10.3.0 python main.py`
+未被 ROCm 官方覆盖的 AMD 卡可尝试 `HSA_OVERRIDE_GFX_VERSION=10.3.0 python main.py`
 （RDNA2 及更早）或 `HSA_OVERRIDE_GFX_VERSION=11.0.0`（RDNA3）。
 
 ### 说明
 
-- 只有输出所需输入齐全的子图才会执行；重复提交相同工作流时，只有变化过的部分及其下游会重跑。
-- 把生成的 PNG 拖回页面，即可载入生成它的工作流（含随机种子）。
+- 只有输出所需输入齐全的节点才会被执行；重复提交未变化的图只会重跑变化过的部分。
+- 把生成的 PNG 拖到页面上，即可加载产出它的工作流（含种子）。
 
 ## 键盘快捷键
 
-| 按键组合                              | 功能                                                                                                              |
-|------------------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `Ctrl` + `Enter`                      | 将当前图加入生成队列                                                                                                |
-| `Ctrl` + `Shift` + `Enter`              | 将当前图插队为第一个执行                                                                                             |
-| `Ctrl` + `Alt` + `Enter`                | 取消当前生成                                                                                                       |
-| `Ctrl` + `Z`/`Ctrl` + `Y`                 | 撤销/重做                                                                                                          |
-| `Ctrl` + `S`                          | 保存工作流                                                                                                         |
-| `Ctrl` + `O`                          | 加载工作流                                                                                                         |
-| `Ctrl` + `A`                          | 全选节点                                                                                                           |
-| `Alt `+ `C`                           | 折叠/展开所选节点                                                                                                   |
-| `Ctrl` + `M`                          | 静音/取消静音所选节点                                                                                               |
-| `Ctrl` + `B`                           | 旁路所选节点（等效于移除该节点并把连线直接接通）                                                                      |
-| `Delete`/`Backspace`                   | 删除所选节点                                                                                                       |
-| `Ctrl` + `Backspace`                   | 删除当前图                                                                                                         |
-| `Space`                              | 按住并移动光标以平移画布                                                                                             |
-| `Ctrl`/`Shift` + `Click`                 | 将点击的节点加入选区                                                                                                 |
-| `Ctrl` + `C`/`Ctrl` + `V`                  | 复制粘贴所选节点（不保留与未选节点输出端口的连线）                                                                     |
-| `Ctrl` + `C`/`Ctrl` + `Shift` + `V`          | 复制粘贴所选节点（保留未选节点输出端口到粘贴节点输入端口的连线）                                                        |
-| `Shift` + `Drag`                       | 同时移动多个所选节点                                                                                                 |
-| `Ctrl` + `D`                           | 载入默认图                                                                                                         |
-| `Alt` + `+`                          | 画布放大                                                                                                           |
-| `Alt` + `-`                          | 画布缩小                                                                                                           |
-| `Ctrl` + `Shift` + LMB + 垂直拖动 | 画布缩放                                                                                                           |
-| `P`                                  | 固定/取消固定所选节点                                                                                                |
-| `Ctrl` + `G`                           | 将所选节点编组                                                                                                      |
-| `Q`                                 | 切换队列面板可见性                                                                                                   |
-| `H`                                  | 切换历史面板可见性                                                                                                   |
-| `R`                                  | 刷新图                                                                                                             |
-| `F`                                  | 显示/隐藏菜单                                                                                                       |
-| `.`                                  | 视图适配所选内容（未选中时适配整图）                                                                                    |
-| 双击左键                            | 打开节点快速搜索面板                                                                                                 |
-| `Shift` + `Drag`                       | 同时移动多根连线                                                                                                    |
-| `Ctrl` + `Alt` + LMB                   | 断开点击端口的所有连线                                                                                               |
+| 按键 | 说明 |
+|------------------------------------|----------------------------------------------------|
+| `Ctrl` + `Enter` | 将当前图入队生成 |
+| `Ctrl` + `Shift` + `Enter` | 将当前图作为队首入队生成 |
+| `Ctrl` + `Alt` + `Enter` | 取消当前生成 |
+| `Ctrl` + `Z` / `Ctrl` + `Y` | 撤销 / 重做 |
+| `Ctrl` + `S` | 保存工作流 |
+| `Ctrl` + `O` | 加载工作流 |
+| `Ctrl` + `A` | 全选节点 |
+| `Alt` + `C` | 折叠 / 展开选中节点 |
+| `Ctrl` + `M` | 静音 / 取消静音选中节点 |
+| `Ctrl` + `B` | 旁路选中节点（等效于把节点从图中移除并直接接通连线） |
+| `Delete` / `Backspace` | 删除选中节点 |
+| `Ctrl` + `Backspace` | 删除当前图 |
+| `Space` | 按住并移动鼠标以平移画布 |
+| `Ctrl` / `Shift` + `Click` | 将点击的节点加入选中 |
+| `Ctrl` + `C` / `Ctrl` + `V` | 复制粘贴选中节点（不保持与未选中节点输出的连接） |
+| `Ctrl` + `C` / `Ctrl` + `Shift` + `V` | 复制粘贴选中节点（保持选中节点输出到粘贴节点输入的连接） |
+| `Shift` + `Drag` | 同时移动多个选中节点 |
+| `Ctrl` + `D` | 加载默认图 |
+| `Alt` + `+` | 画布放大 |
+| `Alt` + `-` | 画布缩小 |
+| `Ctrl` + `Shift` + 鼠标左键 + 纵向拖动 | 画布缩放 |
+| `P` | 钉住 / 取消钉住选中节点 |
+| `Ctrl` + `G` | 为选中节点创建分组 |
+| `Q` | 显示 / 隐藏队列 |
+| `H` | 显示 / 隐藏历史 |
+| `R` | 刷新图 |
+| `F` | 显示 / 隐藏菜单 |
+| `.` | 视图适配选中项（未选中时适配整图） |
+| 双击鼠标左键 | 打开节点快速搜索面板 |
+| `Shift` + `Drag` | 同时拖动多条连线 |
+| `Ctrl` + `Alt` + 鼠标左键 | 断开点击槽位上的所有连线 |
 
-macOS 用户可用 `Cmd` 代替 `Ctrl`。
+`macOS` 用户可将 `Ctrl` 替换为 `Cmd`。
 
-## 文档索引
+## 文档
 
-- [`comfydl/`](comfydl/) 子模块：节点包说明 `README.md` / `README_zh.md` 与完整节点参考
+- [`comfydl/`](comfydl/) — 节点包：`README.md` / `README_zh.md` 与完整节点参考
   `FUNCTIONS.md` / `FUNCTIONS_zh.md`。
-- [`docs/`](docs/)：脱水清单、品牌化与前端补丁、ComfyDL 内置化、内存分析及各阶段 reform 设计文档。
-- [`AGENTS.md`](AGENTS.md)：本仓库的工作约定。
-- [English README](README.md)
+- [`docs/`](docs/) — 分支专属说明：脱水清单、品牌、内置节点包、Profiling 与分步改造设计
+  文档。
+- [`AGENTS.md`](AGENTS.md) — 本仓库的工作方式。
+- [English](README.md)
 
 ## 版本与致谢
 
-- 版本：`v0.3.1`（脱水基线 ComfyUI `v0.34.0`）。
-- 维护者：[Cynthia-lxx](https://github.com/Cynthia-lxx)。
-- 版权：本项目与 `comfydl/` 子模块均以 GPL-3.0 发布，声明见 [`LICENSE`](LICENSE) 与
-  [`comfydl/LICENSE`](comfydl/LICENSE)。
+- **版本** — `v0.3.1`，自 ComfyUI `v0.34.0` 脱水而来。
+- **维护者** — [Cynthia-lxx](https://github.com/Cynthia-lxx)。
+- **许可** — GPL-3.0，适用于本仓库与 `comfydl/` 子模块
+  （[`LICENSE`](LICENSE)、[`comfydl/LICENSE`](comfydl/LICENSE)）。
 
-本项目派生自 comfyanonymous 及贡献者的 [ComfyUI](https://github.com/comfyanonymous/ComfyUI)。
-上游 ComfyUI 保留其自身版权与维护者，相关声明见 [`LICENSE`](LICENSE) 末尾；上游的官网、文档与
-社区位于 <https://www.comfy.org/>，与 ComfyDL_UI 分别维护。
+本项目派生自 comfyanonymous 及贡献者的
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI)。上游 ComfyUI 保留其版权与维护者；
+两份声明均列于 [`LICENSE`](LICENSE) 末尾。上游项目的网站、文档与社区位于
+<https://www.comfy.org/>，独立于 ComfyDL_UI 维护。
 
-界面默认设置为**英文**与**开启 Nodes 2.0**；两者都可在「设置」面板中随时改回。设置面板底部的
-「关于」会说明本项目与上游原版 ComfyUI 的关系。
+<p align="center">
+  <img src="assets/dev_2333.png" alt="" />
+</p>
