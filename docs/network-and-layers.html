@@ -5,479 +5,233 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Network &amp; Layers — node catalog</title>
 <style>
-:root{--bg:#0f1013;--panel:#16171c;--card:#1c1e24;--border:#262832;--text:#e6e6ec;--muted:#9a9aa5;--faint:#6b6b76}
+:root{--bg:#0f1013;--panel:#16171c;--card:#1c1e24;--border:#262832;--text:#e6e6ec;
+      --muted:#9a9aa5;--faint:#6b6b76;
+      --spring:linear(0,.014 1.2%,.056 2.4%,.2 4.6%,.89 10.8%,1.09 15.2%,1.134 18.4%,
+                      1.141 21.4%,1.12 25.4%,1.058 31.4%,1.008 38.2%,.988 44.3%,
+                      .992 52.7%,1.002 66.4%,1)}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.5}
-.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 64px}
-header{margin-bottom:26px}
-h1{margin:0 0 4px;font-size:30px;letter-spacing:.3px}
+body{margin:0;background:var(--bg);color:var(--text);
+     font-family:system-ui,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+     line-height:1.45}
+.wrap{max-width:1240px;margin:0 auto;padding:26px 22px 46px}
+header{margin-bottom:16px}
+h1{margin:0 0 2px;font-size:24px}
 h1 .amp{color:var(--faint);font-weight:400}
-.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
-.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
-.stat{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:13px;color:var(--muted)}
-.stat b{color:var(--text);font-size:15px;margin-right:4px}
-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px}
-.chip{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:13px;border-left:3px solid var(--accent)}
-.chip span{background:var(--card);border-radius:4px;padding:0 7px;font-size:11.5px;color:var(--accent)}
-.chip:hover{border-color:var(--accent)}
-section{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin-bottom:26px}
-h2{display:flex;align-items:center;gap:10px;margin:0 0 4px;font-size:19px;color:var(--accent)}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
-.count{font-size:11.5px;font-weight:500;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1px 8px;margin-left:4px}
-.blurb{color:var(--muted);font-size:13.5px;margin:0 0 14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-.node{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
-.node:hover{border-color:var(--accent)}
-.nname{font-size:13.5px;font-weight:600}
-.nid{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--accent);opacity:.85;margin:1px 0 5px}
-.ndesc{font-size:12px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-footer{color:var(--faint);font-size:12px;text-align:center;margin-top:8px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:6px;
+      padding:4px 12px;font-size:12.5px;color:var(--muted)}
+.stat b{color:var(--text);font-size:14px;margin-right:4px}
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px;
+      align-items:start}
+.cat{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+     overflow:hidden}
+.chead{display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;
+       background:none;border:0;border-bottom:1px solid transparent;color:var(--text);
+       cursor:pointer;font:inherit;font-weight:600;font-size:13.5px;text-align:left}
+.chead:hover{background:var(--card)}
+.cat.open .chead{border-bottom-color:var(--border);background:var(--card)}
+.chead .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.chead .cname{color:var(--accent);flex:1}
+.chead .count{font-size:11px;font-weight:500;color:var(--muted);background:var(--card);
+              border:1px solid var(--border);border-radius:4px;padding:0 7px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;padding:9px}
+.node{background:var(--card);border:1px solid var(--border);border-radius:6px;
+      flex:1 1 auto;min-width:0;overflow:hidden}
+.node.open{flex:1 1 100%;border-color:var(--accent)}
+.nhead{display:block;width:100%;padding:4px 9px;background:none;border:0;
+       color:var(--text);cursor:pointer;font:inherit;font-size:12px;text-align:left;
+       white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nhead:hover{color:var(--accent)}
+.more{display:grid;grid-template-rows:0fr;
+      transition:grid-template-rows .2s cubic-bezier(.2,.7,.3,1)}
+@supports (transition-timing-function:linear(0,1)){
+  .more{transition-timing-function:var(--spring)}
+}
+.node.open .more,.cat.open .node .more{grid-template-rows:1fr}
+.more-in{overflow:hidden;min-height:0;padding:0 9px}
+.node.open .more-in,.cat.open .node .more-in{padding-bottom:7px}
+.more-in>*{opacity:0;transform:translateY(-3px);
+           transition:opacity .16s ease,transform .2s var(--spring)}
+@supports (transition-timing-function:linear(0,1)){
+  .more-in>*{transition-timing-function:var(--spring)}
+}
+.node.open .more-in>*,.cat.open .node .more-in>*{opacity:1;transform:none}
+.nid{font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--accent);
+     opacity:.85;margin:2px 0 3px;white-space:nowrap;overflow:hidden;
+     text-overflow:ellipsis}
+.ndesc{font-size:11.5px;color:var(--muted)}
+.blurb-w{display:grid;grid-template-rows:0fr;
+         transition:grid-template-rows .2s cubic-bezier(.2,.7,.3,1)}
+@supports (transition-timing-function:linear(0,1)){
+  .blurb-w{transition-timing-function:var(--spring)}
+}
+.cat.open .blurb-w{grid-template-rows:1fr}
+.blurb-w>p{overflow:hidden;min-height:0;margin:0;padding:0 12px;font-size:11.5px;
+           color:var(--muted)}
+.cat.open .blurb-w>p{padding-bottom:4px}
+footer{color:var(--faint);font-size:11.5px;text-align:center;margin-top:18px}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
   <h1>Network <span class="amp">&amp;</span> Layers</h1>
-  <p class="sub">The built-in deep-learning node catalog of ComfyDL_UI — every category and every node, straight from the source.</p>
+  <p class="sub">The built-in deep-learning node catalog of ComfyDL_UI — click a category or a node to expand it.</p>
   <div class="stats"><span class="stat"><b>75</b>nodes</span><span class="stat"><b>10</b>categories</span></div>
-  <nav><a class="chip" href="#basic" style="--accent:#5b9dff">Basic<span>8</span></a><a class="chip" href="#activation" style="--accent:#34d399">Activation<span>14</span></a><a class="chip" href="#convolution" style="--accent:#fbbf24">Convolution<span>5</span></a><a class="chip" href="#pooling" style="--accent:#2dd4bf">Pooling<span>2</span></a><a class="chip" href="#normalization" style="--accent:#a78bfa">Normalization<span>7</span></a><a class="chip" href="#regularization" style="--accent:#f472b6">Regularization<span>1</span></a><a class="chip" href="#recurrent" style="--accent:#fb923c">Recurrent<span>3</span></a><a class="chip" href="#attention" style="--accent:#38bdf8">Attention<span>8</span></a><a class="chip" href="#text" style="--accent:#eab308">Text<span>4</span></a><a class="chip" href="#training" style="--accent:#f87171">Training<span>23</span></a></nav>
 </header>
-<section id="basic" style="--accent:#5b9dff">
-  <h2><span class="dot"></span>Basic<span class="count">8 nodes</span></h2>
-  <p class="blurb">Linear, embedding, reshape and broadcast arithmetic — the wiring blocks every network is built from.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Add</div>
-  <div class="nid">BasicAdd</div>
-  <div class="ndesc">Element-wise addition of two tensors (broadcasting); use it for residual / skip connections.</div>
+<main class="cats">
+<section class="cat" id="basic" style="--accent:#5b9dff">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Basic</span><span class="count">8</span></button>
+<div class="blurb-w"><p>Linear, embedding, reshape and broadcast arithmetic — the wiring blocks every network is built from.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Add</button><div class="more"><div class="more-in"><div class="nid">BasicAdd</div><div class="ndesc">Element-wise addition of two tensors (broadcasting); use it for residual / skip connections.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Broadcast</button><div class="more"><div class="more-in"><div class="nid">BasicBroadcast</div><div class="ndesc">Broadcast (view) a tensor to a comma separated shape string, e.g. &quot;2,3&quot;.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Concat</button><div class="more"><div class="more-in"><div class="nid">BasicConcat</div><div class="ndesc">Concatenate two tensors along one dimension (torch.cat).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Embedding</button><div class="more"><div class="more-in"><div class="nid">BasicEmbedding</div><div class="ndesc">Lookup table: gathers rows of weight by integer index; the table is wired in as a tensor.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Flatten</button><div class="more"><div class="more-in"><div class="nid">BasicFlatten</div><div class="ndesc">Flatten dimensions start_dim..end_dim into one; defaults flatten (N, C, H, W) to (N, C*H*W).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Linear</button><div class="more"><div class="more-in"><div class="nid">BasicLinear</div><div class="ndesc">Fully-connected layer: tensor @ weight.T (+ bias); weight/bias are wired in as tensors.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Multiply</button><div class="more"><div class="more-in"><div class="nid">BasicMultiply</div><div class="ndesc">Element-wise multiplication of two tensors (broadcasting); useful for gating or scaling.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Reshape</button><div class="more"><div class="more-in"><div class="nid">BasicReshape</div><div class="ndesc">Reshape to a comma separated shape string, e.g. &quot;1,-1&quot;; -1 infers one dimension.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">Broadcast</div>
-  <div class="nid">BasicBroadcast</div>
-  <div class="ndesc">Broadcast (view) a tensor to a comma separated shape string, e.g. &quot;2,3&quot;.</div>
-</div>
-<div class="node">
-  <div class="nname">Concat</div>
-  <div class="nid">BasicConcat</div>
-  <div class="ndesc">Concatenate two tensors along one dimension (torch.cat).</div>
-</div>
-<div class="node">
-  <div class="nname">Embedding</div>
-  <div class="nid">BasicEmbedding</div>
-  <div class="ndesc">Lookup table: gathers rows of weight by integer index; the table is wired in as a tensor.</div>
-</div>
-<div class="node">
-  <div class="nname">Flatten</div>
-  <div class="nid">BasicFlatten</div>
-  <div class="ndesc">Flatten dimensions start_dim..end_dim into one; defaults flatten (N, C, H, W) to (N, C*H*W).</div>
-</div>
-<div class="node">
-  <div class="nname">Linear</div>
-  <div class="nid">BasicLinear</div>
-  <div class="ndesc">Fully-connected layer: tensor @ weight.T (+ bias); weight/bias are wired in as tensors.</div>
-</div>
-<div class="node">
-  <div class="nname">Multiply</div>
-  <div class="nid">BasicMultiply</div>
-  <div class="ndesc">Element-wise multiplication of two tensors (broadcasting); useful for gating or scaling.</div>
-</div>
-<div class="node">
-  <div class="nname">Reshape</div>
-  <div class="nid">BasicReshape</div>
-  <div class="ndesc">Reshape to a comma separated shape string, e.g. &quot;1,-1&quot;; -1 infers one dimension.</div>
-</div>
-  </div>
 </section>
-<section id="activation" style="--accent:#34d399">
-  <h2><span class="dot"></span>Activation<span class="count">14 nodes</span></h2>
-  <p class="blurb">Element-wise nonlinearities: one tensor in, one tensor out.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">ELU</div>
-  <div class="nid">ActivationELU</div>
-  <div class="ndesc">Exponential linear unit: x if x &gt; 0 else alpha * (exp(x) - 1).</div>
+<section class="cat" id="activation" style="--accent:#34d399">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Activation</span><span class="count">14</span></button>
+<div class="blurb-w"><p>Element-wise nonlinearities: one tensor in, one tensor out.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">ELU</button><div class="more"><div class="more-in"><div class="nid">ActivationELU</div><div class="ndesc">Exponential linear unit: x if x &gt; 0 else alpha * (exp(x) - 1).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">GELU</button><div class="more"><div class="more-in"><div class="nid">ActivationGELU</div><div class="ndesc">Gaussian error linear unit; choose the exact or tanh approximation.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Hard Swish</button><div class="more"><div class="more-in"><div class="nid">ActivationHardSwish</div><div class="ndesc">Piecewise-linear SiLU approximation: x * relu6(x + 3) / 6.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Identity</button><div class="more"><div class="more-in"><div class="nid">ActivationIdentity</div><div class="ndesc">Pass-through activation; returns the input tensor unchanged.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Leaky ReLU</button><div class="more"><div class="more-in"><div class="nid">ActivationLeakyReLU</div><div class="ndesc">ReLU variant that keeps a small slope (negative_slope) for x &lt; 0.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Mish</button><div class="more"><div class="more-in"><div class="nid">ActivationMish</div><div class="ndesc">Mish activation: x * tanh(softplus(x)).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">ReLU</button><div class="more"><div class="more-in"><div class="nid">ActivationReLU</div><div class="ndesc">Element-wise rectified linear unit: max(0, x).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">ReLU6</button><div class="more"><div class="more-in"><div class="nid">ActivationReLU6</div><div class="ndesc">ReLU clamped to [0, 6]: min(max(0, x), 6).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">SELU</button><div class="more"><div class="more-in"><div class="nid">ActivationSELU</div><div class="ndesc">Self-normalizing ELU with the standard scale/alpha constants.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Sigmoid</button><div class="more"><div class="more-in"><div class="nid">ActivationSigmoid</div><div class="ndesc">Element-wise sigmoid: 1 / (1 + exp(-x)); output range (0, 1).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">SiLU</button><div class="more"><div class="more-in"><div class="nid">ActivationSiLU</div><div class="ndesc">Sigmoid linear unit (swish): x * sigmoid(x).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Softmax</button><div class="more"><div class="more-in"><div class="nid">ActivationSoftmax</div><div class="ndesc">Normalize values along one dimension so that they sum to 1.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Softplus</button><div class="more"><div class="more-in"><div class="nid">ActivationSoftplus</div><div class="ndesc">Smooth ReLU approximation: log(1 + exp(x)) (beta=1, threshold=20).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Tanh</button><div class="more"><div class="more-in"><div class="nid">ActivationTanh</div><div class="ndesc">Element-wise hyperbolic tangent; output range (-1, 1).</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">GELU</div>
-  <div class="nid">ActivationGELU</div>
-  <div class="ndesc">Gaussian error linear unit; choose the exact or tanh approximation.</div>
-</div>
-<div class="node">
-  <div class="nname">Hard Swish</div>
-  <div class="nid">ActivationHardSwish</div>
-  <div class="ndesc">Piecewise-linear SiLU approximation: x * relu6(x + 3) / 6.</div>
-</div>
-<div class="node">
-  <div class="nname">Identity</div>
-  <div class="nid">ActivationIdentity</div>
-  <div class="ndesc">Pass-through activation; returns the input tensor unchanged.</div>
-</div>
-<div class="node">
-  <div class="nname">Leaky ReLU</div>
-  <div class="nid">ActivationLeakyReLU</div>
-  <div class="ndesc">ReLU variant that keeps a small slope (negative_slope) for x &lt; 0.</div>
-</div>
-<div class="node">
-  <div class="nname">Mish</div>
-  <div class="nid">ActivationMish</div>
-  <div class="ndesc">Mish activation: x * tanh(softplus(x)).</div>
-</div>
-<div class="node">
-  <div class="nname">ReLU</div>
-  <div class="nid">ActivationReLU</div>
-  <div class="ndesc">Element-wise rectified linear unit: max(0, x).</div>
-</div>
-<div class="node">
-  <div class="nname">ReLU6</div>
-  <div class="nid">ActivationReLU6</div>
-  <div class="ndesc">ReLU clamped to [0, 6]: min(max(0, x), 6).</div>
-</div>
-<div class="node">
-  <div class="nname">SELU</div>
-  <div class="nid">ActivationSELU</div>
-  <div class="ndesc">Self-normalizing ELU with the standard scale/alpha constants.</div>
-</div>
-<div class="node">
-  <div class="nname">Sigmoid</div>
-  <div class="nid">ActivationSigmoid</div>
-  <div class="ndesc">Element-wise sigmoid: 1 / (1 + exp(-x)); output range (0, 1).</div>
-</div>
-<div class="node">
-  <div class="nname">SiLU</div>
-  <div class="nid">ActivationSiLU</div>
-  <div class="ndesc">Sigmoid linear unit (swish): x * sigmoid(x).</div>
-</div>
-<div class="node">
-  <div class="nname">Softmax</div>
-  <div class="nid">ActivationSoftmax</div>
-  <div class="ndesc">Normalize values along one dimension so that they sum to 1.</div>
-</div>
-<div class="node">
-  <div class="nname">Softplus</div>
-  <div class="nid">ActivationSoftplus</div>
-  <div class="ndesc">Smooth ReLU approximation: log(1 + exp(x)) (beta=1, threshold=20).</div>
-</div>
-<div class="node">
-  <div class="nname">Tanh</div>
-  <div class="nid">ActivationTanh</div>
-  <div class="ndesc">Element-wise hyperbolic tangent; output range (-1, 1).</div>
-</div>
-  </div>
 </section>
-<section id="convolution" style="--accent:#fbbf24">
-  <h2><span class="dot"></span>Convolution<span class="count">5 nodes</span></h2>
-  <p class="blurb">Learned spatial filters: conv, transpose conv, upsample and pixel (un)shuffle for feature maps.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Conv</div>
-  <div class="nid">ConvolutionConv</div>
-  <div class="ndesc">Convolution over 1/2/3 spatial dims with grouped/dilated kernels and zeros/reflect/replicate/circular padding; weight and bias are wired in.</div>
+<section class="cat" id="convolution" style="--accent:#fbbf24">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Convolution</span><span class="count">5</span></button>
+<div class="blurb-w"><p>Learned spatial filters: conv, transpose conv, upsample and pixel (un)shuffle for feature maps.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Conv</button><div class="more"><div class="more-in"><div class="nid">ConvolutionConv</div><div class="ndesc">Convolution over 1/2/3 spatial dims with grouped/dilated kernels and zeros/reflect/replicate/circular padding; weight and bias are wired in.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">ConvTranspose</button><div class="more"><div class="more-in"><div class="nid">ConvolutionConvTranspose</div><div class="ndesc">Transposed convolution (upsampling) over 1/2/3 spatial dims with stride/padding/output_padding/groups; weight and bias are wired in.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Pixel Shuffle</button><div class="more"><div class="more-in"><div class="nid">ConvolutionPixelShuffle</div><div class="ndesc">Reshuffle (N, C*r^2, H, W) into (N, C, H*r, W*r): channels become sub-pixels, the parameter-free half of sub-pixel convolution.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Pixel Unshuffle</button><div class="more"><div class="more-in"><div class="nid">ConvolutionPixelUnshuffle</div><div class="ndesc">Reshuffle (N, C, H*r, W*r) into (N, C*r^2, H, W): the exact inverse of Pixel Shuffle.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Upsample</button><div class="more"><div class="more-in"><div class="nid">ConvolutionUpsample</div><div class="ndesc">Interpolation upsampling over 1/2/3 spatial dims (nearest/linear/bilinear/bicubic/trilinear, scale_factor, align_corners); parameter-free.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">ConvTranspose</div>
-  <div class="nid">ConvolutionConvTranspose</div>
-  <div class="ndesc">Transposed convolution (upsampling) over 1/2/3 spatial dims with stride/padding/output_padding/groups; weight and bias are wired in.</div>
-</div>
-<div class="node">
-  <div class="nname">Pixel Shuffle</div>
-  <div class="nid">ConvolutionPixelShuffle</div>
-  <div class="ndesc">Reshuffle (N, C*r^2, H, W) into (N, C, H*r, W*r): channels become sub-pixels, the parameter-free half of sub-pixel convolution.</div>
-</div>
-<div class="node">
-  <div class="nname">Pixel Unshuffle</div>
-  <div class="nid">ConvolutionPixelUnshuffle</div>
-  <div class="ndesc">Reshuffle (N, C, H*r, W*r) into (N, C*r^2, H, W): the exact inverse of Pixel Shuffle.</div>
-</div>
-<div class="node">
-  <div class="nname">Upsample</div>
-  <div class="nid">ConvolutionUpsample</div>
-  <div class="ndesc">Interpolation upsampling over 1/2/3 spatial dims (nearest/linear/bilinear/bicubic/trilinear, scale_factor, align_corners); parameter-free.</div>
-</div>
-  </div>
 </section>
-<section id="pooling" style="--accent:#2dd4bf">
-  <h2><span class="dot"></span>Pooling<span class="count">2 nodes</span></h2>
-  <p class="blurb">Sliding-window and adaptive down-sampling over 1/2/3 spatial dims.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Adaptive Pool</div>
-  <div class="nid">PoolingAdaptive</div>
-  <div class="ndesc">Adaptive pooling (avg/max) to an exact output_size over 1/2/3 spatial dims; output_size=1 is global pooling.</div>
+<section class="cat" id="pooling" style="--accent:#2dd4bf">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Pooling</span><span class="count">2</span></button>
+<div class="blurb-w"><p>Sliding-window and adaptive down-sampling over 1/2/3 spatial dims.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Adaptive Pool</button><div class="more"><div class="more-in"><div class="nid">PoolingAdaptive</div><div class="ndesc">Adaptive pooling (avg/max) to an exact output_size over 1/2/3 spatial dims; output_size=1 is global pooling.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Pool</button><div class="more"><div class="more-in"><div class="nid">PoolingSliding</div><div class="ndesc">Sliding window pooling (max/avg) over 1/2/3 spatial dims - MaxPool{1,2,3}d and AvgPool{1,2,3}d in one node.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">Pool</div>
-  <div class="nid">PoolingSliding</div>
-  <div class="ndesc">Sliding window pooling (max/avg) over 1/2/3 spatial dims - MaxPool{1,2,3}d and AvgPool{1,2,3}d in one node.</div>
-</div>
-  </div>
 </section>
-<section id="normalization" style="--accent:#a78bfa">
-  <h2><span class="dot"></span>Normalization<span class="count">7 nodes</span></h2>
-  <p class="blurb">Batch / instance / layer / group / RMS / weight / spectral — every standard re-scaling scheme.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">BatchNorm</div>
-  <div class="nid">NormalizationBatchNorm</div>
-  <div class="ndesc">Batch normalization over the channel dimension of (N, C, ...); one node covers the 1d/2d/3d flavours.</div>
+<section class="cat" id="normalization" style="--accent:#a78bfa">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Normalization</span><span class="count">7</span></button>
+<div class="blurb-w"><p>Batch / instance / layer / group / RMS / weight / spectral — every standard re-scaling scheme.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">BatchNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationBatchNorm</div><div class="ndesc">Batch normalization over the channel dimension of (N, C, ...); one node covers the 1d/2d/3d flavours.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">GroupNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationGroupNorm</div><div class="ndesc">Normalization over groups of channels; num_groups=1 normalizes over all channels.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">InstanceNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationInstanceNorm</div><div class="ndesc">Per-sample, per-channel normalization over the spatial dimensions of (N, C, ...).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">LayerNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationLayerNorm</div><div class="ndesc">Layer normalization over the trailing dimensions, e.g. &quot;last&quot; or &quot;8,16&quot;.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">RMSNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationRMSNorm</div><div class="ndesc">Root-mean-square normalization over the trailing dimensions, e.g. LLaMA style.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">SpectralNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationSpectralNorm</div><div class="ndesc">Divide a weight by an estimate of its largest singular value (deterministic power iteration).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">WeightNorm</button><div class="more"><div class="more-in"><div class="nid">NormalizationWeightNorm</div><div class="ndesc">Re-parameterize a weight as g * v / ||v||, i.e. separate its direction from its scale.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">GroupNorm</div>
-  <div class="nid">NormalizationGroupNorm</div>
-  <div class="ndesc">Normalization over groups of channels; num_groups=1 normalizes over all channels.</div>
-</div>
-<div class="node">
-  <div class="nname">InstanceNorm</div>
-  <div class="nid">NormalizationInstanceNorm</div>
-  <div class="ndesc">Per-sample, per-channel normalization over the spatial dimensions of (N, C, ...).</div>
-</div>
-<div class="node">
-  <div class="nname">LayerNorm</div>
-  <div class="nid">NormalizationLayerNorm</div>
-  <div class="ndesc">Layer normalization over the trailing dimensions, e.g. &quot;last&quot; or &quot;8,16&quot;.</div>
-</div>
-<div class="node">
-  <div class="nname">RMSNorm</div>
-  <div class="nid">NormalizationRMSNorm</div>
-  <div class="ndesc">Root-mean-square normalization over the trailing dimensions, e.g. LLaMA style.</div>
-</div>
-<div class="node">
-  <div class="nname">SpectralNorm</div>
-  <div class="nid">NormalizationSpectralNorm</div>
-  <div class="ndesc">Divide a weight by an estimate of its largest singular value (deterministic power iteration).</div>
-</div>
-<div class="node">
-  <div class="nname">WeightNorm</div>
-  <div class="nid">NormalizationWeightNorm</div>
-  <div class="ndesc">Re-parameterize a weight as g * v / ||v||, i.e. separate its direction from its scale.</div>
-</div>
-  </div>
 </section>
-<section id="regularization" style="--accent:#f472b6">
-  <h2><span class="dot"></span>Regularization<span class="count">1 nodes</span></h2>
-  <p class="blurb">Dropout and friends: training-time noise that keeps networks honest.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Dropout</div>
-  <div class="nid">RegularizationDropout</div>
-  <div class="ndesc">Zero each element with probability p and rescale the rest by 1/(1-p); eval mode passes the input through.</div>
+<section class="cat" id="regularization" style="--accent:#f472b6">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Regularization</span><span class="count">1</span></button>
+<div class="blurb-w"><p>Dropout and friends: training-time noise that keeps networks honest.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Dropout</button><div class="more"><div class="more-in"><div class="nid">RegularizationDropout</div><div class="ndesc">Zero each element with probability p and rescale the rest by 1/(1-p); eval mode passes the input through.</div></div></div></div>
 </div>
-  </div>
 </section>
-<section id="recurrent" style="--accent:#fb923c">
-  <h2><span class="dot"></span>Recurrent<span class="count">3 nodes</span></h2>
-  <p class="blurb">RNN / LSTM / GRU cells for sequence state.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">GRU</div>
-  <div class="nid">RecurrentGRU</div>
-  <div class="ndesc">The gated recurrent unit with its reset / update gates, single layer and batch-first; weights and the initial state are wired in as tensors.</div>
+<section class="cat" id="recurrent" style="--accent:#fb923c">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Recurrent</span><span class="count">3</span></button>
+<div class="blurb-w"><p>RNN / LSTM / GRU cells for sequence state.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">GRU</button><div class="more"><div class="more-in"><div class="nid">RecurrentGRU</div><div class="ndesc">The gated recurrent unit with its reset / update gates, single layer and batch-first; weights and the initial state are wired in as tensors.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">LSTM</button><div class="more"><div class="more-in"><div class="nid">RecurrentLSTM</div><div class="ndesc">The LSTM cell with its input / forget / candidate / output gates, single layer and batch-first; weights and both initial states are wired in as tensors.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">RNN</button><div class="more"><div class="more-in"><div class="nid">RecurrentRNN</div><div class="ndesc">The vanilla tanh recurrent cell, single layer and batch-first: weights, biases and the initial state are wired in as tensors.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">LSTM</div>
-  <div class="nid">RecurrentLSTM</div>
-  <div class="ndesc">The LSTM cell with its input / forget / candidate / output gates, single layer and batch-first; weights and both initial states are wired in as tensors.</div>
-</div>
-<div class="node">
-  <div class="nname">RNN</div>
-  <div class="nid">RecurrentRNN</div>
-  <div class="ndesc">The vanilla tanh recurrent cell, single layer and batch-first: weights, biases and the initial state are wired in as tensors.</div>
-</div>
-  </div>
 </section>
-<section id="attention" style="--accent:#38bdf8">
-  <h2><span class="dot"></span>Attention<span class="count">8 nodes</span></h2>
-  <p class="blurb">Multi-head, self and cross attention, transformer blocks, and the masks / positional encoding that feed them.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Causal Mask</div>
-  <div class="nid">AttentionCausalMask</div>
-  <div class="ndesc">Lower-triangular boolean attention mask (True = attend): position i may see positions &lt;= i, the decoder / language-model mask.</div>
+<section class="cat" id="attention" style="--accent:#38bdf8">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Attention</span><span class="count">8</span></button>
+<div class="blurb-w"><p>Multi-head, self and cross attention, transformer blocks, and the masks / positional encoding that feed them.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Causal Mask</button><div class="more"><div class="more-in"><div class="nid">AttentionCausalMask</div><div class="ndesc">Lower-triangular boolean attention mask (True = attend): position i may see positions &lt;= i, the decoder / language-model mask.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Cross-Attention</button><div class="more"><div class="more-in"><div class="nid">AttentionCross</div><div class="ndesc">Cross-attention: queries from tensor, keys/values from context; the encoder-decoder / multimodal form.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Multi-Head Attention</button><div class="more"><div class="more-in"><div class="nid">AttentionMultihead</div><div class="ndesc">Multi-head attention over wired q/k/v tensors: projections, scaled dot-product, optional mask, softmax and output projection.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Padding Mask</button><div class="more"><div class="more-in"><div class="nid">AttentionPaddingMask</div><div class="ndesc">Boolean attention mask from per-sample sequence lengths: True = valid token, False = padding tail; broadcasts over heads and queries.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Positional Encoding</button><div class="more"><div class="more-in"><div class="nid">AttentionPositionalEncoding</div><div class="ndesc">Fixed sinusoidal position table (length, width), optionally added onto a wired sequence: order information without learnable parameters.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Self-Attention</button><div class="more"><div class="more-in"><div class="nid">AttentionSelf</div><div class="ndesc">Self-attention on one tensor: q=k=v=the wired input, projections from the wired weight set.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Transformer Decoder Block</button><div class="more"><div class="more-in"><div class="nid">TransformerDecoderBlock</div><div class="ndesc">Post-LN Transformer decoder block: Self-Attn -&gt; Add -&gt; LN -&gt; Cross-Attn (k/v from context) -&gt; Add -&gt; LN -&gt; FFN -&gt; Add -&gt; LN, all weights wired in.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Transformer Encoder Block</button><div class="more"><div class="more-in"><div class="nid">TransformerEncoderBlock</div><div class="ndesc">Post-LN Transformer encoder block: LayerNorm -&gt; MHA -&gt; Add -&gt; LayerNorm -&gt; FFN -&gt; Add, all weights wired in.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">Cross-Attention</div>
-  <div class="nid">AttentionCross</div>
-  <div class="ndesc">Cross-attention: queries from tensor, keys/values from context; the encoder-decoder / multimodal form.</div>
-</div>
-<div class="node">
-  <div class="nname">Multi-Head Attention</div>
-  <div class="nid">AttentionMultihead</div>
-  <div class="ndesc">Multi-head attention over wired q/k/v tensors: projections, scaled dot-product, optional mask, softmax and output projection.</div>
-</div>
-<div class="node">
-  <div class="nname">Padding Mask</div>
-  <div class="nid">AttentionPaddingMask</div>
-  <div class="ndesc">Boolean attention mask from per-sample sequence lengths: True = valid token, False = padding tail; broadcasts over heads and queries.</div>
-</div>
-<div class="node">
-  <div class="nname">Positional Encoding</div>
-  <div class="nid">AttentionPositionalEncoding</div>
-  <div class="ndesc">Fixed sinusoidal position table (length, width), optionally added onto a wired sequence: order information without learnable parameters.</div>
-</div>
-<div class="node">
-  <div class="nname">Self-Attention</div>
-  <div class="nid">AttentionSelf</div>
-  <div class="ndesc">Self-attention on one tensor: q=k=v=the wired input, projections from the wired weight set.</div>
-</div>
-<div class="node">
-  <div class="nname">Transformer Decoder Block</div>
-  <div class="nid">TransformerDecoderBlock</div>
-  <div class="ndesc">Post-LN Transformer decoder block: Self-Attn -&gt; Add -&gt; LN -&gt; Cross-Attn (k/v from context) -&gt; Add -&gt; LN -&gt; FFN -&gt; Add -&gt; LN, all weights wired in.</div>
-</div>
-<div class="node">
-  <div class="nname">Transformer Encoder Block</div>
-  <div class="nid">TransformerEncoderBlock</div>
-  <div class="ndesc">Post-LN Transformer encoder block: LayerNorm -&gt; MHA -&gt; Add -&gt; LayerNorm -&gt; FFN -&gt; Add, all weights wired in.</div>
-</div>
-  </div>
 </section>
-<section id="text" style="--accent:#eab308">
-  <h2><span class="dot"></span>Text<span class="count">4 nodes</span></h2>
-  <p class="blurb">Vocabulary building, token encoding / decoding and the sliding-window sampling that turns text into training pairs.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Sliding Window</div>
-  <div class="nid">TextSlidingWindow</div>
-  <div class="ndesc">Cuts a token-index stream into (context, next token) sample pairs: the next-token dataset of a language model.</div>
+<section class="cat" id="text" style="--accent:#eab308">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Text</span><span class="count">4</span></button>
+<div class="blurb-w"><p>Vocabulary building, token encoding / decoding and the sliding-window sampling that turns text into training pairs.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Sliding Window</button><div class="more"><div class="more-in"><div class="nid">TextSlidingWindow</div><div class="ndesc">Cuts a token-index stream into (context, next token) sample pairs: the next-token dataset of a language model.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Text Decode</button><div class="more"><div class="more-in"><div class="nid">TextDecode</div><div class="ndesc">Decodes token indices (1-D stream or 2-D batch) back into text through a vocabulary.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Text Encode</button><div class="more"><div class="more-in"><div class="nid">TextEncode</div><div class="ndesc">Encodes text into a 1-D long tensor of token indices through a vocabulary; unknown tokens become &lt;unk&gt;.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Vocab Build</button><div class="more"><div class="more-in"><div class="nid">TextVocabBuild</div><div class="ndesc">Builds a deterministic token vocabulary (with &lt;unk&gt; at index 0) from a corpus string, at char or word level.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">Text Decode</div>
-  <div class="nid">TextDecode</div>
-  <div class="ndesc">Decodes token indices (1-D stream or 2-D batch) back into text through a vocabulary.</div>
-</div>
-<div class="node">
-  <div class="nname">Text Encode</div>
-  <div class="nid">TextEncode</div>
-  <div class="ndesc">Encodes text into a 1-D long tensor of token indices through a vocabulary; unknown tokens become &lt;unk&gt;.</div>
-</div>
-<div class="node">
-  <div class="nname">Vocab Build</div>
-  <div class="nid">TextVocabBuild</div>
-  <div class="ndesc">Builds a deterministic token vocabulary (with &lt;unk&gt; at index 0) from a corpus string, at char or word level.</div>
-</div>
-  </div>
 </section>
-<section id="training" style="--accent:#f87171">
-  <h2><span class="dot"></span>Training<span class="count">23 nodes</span></h2>
-  <p class="blurb">Learnable parameters, optimizers, schedulers, the training loop, loss / metrics / evaluation, persistence — and the whole language-model pipeline.</p>
-  <div class="grid">
-<div class="node">
-  <div class="nname">Evaluate</div>
-  <div class="nid">TrainingEvaluate</div>
-  <div class="ndesc">Evaluates a model (nn_model) or a parameter set (PARAMS) on x/y: loss, metric and predictions, without training.</div>
+<section class="cat" id="training" style="--accent:#f87171">
+<button class="chead" type="button"><span class="dot"></span><span class="cname">Training</span><span class="count">23</span></button>
+<div class="blurb-w"><p>Learnable parameters, optimizers, schedulers, the training loop, loss / metrics / evaluation, persistence — and the whole language-model pipeline.</p></div>
+<div class="chips">
+<div class="node"><button class="nhead" type="button">Evaluate</button><div class="more"><div class="more-in"><div class="nid">TrainingEvaluate</div><div class="ndesc">Evaluates a model (nn_model) or a parameter set (PARAMS) on x/y: loss, metric and predictions, without training.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Language Model Build</button><div class="more"><div class="more-in"><div class="nid">LanguageModelBuild</div><div class="ndesc">Materialises a spec chain into a seeded nn.Module language model and reports its parameter count.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Language Model Embedding</button><div class="more"><div class="more-in"><div class="nid">LanguageModelEmbedding</div><div class="ndesc">First spec link of a language model: token embedding width, vocabulary size and the optional sinusoidal position encoding.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Language Model Forward</button><div class="more"><div class="more-in"><div class="nid">LanguageModelForward</div><div class="ndesc">Runs a language model in eval mode and returns the per-position next-token logits of a batch of token-index sequences.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Language Model Generate</button><div class="more"><div class="more-in"><div class="nid">LanguageModelGenerate</div><div class="ndesc">Autoregressive continuation of a prefix: greedy or temperature-sampled next tokens, seeded locally, with optional text decode through a vocabulary.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Language Model Train</button><div class="more"><div class="more-in"><div class="nid">LanguageModelTrain</div><div class="ndesc">Trains a language model on (context, next-token) samples inside the node: forward + backward + optimizer.step per step, returning a new trained model and the loss history.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Language Model Transformer Block</button><div class="more"><div class="more-in"><div class="nid">LanguageModelTransformerBlock</div><div class="ndesc">Appends one pre-LN transformer block (causal self-attention + FFN) to a language-model spec chain; the width follows the embedding link.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Learnable Parameters</button><div class="more"><div class="more-in"><div class="nid">TrainingParameters</div><div class="ndesc">Creates a named trainable parameter: from a wired tensor, or from the shape/init widgets.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Load Language Model</button><div class="more"><div class="more-in"><div class="nid">LanguageModelLoad</div><div class="ndesc">Reads a language model from a .safetensors file written by Save Language Model (relative to the output folder, or absolute), returning model + vocabulary.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Load Parameters</button><div class="more"><div class="more-in"><div class="nid">TrainingLoadParameters</div><div class="ndesc">Reads a parameter set from a .safetensors file (relative to the output folder, or absolute).</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Loss</button><div class="more"><div class="more-in"><div class="nid">TrainingLoss</div><div class="ndesc">Computes one loss (mse / l1 / smooth_l1 / cross_entropy / bce_with_logits / kl_div) between a prediction and a target.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">LR Scheduler</button><div class="more"><div class="more-in"><div class="nid">TrainingLRScheduler</div><div class="ndesc">Publishes the LR scheduler settings (StepLR / cosine / exponential / one-cycle / plateau) for a trainer node.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Merge Parameters</button><div class="more"><div class="more-in"><div class="nid">TrainingParametersMerge</div><div class="ndesc">Concatenates two parameter sets; colliding names are renamed with a warning.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Metrics</button><div class="more"><div class="more-in"><div class="nid">TrainingMetrics</div><div class="ndesc">Computes one metric (mae / rmse / accuracy / top_3 / top_5 / perplexity) between a prediction and a target.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Optimizer</button><div class="more"><div class="more-in"><div class="nid">TrainingOptimizer</div><div class="ndesc">Publishes the optimizer settings (type, lr, betas, eps, weight decay) for a Training Loop node.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Parameters to Tensor</button><div class="more"><div class="more-in"><div class="nid">TrainingParametersExtract</div><div class="ndesc">Pulls one named entry out of a parameter set as a tensor, e.g. layer0.weight for a Linear node.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Parameters to Text</button><div class="more"><div class="more-in"><div class="nid">TrainingParametersToText</div><div class="ndesc">Encodes a parameter set into copyable text (CDLPARAMS1:&lt;base64&gt;) that survives inside a workflow file.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Save Language Model</button><div class="more"><div class="more-in"><div class="nid">LanguageModelSave</div><div class="ndesc">Saves a language model as a .safetensors file in the output folder (spec chain and vocabulary in the metadata), and passes the model through.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Save Parameters</button><div class="more"><div class="more-in"><div class="nid">TrainingSaveParameters</div><div class="ndesc">Saves a parameter set as a .safetensors file in the output folder, and passes it through.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Text to Parameters</button><div class="more"><div class="more-in"><div class="nid">TrainingTextToParameters</div><div class="ndesc">Decodes text produced by &#x27;Parameters to Text&#x27; back into a trainable parameter set.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Training Loop</button><div class="more"><div class="more-in"><div class="nid">TrainingLoop</div><div class="ndesc">Trains a small MLP on x/y inside the node (forward + backward + optimizer.step) and returns the trained parameters, loss history and predictions.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Training Mode</button><div class="more"><div class="more-in"><div class="nid">TrainingMode</div><div class="ndesc">Publishes train/eval to every node whose mode slot is linked to it; flip it to switch a graph between training and inference.</div></div></div></div>
+<div class="node"><button class="nhead" type="button">Training Run Stats</button><div class="more"><div class="more-in"><div class="nid">TrainingRunStats</div><div class="ndesc">Editable running_mean / running_var for eval mode; wire the outputs into the running stat slots of BatchNorm / InstanceNorm.</div></div></div></div>
 </div>
-<div class="node">
-  <div class="nname">Language Model Build</div>
-  <div class="nid">LanguageModelBuild</div>
-  <div class="ndesc">Materialises a spec chain into a seeded nn.Module language model and reports its parameter count.</div>
-</div>
-<div class="node">
-  <div class="nname">Language Model Embedding</div>
-  <div class="nid">LanguageModelEmbedding</div>
-  <div class="ndesc">First spec link of a language model: token embedding width, vocabulary size and the optional sinusoidal position encoding.</div>
-</div>
-<div class="node">
-  <div class="nname">Language Model Forward</div>
-  <div class="nid">LanguageModelForward</div>
-  <div class="ndesc">Runs a language model in eval mode and returns the per-position next-token logits of a batch of token-index sequences.</div>
-</div>
-<div class="node">
-  <div class="nname">Language Model Generate</div>
-  <div class="nid">LanguageModelGenerate</div>
-  <div class="ndesc">Autoregressive continuation of a prefix: greedy or temperature-sampled next tokens, seeded locally, with optional text decode through a vocabulary.</div>
-</div>
-<div class="node">
-  <div class="nname">Language Model Train</div>
-  <div class="nid">LanguageModelTrain</div>
-  <div class="ndesc">Trains a language model on (context, next-token) samples inside the node: forward + backward + optimizer.step per step, returning a new trained model and the loss history.</div>
-</div>
-<div class="node">
-  <div class="nname">Language Model Transformer Block</div>
-  <div class="nid">LanguageModelTransformerBlock</div>
-  <div class="ndesc">Appends one pre-LN transformer block (causal self-attention + FFN) to a language-model spec chain; the width follows the embedding link.</div>
-</div>
-<div class="node">
-  <div class="nname">Learnable Parameters</div>
-  <div class="nid">TrainingParameters</div>
-  <div class="ndesc">Creates a named trainable parameter: from a wired tensor, or from the shape/init widgets.</div>
-</div>
-<div class="node">
-  <div class="nname">Load Language Model</div>
-  <div class="nid">LanguageModelLoad</div>
-  <div class="ndesc">Reads a language model from a .safetensors file written by Save Language Model (relative to the output folder, or absolute), returning model + vocabulary.</div>
-</div>
-<div class="node">
-  <div class="nname">Load Parameters</div>
-  <div class="nid">TrainingLoadParameters</div>
-  <div class="ndesc">Reads a parameter set from a .safetensors file (relative to the output folder, or absolute).</div>
-</div>
-<div class="node">
-  <div class="nname">Loss</div>
-  <div class="nid">TrainingLoss</div>
-  <div class="ndesc">Computes one loss (mse / l1 / smooth_l1 / cross_entropy / bce_with_logits / kl_div) between a prediction and a target.</div>
-</div>
-<div class="node">
-  <div class="nname">LR Scheduler</div>
-  <div class="nid">TrainingLRScheduler</div>
-  <div class="ndesc">Publishes the LR scheduler settings (StepLR / cosine / exponential / one-cycle / plateau) for a trainer node.</div>
-</div>
-<div class="node">
-  <div class="nname">Merge Parameters</div>
-  <div class="nid">TrainingParametersMerge</div>
-  <div class="ndesc">Concatenates two parameter sets; colliding names are renamed with a warning.</div>
-</div>
-<div class="node">
-  <div class="nname">Metrics</div>
-  <div class="nid">TrainingMetrics</div>
-  <div class="ndesc">Computes one metric (mae / rmse / accuracy / top_3 / top_5 / perplexity) between a prediction and a target.</div>
-</div>
-<div class="node">
-  <div class="nname">Optimizer</div>
-  <div class="nid">TrainingOptimizer</div>
-  <div class="ndesc">Publishes the optimizer settings (type, lr, betas, eps, weight decay) for a Training Loop node.</div>
-</div>
-<div class="node">
-  <div class="nname">Parameters to Tensor</div>
-  <div class="nid">TrainingParametersExtract</div>
-  <div class="ndesc">Pulls one named entry out of a parameter set as a tensor, e.g. layer0.weight for a Linear node.</div>
-</div>
-<div class="node">
-  <div class="nname">Parameters to Text</div>
-  <div class="nid">TrainingParametersToText</div>
-  <div class="ndesc">Encodes a parameter set into copyable text (CDLPARAMS1:&lt;base64&gt;) that survives inside a workflow file.</div>
-</div>
-<div class="node">
-  <div class="nname">Save Language Model</div>
-  <div class="nid">LanguageModelSave</div>
-  <div class="ndesc">Saves a language model as a .safetensors file in the output folder (spec chain and vocabulary in the metadata), and passes the model through.</div>
-</div>
-<div class="node">
-  <div class="nname">Save Parameters</div>
-  <div class="nid">TrainingSaveParameters</div>
-  <div class="ndesc">Saves a parameter set as a .safetensors file in the output folder, and passes it through.</div>
-</div>
-<div class="node">
-  <div class="nname">Text to Parameters</div>
-  <div class="nid">TrainingTextToParameters</div>
-  <div class="ndesc">Decodes text produced by &#x27;Parameters to Text&#x27; back into a trainable parameter set.</div>
-</div>
-<div class="node">
-  <div class="nname">Training Loop</div>
-  <div class="nid">TrainingLoop</div>
-  <div class="ndesc">Trains a small MLP on x/y inside the node (forward + backward + optimizer.step) and returns the trained parameters, loss history and predictions.</div>
-</div>
-<div class="node">
-  <div class="nname">Training Mode</div>
-  <div class="nid">TrainingMode</div>
-  <div class="ndesc">Publishes train/eval to every node whose mode slot is linked to it; flip it to switch a graph between training and inference.</div>
-</div>
-<div class="node">
-  <div class="nname">Training Run Stats</div>
-  <div class="nid">TrainingRunStats</div>
-  <div class="ndesc">Editable running_mean / running_var for eval mode; wire the outputs into the running stat slots of BatchNorm / InstanceNorm.</div>
-</div>
-  </div>
 </section>
+</main>
 <footer>Network &amp; Layers · ComfyDL_UI · generated from comfy_extras source</footer>
 </div>
+<script>
+document.querySelectorAll('.cat').forEach(function (cat) {
+  cat.querySelector('.chead').addEventListener('click', function () {
+    cat.classList.toggle('open');
+  });
+});
+document.querySelectorAll('.node').forEach(function (node) {
+  node.querySelector('.nhead').addEventListener('click', function (e) {
+    e.stopPropagation();
+    node.classList.toggle('open');
+  });
+});
+</script>
 </body>
 </html>
