@@ -68,6 +68,16 @@ schedulers, training loops with early stopping, dataset readers and writers (CSV
 DB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and
 visualization — 128 nodes across 21 categories, wired instead of written.
 
+The catalog at a glance:
+
+![Network & Layers: all 75 nodes grouped by category](assets/network_layers_catalog.svg)
+
+An **interactive version** — click any node for its description and source — ships at
+[`docs/network-and-layers.html`](docs/network-and-layers.html). GitHub strips scripts from
+READMEs, so it can't run inline: view it rendered via
+[htmlpreview](https://htmlpreview.github.io/?https://github.com/Cynthia-lxx/ComfyDL_UI/blob/master/docs/network-and-layers.html)
+or open the file locally.
+
 ### Live progress & previews
 
 Every long-running node reports per-step progress over the built-in WebSocket channel —
