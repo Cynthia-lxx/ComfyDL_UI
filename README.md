@@ -24,62 +24,107 @@ original ComfyUI, get it from <https://github.com/comfyanonymous/ComfyUI>.
 
 ## What it looks like
 
-A language model trained end to end inside the graph — Vocab Build → Text Encode → Sliding
-Window → the Language Model pipeline → Generate → Save. The `Language Model Train` node streams
-its cross-entropy curve **under itself while it trains** (the preview card below the node):
+A production-grade tabular regression workflow — Formula Data Gen → Inspect the table →
+Train & Monitor → Export predictions — running end to end inside the graph. Every trainer
+streams its loss curve **under itself while it trains**, and the status corners report the
+run's live cost (elapsed time, I/O, node count):
 
-![Language Model training workflow in ComfyDL_UI](assets/languange_model_train_workflow.png)
-
-<p align="center">
-  <img src="assets/language_model_train_node_focus.png" alt="Language Model Train node with its live loss-curve preview" width="440" />
-</p>
+![Tabular regression workflow in ComfyDL_UI](assets/tabular_regression_workflow.png)
 
 > More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule
 > README ([中文](comfydl/README_zh.md), [FUNCTIONS.md](comfydl/FUNCTIONS.md)).
 
 ## Features
 
-- A visual node graph for building and reusing deep-learning workflows without code.
-- The full [ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) node pack built in: tensor ops,
-  network layers, learnable parameters, optimizers, training loops with live loss-curve
-  previews, language-model training and generation, datasets, and visualization nodes.
+ComfyDL_UI's headline capabilities each get their own section below — the visual editor, the
+built-in node pack, live progress, full profiling, and the Crash Site save & resume net. The
+everyday basics:
+
 - Efficient local execution with asynchronous queueing and partial graph re-execution — only
   the parts of the graph that changed are re-run.
 - Smart VRAM/RAM management with automatic CPU fallback when no GPU backend is available.
-- Live progress and preview cards under running nodes (loss curves, generated text snapshots),
-  streamed over the built-in WebSocket channel.
-- Built-in memory profiling: peak-memory estimation, traffic-light verdicts, a warning before
-  queueing a graph that cannot fit, and post-mortem analysis of failed allocations.
-- Crash Site: execution snapshots with lazy capture (zero overhead on normal runs), one-click
-  resume that skips finished nodes, and breakpoint continuation for the training nodes — an
-  interrupted 10k-step training continues from its breakpoint step instead of starting over.
-- Workflows are saved and loaded as JSON.
 - Runs fully offline: the core downloads nothing unless you ask it to.
 - Still compatible with third-party custom nodes via `custom_nodes/`.
 - Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).
 
-### Memory profiling
+### Visual node-graph editor
 
-Before anything is queued, ComfyDL_UI estimates the graph's peak memory from its parameters and
-data flow, grades it green / amber / red against the device budget, and warns before a run that
-cannot fit.
+Build deep-learning workflows by connecting nodes instead of writing code: drag, wire, group,
+mute, bypass and collapse; re-run only the parts that changed; save and share the graph as
+plain JSON (a generated PNG reloads the workflow — seeds included — that produced it).
 
-![Profiling sidebar: device budget, a CERTAIN OOM verdict and the per-node breakdown](assets/profiling_memory_verdict.png)
+### The ComfyDL node pack, built in
 
-- **Estimates while you edit** — re-estimated after a 500 ms debounce; the sidebar shows the budget, estimated peak, largest single tensor, and a per-node breakdown (params / activations / optimizer state).
-- **Traffic-light verdict** — green fits; amber is tight (a toast); red is **certain OOM** and warns before running.
-- **Post-mortem analysis** — a failed allocation's byte count is matched back to its tensor, with a suggested value that fits.
-- **Honest about unknowns** — uncovered node types are reported as `unknown`.
-- **Bilingual** — panel, badge, dialog and post-mortem card follow the UI language.
+128 nodes across 21 categories: tensor ops, network layers, learnable parameters, optimizers,
+training loops, language-model training and generation, datasets (CSV / Excel / DB / JSON /
+TXT in and out), object detection, segmentation and visualization — with live loss-curve
+previews on the trainers.
 
-Pressing Run on a red graph warns first and can be overridden:
+### Live progress & previews
+
+Every long-running node reports per-step progress over the built-in WebSocket channel: the
+loss curve renders **under the training node while it trains**, generated text appears under
+the language-model nodes, and the top bar tracks each run's cost as it goes.
+
+### Profiling — memory, compute & operators
+
+ComfyDL_UI profiles everything a graph costs, before and during the run:
+
+- **Memory** — peak estimation from parameters and data flow with a per-node breakdown
+  (params / activations / optimizer state), graded green / amber / red against the device
+  budget; red is **certain OOM** and warns before queueing; a failed allocation is matched
+  back to its tensor after the fact, with a value that fits.
+
+  ![Profiling sidebar: device budget, a CERTAIN OOM verdict and the per-node breakdown](assets/profiling_memory_verdict.png)
+
+  Pressing Run on a red graph warns first and can be overridden:
+  <p align="center">
+    <img src="assets/profiling_memory_warning.png" alt="Memory warning dialog shown when queueing a graph graded certain-OOM" width="620" />
+  </p>
+
+- **Compute load** — a FLOPs ledger per node family (attention / FFN / logits / conv …) and
+  per-node wall time, with a live top-bar indicator while the run executes.
+- **Operator breakdown** — each node is expanded into the ATen operators it actually executes
+  (`aten.mm`, `aten._softmax`, `aten.conv2d`, …); the op-level ledger cross-checks the formula
+  estimates, and mismatches are flagged, not hidden.
+- **Watchdog** — sampled CPU / RSS facts attributed to the executing node catch the nodes that
+  monopolize the machine mid-run.
+- **Honest about unknowns** — uncovered node types report `unknown`; failed probes fall back
+  to formula values with an explicit `fallback` grade. Panels, badges and dialogs follow the
+  UI language.
+
+Design notes: [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md),
+[`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md),
+[`docs/profiling-m3-estimator-families.md`](docs/profiling-m3-estimator-families.md),
+[`docs/profiling-m3-opgraph.md`](docs/profiling-m3-opgraph.md).
+
+### Crash Site — save & resume
+
+A safety net for interrupted runs, with **zero overhead while everything works**:
+
+- **Lazy capture** — nothing is written while the workflow runs at full speed; the moment it
+  is interrupted or fails, surviving outputs are written to the snapshot library.
+- **One-click resume** — re-queues the stored prompt and skips every finished node; the
+  skip / re-run statistics appear on the new snapshot card when the run ends.
+- **Scene export** — pick exactly what to keep, per node, with a format per row
+  (safetensors / png / json / db / pt) plus the workflow prompt; files land in the output
+  folder and surface in Results assets.
+- **Breakpoint continuation** — the trainers (Regression Train, Training Loop, Language Model
+  Train) save their complete state at the interrupt moment; a resume continues from the
+  breakpoint step instead of starting a 10k-step training over.
+
+The snapshot library in the sidebar — every run is filed with its captured nodes; interrupted
+scenes offer Scene export:
 
 <p align="center">
-  <img src="assets/profiling_memory_warning.png" alt="Memory warning dialog shown when queueing a graph graded certain-OOM" width="620" />
+  <img src="assets/crashsite_snapshot_library.png" alt="Crash Site sidebar: snapshot library with captured nodes and Scene export entries" width="440" />
 </p>
 
-Formulas, thresholds and the acceptance checklist live in
-[`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md).
+The scene-export table — choose what to keep and in which format:
+
+<p align="center">
+  <img src="assets/crashsite_scene_export.png" alt="Crash Site scene export: per-node checkboxes with format dropdowns and the workflow prompt row" width="520" />
+</p>
 
 ## Installation
 
