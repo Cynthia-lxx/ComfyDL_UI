@@ -60,18 +60,19 @@ Build deep-learning workflows by connecting nodes instead of writing code: drag,
 mute, bypass and collapse; re-run only the parts that changed; save and share the graph as
 plain JSON (a generated PNG reloads the workflow — seeds included — that produced it).
 
-### The ComfyDL node pack, built in
+### Most deep-learning operators, built in
 
-128 nodes across 21 categories: tensor ops, network layers, learnable parameters, optimizers,
-training loops, language-model training and generation, datasets (CSV / Excel / DB / JSON /
-TXT in and out), object detection, segmentation and visualization — with live loss-curve
-previews on the trainers.
+You already know deep learning — here, most of it is a node away. Tensors and shape ops,
+linear / conv / norm / attention layers, losses, optimizers with gradient clipping, LR
+schedulers, training loops with early stopping, dataset readers and writers (CSV / Excel /
+DB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and
+visualization — 128 nodes across 21 categories, wired instead of written.
 
 ### Live progress & previews
 
-Every long-running node reports per-step progress over the built-in WebSocket channel: the
-loss curve renders **under the training node while it trains**, generated text appears under
-the language-model nodes, and the top bar tracks each run's cost as it goes.
+Every long-running node reports per-step progress over the built-in WebSocket channel —
+generated text appears under the language-model nodes as it is produced, and the top bar
+tracks each run's cost while it executes.
 
 ### Profiling — memory, compute & operators
 
@@ -141,6 +142,16 @@ The scene-export table — choose what to keep and in which format:
 
 <p align="center">
   <img src="assets/crashsite_scene_export.png" alt="Crash Site scene export: per-node checkboxes with format dropdowns and the workflow prompt row" width="520" />
+</p>
+
+### Live loss map
+
+Every trainer draws its loss map live on a card right under the node — the raw step loss and
+the smoothed curve side by side, refreshed as the run progresses — so convergence or
+divergence is visible at a glance, without opening anything:
+
+<p align="center">
+  <img src="assets/loss_map_focus.png" alt="Live loss map preview card under a training node, showing the raw and smoothed loss curves" width="520" />
 </p>
 
 ## Installation
@@ -261,3 +272,7 @@ This project is derived from [ComfyUI](https://github.com/comfyanonymous/ComfyUI
 comfyanonymous and contributors. Upstream ComfyUI keeps its own copyright and maintainers; both
 notices are listed at the end of [`LICENSE`](LICENSE). The upstream project's website, docs and
 community live at <https://www.comfy.org/> and are maintained separately from ComfyDL_UI.
+
+<p align="center">
+  <img src="assets/dev_2333.png" alt="" />
+</p>
