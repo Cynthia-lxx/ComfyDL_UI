@@ -333,6 +333,52 @@ class BasicCache:
             _logger.warning(f"Failed to build cache context for node {node_id}: {e}")
             return None
 
+    async def rescue_scene(self, prompt_id, node_ids=None):
+        """Lazy capture: sweep surviving cache entries to crash-site providers.
+
+        Called by the executor ONLY when a prompt died mid-flight (interrupt
+        or node error).  Normal runs never reach this - real-time provider
+        stores are disabled (providers' should_cache returns False for the
+        store phase), so runs pay zero provider overhead and the scene is
+        rescued from the still-warm output cache at failure time instead.
+        Entries still present locally are handed to every provider that
+        implements the optional ``on_scene_rescue(prompt_id, context, value)``
+        hook.  Returns the number of entries handed over.
+        """
+        from comfy_execution.cache_provider import (
+            _has_cache_providers, _get_cache_providers, CacheValue, _logger
+        )
+
+        if not self.enable_providers or not _has_cache_providers():
+            return 0
+        if not self.initialized:
+            return 0
+        if node_ids is None:
+            node_ids = self.all_node_ids()
+        rescued = 0
+        for node_id in node_ids:
+            try:
+                value = self.get_local(node_id)
+                if value is None or not self._is_external_cacheable_value(value):
+                    continue
+                cache_key = self.cache_key_set.get_data_key(node_id)
+                context = self._build_context(node_id, cache_key)
+                if context is None:
+                    continue
+                cache_value = CacheValue(outputs=value.outputs, ui=value.ui)
+                for provider in _get_cache_providers():
+                    on_rescue = getattr(provider, "on_scene_rescue", None)
+                    if not callable(on_rescue):
+                        continue
+                    try:
+                        await on_rescue(prompt_id, context, cache_value)
+                    except Exception as e:
+                        _logger.warning(f"Cache provider {provider.__class__.__name__} scene rescue error on {node_id}: {e}")
+                rescued += 1
+            except Exception as e:
+                _logger.warning(f"Scene rescue failed for node {node_id}: {e}")
+        return rescued
+
     async def _ensure_subcache(self, node_id, children_ids):
         subcache_key = self.cache_key_set.get_subcache_key(node_id)
         subcache = self.subcaches.get(subcache_key, None)

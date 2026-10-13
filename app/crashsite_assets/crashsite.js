@@ -32,7 +32,7 @@
     en: {
       tab_title: "Crash Site",
       tab_tooltip: "Execution snapshots and breakpoint recovery",
-      incremental: "Capture is automatic: every finished node output is written to the snapshot library as the workflow runs. Just Resume after a crash.",
+      incremental: "Lazy capture: nothing is written while the workflow runs at full speed. The moment it is interrupted or fails, surviving outputs are written to the snapshot library - just Resume after a crash.",
       title: "Snapshot library",
       empty: "No snapshots yet - run or interrupt a workflow to create one.",
       refresh: "Refresh",
@@ -62,7 +62,7 @@
     zh: {
       tab_title: "事故现场",
       tab_tooltip: "工作流执行快照与断点恢复",
-      incremental: "自动保存：工作流运行时每个完成节点的输出都会写入快照库。崩溃后直接点恢复即可。",
+      incremental: "惰性捕获：正常运行零开销；工作流被打断或失败的那一刻，缓存中幸存的输出会写入快照库，直接点恢复即可。",
       title: "快照库",
       empty: "暂无快照——运行或打断一次工作流即会生成。",
       refresh: "刷新",

@@ -2,12 +2,19 @@
 
 ## What it is
 
-Every workflow execution is snapshotted incrementally: as each node finishes,
-its output is serialized and written into a per-prompt SQLite database
-(`user/comfydl/snapshots/<id>.db`).  If the run later fails, is interrupted,
-or you simply want to re-run it, the panel can re-queue the stored prompt and
-the host skips every node whose output survived — only the remaining part
-actually executes.
+A breakpoint-recovery net for interrupted/failed runs.  **Lazy capture**
+(git-fire perf fix, 2026-10-13): normal runs pay ZERO crash-site overhead —
+nothing is serialized while the workflow executes.  The moment a run is
+interrupted or a node fails, the host sweeps whatever survived in the output
+cache into a per-prompt SQLite database
+(`user/comfydl/snapshots/<id>.db`); the panel can then re-queue the stored
+prompt and the host skips every node whose output survived — only the
+remaining part actually executes.
+
+Trade-off: a HARD process death (kill/segfault/power loss) loses the scene,
+because capture happens at failure time from the still-warm cache.  The
+earlier always-on incremental capture covered that case but slowed runs
+2-10x — judged the wrong trade.
 
 Independent of the profiling stack (the profiling master switch does not
 affect it); a single hard-disable flag, `--cdl-profiling-disable`, turns it
@@ -16,11 +23,15 @@ off too (data safety is treated as part of the same stack for that flag).
 ## How it works
 
 1. `app/crashsite/provider.py` registers a **CacheProvider** with the host
-   (`comfy_api.latest._caching`): `on_store` fires after every node output
-   enters the host output cache — serialization happens in a thread pool
-   (never on the event loop) and the row lands in the snapshot DB keyed by
+   (`comfy_api.latest._caching`).  Its `should_cache` declines ALL real-time
+   stores (lazy capture) and gates snapshot lookups to resumed prompts only.
+2. When a run dies mid-flight, the executor's failure path calls
+   `BasicCache.rescue_scene(prompt_id)` (comfy_execution/caching.py), which
+   walks the surviving output-cache entries and hands each to
+   `SnapshotProvider.on_scene_rescue` — serialization happens in a thread
+   pool (never on the event loop) and rows land in the snapshot DB keyed by
    the host's input-signature SHA256.
-2. `POST /comfydl/crashsite/resume {"id": ..., "client_id": ...}` re-validates
+3. `POST /comfydl/crashsite/resume {"id": ..., "client_id": ...}` re-validates
    and re-queues the stored prompt; on the fresh run, each node's local cache
    miss is answered by `on_lookup` (the stored output is rehydrated), so the
    host marks those nodes cached and skips them.  The `client_id` from the
@@ -114,7 +125,10 @@ user interrupts both land here).
 
 `cdl_smoke_tests/test_crashsite.py` — serialization round-trips, store
 CRUD, the provider lifecycle (start → store → end → lookup, plus the
-error→interrupted filing), scene export (format matrix, png/db writers,
-fallbacks, per-row isolation), and the routes through a real TestServer
-with a crashed 3-node scene (client_id passthrough, capture summaries,
-detail/export endpoints); plus a real-startup smoke (`--quick-test-for-ci`).
+error→interrupted filing), lazy capture (real-time store declined,
+resume-gated lookups, and the real-executor L1/L2 pair: successful run
+stores nothing, failed run rescues its surviving outputs), scene export
+(format matrix, png/db writers, fallbacks, per-row isolation), and the
+routes through a real TestServer with a crashed 3-node scene (client_id
+passthrough, capture summaries, detail/export endpoints); plus a
+real-startup smoke (`--quick-test-for-ci`).

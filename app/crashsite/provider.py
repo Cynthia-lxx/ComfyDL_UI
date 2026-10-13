@@ -2,14 +2,15 @@
 
 Registered once at server startup; the host then drives everything:
 
-* ``on_store``  - fired after every ``caches.outputs.set``; we serialize the
-  slot output OFF the event loop (``run_in_executor``) and append it to the
-  prompt's snapshot database.  Incremental capture: by the time a run fails,
-  is interrupted, or completes, everything finished is already on disk - no
-  rescue window left to race against.
-* ``on_lookup`` - fired on a local cache miss; we look the input-signature
-  hash up across snapshot databases and rehydrate the stored object, so a
-  re-queued prompt skips every node whose output survived.
+* ``on_store``  - retained for direct/manual use, but NOT driven during
+  normal runs any more (lazy capture, git-fire perf fix 2026-10-13: the
+  real-time serialize+write per node completion slowed runs 2-10x).
+* ``on_scene_rescue`` - THE capture path now: the host calls it once per
+  surviving cache entry when a run dies mid-flight (interrupt/error), so
+  the scene is written while the process and cache are still alive.  A
+  hard process kill is the one scenario lazy capture cannot cover.
+* ``on_lookup`` - fired on a local cache miss, but only for RESUMED
+  prompts (lazy gating) - normal runs never scan the snapshot library.
 * ``should_cache`` - rejects what cannot round-trip (ModelPatcher,
   DataLoaders) before it ever reaches the store.
 * ``on_prompt_start/end`` - opens/closes the per-prompt snapshot database.
@@ -58,6 +59,10 @@ class SnapshotProvider(CacheProvider):
         self._rehydrated: set = set()  # node_ids served from snapshot dbs
         self._resume_source: Optional[str] = None  # snapshot id we resumed
         self._pending_resume: Optional[Dict[str, str]] = None
+        # Lazy capture (git-fire perf fix, 2026-10-13): snapshot-db lookups
+        # are only answered for RESUMED prompts - normal runs never scan the
+        # library, which used to crawl first-run start-up as it grew.
+        self._lookup_active = False
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ api
@@ -97,6 +102,7 @@ class SnapshotProvider(CacheProvider):
                     if pending is not None and pending["prompt_id"] == prompt_id
                     else None)
                 self._pending_resume = None
+                self._lookup_active = self._resume_source is not None
             _logger.info("crash site: snapshot %s opened (prompt %s)%s",
                          path.stem, prompt_id,
                          " [resume]" if self._resume_source else "")
@@ -129,6 +135,7 @@ class SnapshotProvider(CacheProvider):
             self._cached_nodes = {}
             self._rehydrated = set()
             self._resume_source = None
+            self._lookup_active = False
         if path is not None:
             try:
                 store.mark_status(path, "completed", skipped=skipped)
@@ -162,6 +169,7 @@ class SnapshotProvider(CacheProvider):
             self._cached_nodes = {}
             self._rehydrated = set()
             self._resume_source = None
+            self._lookup_active = False
         try:
             store.mark_status(path, "interrupted", skipped=skipped)
         except Exception as exc:  # noqa: BLE001 - never break execution
@@ -225,22 +233,32 @@ class SnapshotProvider(CacheProvider):
     # ------------------------------------------------------------- gating --
     def should_cache(self, context: CacheContext,
                      value: Optional[CacheValue] = None) -> bool:
+        """Lazy-capture gate (git-fire perf fix, 2026-10-13).
+
+        Lookup phase (``value`` None): answer only while the active prompt
+        is a RESUME - normal runs never scan the snapshot library, which is
+        what made every first-run node and prompt start-up crawl as the
+        library grew.
+
+        Store phase (``value`` set): NEVER store in real time.  Serializing
+        every node completion (CPU clone + safetensors + sqlite) ran
+        concurrently with execution and slowed runs 2-10x.  Actual capture
+        now happens once, at failure time, via :meth:`on_scene_rescue`.
+        The exotic-leaf walk stays only to keep the card's skipped counter
+        honest (pure type checks, no tensor work).
+        """
         if not self._enabled:
             return False
-        if value is None:  # lookup phase: always let the db be asked
-            return True
+        if value is None:
+            with self._lock:
+                return self._lookup_active and self._active is not None
         try:
-            ok = not serialize.has_exotic_leaves(value.outputs)
-            if not ok:
+            if serialize.has_exotic_leaves(value.outputs):
                 with self._lock:
                     self._skipped += 1
-                proflog(
-                    "medium", "crash site: node %s (%s) skipped - unrescuable"
-                    " output, resume will re-execute it",
-                    context.node_id, context.class_type, request=None)
-            return ok
         except Exception:  # noqa: BLE001 - never break execution
-            return False
+            pass
+        return False
 
     # ------------------------------------------------------ store/lookup ---
     async def on_store(self, context: CacheContext,
@@ -257,8 +275,32 @@ class SnapshotProvider(CacheProvider):
     async def on_lookup(self, context: CacheContext) -> Optional[CacheValue]:
         if not self._enabled:
             return None
+        with self._lock:
+            active = self._lookup_active and self._active is not None
+        if not active:
+            return None  # lazy capture: only resumed prompts scan the library
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._lookup_sync, context)
+
+    async def on_scene_rescue(self, prompt_id: str, context: CacheContext,
+                              value: CacheValue) -> None:
+        """Lazy capture: serialize one surviving cache entry at failure time.
+
+        Host-driven (BasicCache.rescue_scene) ONLY on the interrupt/error
+        path, after the run died, while the output cache is still warm.
+        Reuses the regular row writer; exotic slots are skipped as usual.
+        Stray events for non-active prompts are ignored.
+        """
+        with self._lock:
+            path = self._active
+            mine = self._active_prompt_id == prompt_id
+        if path is None or not mine:
+            return
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, self._store_sync, path, context, value)
+        proflog("medium", "crash site: rescued node %s (%s) from cache",
+                context.node_id, context.class_type, request=None)
 
     # ----------------------------------------------------------- internals -
     def _store_sync(self, path, context: CacheContext,

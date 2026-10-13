@@ -234,11 +234,19 @@ def _provider_checks() -> None:
     provider.on_prompt_start("pid-p")
     ctx = types.SimpleNamespace(node_id="1", class_type="SpikeSource",
                                 cache_key_hash="h-111")
-    check("P1 should_cache accepts tensor output",
-          provider.should_cache(ctx, types.SimpleNamespace(outputs=[T(2, 2)])))
+    # M2.5 lazy capture: real-time stores are ALWAYS declined.
+    check("P1 lazy: should_cache declines real-time store",
+          provider.should_cache(ctx, types.SimpleNamespace(
+              outputs=[T(2, 2)])) is False)
     asyncio.run(provider.on_store(ctx, types.SimpleNamespace(
         outputs=[{"samples": T(1, 2, 2, 2)}])))
+    # Lookups only fire for RESUMED prompts (library scan gating).
+    miss = asyncio.run(provider.on_lookup(types.SimpleNamespace(
+        node_id="1", class_type="SpikeSource", cache_key_hash="h-none")))
+    check("P2 non-resume lookups are gated off", miss is None)
     provider.on_prompt_end("pid-p")
+    provider.mark_resume("pid-p", "src-x")
+    provider.on_prompt_start("pid-p")
     miss = asyncio.run(provider.on_lookup(types.SimpleNamespace(
         node_id="1", class_type="SpikeSource", cache_key_hash="h-none")))
     check("P2 lookup miss returns None", miss is None)
@@ -248,11 +256,15 @@ def _provider_checks() -> None:
           hit is not None and hit.outputs is not None
           and isinstance(hit.outputs[0], dict)
           and torch.equal(hit.outputs[0]["samples"], T(1, 2, 2, 2)))
+    provider.on_prompt_end("pid-p")
     listed = store.list_snapshots()
     mine = [s for s in listed if s["prompt_id"] == "pid-p"]
-    check("P4 prompt lifecycle recorded", len(mine) == 1
-          and mine[0]["status"] == "completed"
-          and mine[0]["nodes"] == 1)
+    # Two lifecycle cycles ran for pid-p (the second as a gated resume);
+    # only the first one holds the manually stored row.
+    check("P4 prompt lifecycle recorded", len(mine) == 2
+          and all(s["status"] == "completed" for s in mine)
+          and sum(s["nodes"] for s in mine) == 1,
+          json.dumps(mine)[:160])
 
     # 2026-10-09: a run that dies mid-flight must be filed "interrupted",
     # not "completed" (the executor notifies on_prompt_error before the
@@ -533,6 +545,49 @@ def _route_checks() -> None:
     routes.set_snapshot_provider(mock_provider)
     routes.set_prompt_queue(MockQueue(), MockServer())
     asyncio.new_event_loop().run_until_complete(_run())
+
+    # ---- M2.5 lazy capture: real executor with a REGISTERED provider ------
+    # A successful run must store NOTHING in real time (L1); a failed run
+    # must have its surviving cache entries rescued into the snapshot (L2).
+    from comfy_execution.cache_provider import (
+        register_cache_provider, unregister_cache_provider)
+
+    class LazyQ:
+        currently_running = {
+            "1.0": (1.0, "pid-ok", PROMPT, {}, ["3"], {}),
+            "2.0": (2.0, "pid-lazy-crash", PROMPT, {}, ["3"], {}),
+        }
+
+    real_provider = SnapshotProvider(queue=LazyQ())
+    register_cache_provider(real_provider)
+    try:
+        lazy_executor = execution_mod.PromptExecutor(
+            mock_server, cache_type=None,
+            cache_args={"ram": 0.5, "ram_inactive": 0.3})
+        SpikeBoom.boom["on"] = False
+        lazy_executor.execute(PROMPT, "pid-ok", {}, ["3"])
+        listed = store.list_snapshots()
+        ok = [s for s in listed if s["prompt_id"] == "pid-ok"]
+        check("L1 lazy: successful run stores nothing",
+              len(ok) == 1 and ok[0]["status"] == "completed"
+              and ok[0]["nodes"] == 0, json.dumps(ok)[:160])
+        # Fresh executor: node 3's successful output from L1 is cached and
+        # the boom flag is not part of the input signature, so reusing the
+        # executor would make L2 a full cache hit instead of a failure.
+        lazy_executor = execution_mod.PromptExecutor(
+            mock_server, cache_type=None,
+            cache_args={"ram": 0.5, "ram_inactive": 0.3})
+        SpikeBoom.boom["on"] = True
+        lazy_executor.execute(PROMPT, "pid-lazy-crash", {}, ["3"])
+        listed = store.list_snapshots()
+        crashed2 = [s for s in listed
+                    if s["prompt_id"] == "pid-lazy-crash"]
+        check("L2 failure rescues surviving outputs",
+              len(crashed2) == 1 and crashed2[0]["status"] == "interrupted"
+              and crashed2[0]["nodes"] == 2, json.dumps(crashed2)[:160])
+    finally:
+        unregister_cache_provider(real_provider)
+        SpikeBoom.boom["on"] = True
 
 
 def main() -> int:

@@ -897,6 +897,17 @@ class PromptExecutor:
                 detail("RAM cache evictions: prompt=%s active=%s full=%s", prompt_id, self.caches.outputs.active_evictions, self.caches.outputs.full_evictions)
             comfy.memory_management.set_ram_cache_release_state(None, 0)
             self.prompt_model_tracker.end()
+            if lifecycle_failed:
+                # Lazy capture (git-fire perf fix, 2026-10-13): the run died
+                # mid-flight - sweep whatever survived in the output cache
+                # into the crash-site snapshot before it is closed.  Normal
+                # (successful) runs never pay this cost.
+                try:
+                    rescued = await self.caches.outputs.rescue_scene(prompt_id)
+                    if rescued:
+                        logging.info("crash site: rescued %d node(s) from cache", rescued)
+                except Exception as e:
+                    _cache_logger.warning(f"Scene rescue failed: {e}")
             self._notify_prompt_lifecycle("error" if lifecycle_failed else "end", prompt_id)
             if run_meter is not None:
                 try:
