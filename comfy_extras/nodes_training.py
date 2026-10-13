@@ -1059,6 +1059,46 @@ class TrainingLoop(io.ComfyNode):
             best_state: dict[str, torch.Tensor] | None = None
             best_length = 0
             stopped_at: int | None = None
+
+            # Breakpoint continuation (crash site M3): a resumed run (same
+            # prompt_id) restores the interrupted training state; a fresh Run
+            # has a new prompt_id, the stale checkpoint is discarded.
+            from comfy.model_management import InterruptProcessingException
+            from comfy.train_checkpoint import (
+                current_node_id as ckpt_node_id, discard as ckpt_discard,
+                load as ckpt_load, run_key as ckpt_run_key,
+                save as ckpt_save)
+
+            ckpt_run = ckpt_run_key({
+                "node": "TrainingLoop",
+                "node_id": ckpt_node_id(),
+                "widgets": [hidden, activation, loss, steps, batch_size,
+                            seed, early_stop_patience, early_stop_min_delta],
+                "optimizer": optimizer,
+                "scheduler": scheduler,
+                "x": data.inputs, "y": data.targets,
+            })
+            start_step = 0
+            saved = ckpt_load(ckpt_run)
+            if saved is not None:
+                try:
+                    model.load_state_dict(saved["model"])
+                    trainer.load_state_dict(saved["optimizer"])
+                    if lr_schedule is not None and saved.get("scheduler"):
+                        lr_schedule.load_state_dict(saved["scheduler"])
+                    history = list(saved["history"])
+                    stopper.best = saved["stopper_best"]
+                    stopper.best_step = int(saved["stopper_best_step"])
+                    stopper._window = list(saved["stopper_window"])
+                    stopper._since_best = int(saved["stopper_since_best"])
+                    best_state = saved["best_state"]
+                    best_length = int(saved["best_length"])
+                    stopped_at = saved["stopped_at"]
+                    shuffler.set_state(saved["shuffler"])
+                    torch.set_rng_state(saved["torch_rng"])
+                    start_step = int(saved["step"]) + 1
+                except Exception:  # corrupt payload: train fresh
+                    start_step = 0
             # Live progress: one update per optimizer step.  The ProgressBar hook
             # binds itself to the executing node (see comfy_execution.utils) and
             # doubles as the interrupt check, so long runs stay cancellable.
@@ -1067,40 +1107,64 @@ class TrainingLoop(io.ComfyNode):
             # a frame still reports through update(1) below.
             pbar = comfy.utils.ProgressBar(iterations)
             curve_previewer = loss_preview.LossCurvePreviewer(title="loss")
-            for step in range(iterations):
-                if per_step:
-                    order = torch.randperm(data.samples, generator=shuffler)[:per_step].to(device)
-                    inputs = data.inputs.index_select(0, order)
-                    targets = data.targets.index_select(0, order)
-                else:
-                    inputs, targets = data.inputs, data.targets
-                step_loss = _loss_value(data.loss, model(inputs), targets)
-                trainer.zero_grad(set_to_none=True)
-                step_loss.backward()
-                if optimizer.grad_clip_norm > 0.0 or optimizer.grad_clip_value > 0.0:
-                    tp.clip_gradients(optimizer, model.parameters())
-                trainer.step()
-                if lr_schedule is not None:
-                    if schedule_needs_metric:
-                        lr_schedule.step(float(step_loss.detach()))
+            # The interrupt exception is raised from inside the progress
+            # update (the host's hook) - caught so the exact breakpoint state
+            # is saved before it propagates (crash site M3).
+            step = start_step - 1
+            try:
+                for step in range(start_step, iterations):
+                    if per_step:
+                        order = torch.randperm(data.samples, generator=shuffler)[:per_step].to(device)
+                        inputs = data.inputs.index_select(0, order)
+                        targets = data.targets.index_select(0, order)
                     else:
-                        lr_schedule.step()
-                # Detached scalars, stacked into one tensor at the end: the loss
-                # history must not keep the graph (or the dataset) alive.
-                history.append(step_loss.detach().reshape(()))
-                if stopper.update(step, float(step_loss.detach())):
-                    stopped_at = step
-                    break
-                if stopper.improved:
-                    best_state = tp.snapshot_state(model)
-                    best_length = len(history)
-                frame = curve_previewer.record(
-                    float(step_loss.detach()), force=(step + 1 == iterations)
-                )
-                if frame is not None:
-                    pbar.update_absolute(step + 1, iterations, frame)
-                else:
-                    pbar.update(1)
+                        inputs, targets = data.inputs, data.targets
+                    step_loss = _loss_value(data.loss, model(inputs), targets)
+                    trainer.zero_grad(set_to_none=True)
+                    step_loss.backward()
+                    if optimizer.grad_clip_norm > 0.0 or optimizer.grad_clip_value > 0.0:
+                        tp.clip_gradients(optimizer, model.parameters())
+                    trainer.step()
+                    if lr_schedule is not None:
+                        if schedule_needs_metric:
+                            lr_schedule.step(float(step_loss.detach()))
+                        else:
+                            lr_schedule.step()
+                    # Detached scalars, stacked into one tensor at the end: the loss
+                    # history must not keep the graph (or the dataset) alive.
+                    history.append(step_loss.detach().reshape(()))
+                    if stopper.update(step, float(step_loss.detach())):
+                        stopped_at = step
+                        break
+                    if stopper.improved:
+                        best_state = tp.snapshot_state(model)
+                        best_length = len(history)
+                    frame = curve_previewer.record(
+                        float(step_loss.detach()), force=(step + 1 == iterations)
+                    )
+                    if frame is not None:
+                        pbar.update_absolute(step + 1, iterations, frame)
+                    else:
+                        pbar.update(1)
+            except InterruptProcessingException:
+                ckpt_save(ckpt_run, {
+                    "step": step,
+                    "model": model.state_dict(),
+                    "optimizer": trainer.state_dict(),
+                    "scheduler": (lr_schedule.state_dict()
+                                  if lr_schedule is not None else None),
+                    "history": history,
+                    "stopper_best": stopper.best,
+                    "stopper_best_step": stopper.best_step,
+                    "stopper_window": list(stopper._window),
+                    "stopper_since_best": stopper._since_best,
+                    "best_state": best_state,
+                    "best_length": best_length,
+                    "stopped_at": stopped_at,
+                    "shuffler": shuffler.get_state(),
+                    "torch_rng": torch.get_rng_state(),
+                })
+                raise
             if stopped_at is not None and best_state is not None:
                 # Roll back to the best point and cut the history there, so the
                 # outputs are what "the best model of this run" means.
@@ -1113,6 +1177,9 @@ class TrainingLoop(io.ComfyNode):
             trainer.zero_grad(set_to_none=True)
             for parameter in model.parameters():
                 parameter.grad = None
+            # The run finished (naturally or via early stop) - no continuation
+            # is wanted anymore, so the breakpoint file goes away (M3).
+            ckpt_discard(ckpt_run)
             curve = torch.stack(history)
             with torch.no_grad():
                 predictions = model(data.inputs).detach()

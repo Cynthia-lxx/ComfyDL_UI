@@ -90,14 +90,20 @@ back to that slot's own default.  Endpoints: `GET .../snapshots/{id}/detail`
 Auto-nudge: on `execution_error`/`execution_interrupted` the panel opens
 itself with the newest interrupted snapshot's export table and a toast.
 
-Resume semantics (M1): **node-level memoization, not mid-node continuation.**
-Finished nodes are skipped; the interrupted node re-executes from scratch
-with the ORIGINAL stored widget values (edits made after the interrupt do
-not apply — they affect the next normal Run).  Mid-node continuation for
-long training nodes is the M3 checkpoint integration.  Note that a trainer
-with early stopping may legitimately finish with a short `loss_history`
-(e.g. `early_stop_patience` default 30 on a plateauing curve) — check the
-skip statistics before assuming a resume was "truncated".
+Resume semantics (M1): **node-level memoization, not mid-node continuation** —
+with one M3 exception: the three trainers (Regression Train, Training Loop,
+Language Model Train) checkpoint their full state at the interrupt moment
+(model/optimizer/scheduler/loss history/early-stop tracker/RNG) into
+`user/comfydl/checkpoints/`, and a resume re-executing them CONTINUES from
+the breakpoint step.  The freshness gate is the prompt_id: a checkpoint only
+continues under the prompt that was interrupted — a fresh Run carries a new
+prompt_id, the stale checkpoint is discarded and training starts over.
+Finished non-training nodes are skipped; edits made after the interrupt do
+not apply to a resume (they affect the next normal Run).  Note that a
+trainer with early stopping may legitimately finish with a short
+`loss_history` (e.g. `early_stop_patience` default 30 on a plateauing
+curve) — check the skip statistics before assuming a resume was
+"truncated".
 
 ## Type mapping & honest boundaries
 

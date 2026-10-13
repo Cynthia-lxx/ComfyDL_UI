@@ -627,6 +627,49 @@ class LanguageModelTrain(io.ComfyNode):
                 best_state: dict[str, torch.Tensor] | None = None
                 best_length = 0
                 stopped_at: int | None = None
+
+                # Breakpoint continuation (crash site M3): a resumed run
+                # (same prompt_id) restores the interrupted training state; a
+                # fresh Run has a new prompt_id, the stale checkpoint is
+                # discarded.  The source model's weights are part of the run
+                # identity (a re-built or re-wired model must not continue).
+                from comfy.model_management import InterruptProcessingException
+                from comfy.train_checkpoint import (
+                    current_node_id as ckpt_node_id, discard as ckpt_discard,
+                    load as ckpt_load, run_key as ckpt_run_key,
+                    save as ckpt_save)
+
+                ckpt_run = ckpt_run_key({
+                    "node": "LanguageModelTrain",
+                    "node_id": ckpt_node_id(),
+                    "widgets": [steps, batch_size, seed, early_stop_patience,
+                                early_stop_min_delta],
+                    "optimizer": config,
+                    "scheduler": scheduler,
+                    "model": source.state_dict(),
+                    "x": contexts, "y": targets_flat,
+                })
+                start_step = 0
+                saved = ckpt_load(ckpt_run)
+                if saved is not None:
+                    try:
+                        trainee.load_state_dict(saved["model"])
+                        trainer.load_state_dict(saved["optimizer"])
+                        if lr_schedule is not None and saved.get("scheduler"):
+                            lr_schedule.load_state_dict(saved["scheduler"])
+                        history = list(saved["history"])
+                        stopper.best = saved["stopper_best"]
+                        stopper.best_step = int(saved["stopper_best_step"])
+                        stopper._window = list(saved["stopper_window"])
+                        stopper._since_best = int(saved["stopper_since_best"])
+                        best_state = saved["best_state"]
+                        best_length = int(saved["best_length"])
+                        stopped_at = saved["stopped_at"]
+                        shuffler.set_state(saved["shuffler"])
+                        torch.set_rng_state(saved["torch_rng"])
+                        start_step = int(saved["step"]) + 1
+                    except Exception:  # corrupt payload: train fresh
+                        start_step = 0
                 # Live progress: one update per optimizer step.  The ProgressBar
                 # hook binds itself to the executing node and doubles as the
                 # interrupt check, so a long run stays cancellable from the UI.
@@ -634,41 +677,65 @@ class LanguageModelTrain(io.ComfyNode):
                 # loss-curve preview (rate-limited inside LossCurvePreviewer).
                 pbar = comfy.utils.ProgressBar(iterations)
                 curve_previewer = loss_preview.LossCurvePreviewer(title="cross entropy")
-                for step in range(iterations):
-                    if per_step:
-                        order = torch.randperm(samples, generator=shuffler)[:per_step]
-                        batch_x = inputs.index_select(0, order)
-                        batch_y = labels.index_select(0, order)
-                    else:
-                        batch_x, batch_y = inputs, labels
-                    logits = trainee(batch_x)
-                    step_loss = F.cross_entropy(
-                        logits.reshape(-1, trainee.vocab_size), batch_y.reshape(-1)
-                    )
-                    trainer.zero_grad(set_to_none=True)
-                    step_loss.backward()
-                    if config.grad_clip_norm > 0.0 or config.grad_clip_value > 0.0:
-                        tp.clip_gradients(config, trainee.parameters())
-                    trainer.step()
-                    if lr_schedule is not None:
-                        if schedule_needs_metric:
-                            lr_schedule.step(float(step_loss.detach()))
+                # The interrupt exception is raised from inside the progress
+                # update (the host's hook) - caught so the exact breakpoint
+                # state is saved before it propagates (crash site M3).
+                step = start_step - 1
+                try:
+                    for step in range(start_step, iterations):
+                        if per_step:
+                            order = torch.randperm(samples, generator=shuffler)[:per_step]
+                            batch_x = inputs.index_select(0, order)
+                            batch_y = labels.index_select(0, order)
                         else:
-                            lr_schedule.step()
-                    history.append(step_loss.detach().reshape(()))
-                    if stopper.update(step, float(step_loss.detach())):
-                        stopped_at = step
-                        break
-                    if stopper.improved:
-                        best_state = tp.snapshot_state(trainee)
-                        best_length = len(history)
-                    frame = curve_previewer.record(
-                        float(step_loss.detach()), force=(step + 1 == iterations)
-                    )
-                    if frame is not None:
-                        pbar.update_absolute(step + 1, iterations, frame)
-                    else:
-                        pbar.update(1)
+                            batch_x, batch_y = inputs, labels
+                        logits = trainee(batch_x)
+                        step_loss = F.cross_entropy(
+                            logits.reshape(-1, trainee.vocab_size), batch_y.reshape(-1)
+                        )
+                        trainer.zero_grad(set_to_none=True)
+                        step_loss.backward()
+                        if config.grad_clip_norm > 0.0 or config.grad_clip_value > 0.0:
+                            tp.clip_gradients(config, trainee.parameters())
+                        trainer.step()
+                        if lr_schedule is not None:
+                            if schedule_needs_metric:
+                                lr_schedule.step(float(step_loss.detach()))
+                            else:
+                                lr_schedule.step()
+                        history.append(step_loss.detach().reshape(()))
+                        if stopper.update(step, float(step_loss.detach())):
+                            stopped_at = step
+                            break
+                        if stopper.improved:
+                            best_state = tp.snapshot_state(trainee)
+                            best_length = len(history)
+                        frame = curve_previewer.record(
+                            float(step_loss.detach()), force=(step + 1 == iterations)
+                        )
+                        if frame is not None:
+                            pbar.update_absolute(step + 1, iterations, frame)
+                        else:
+                            pbar.update(1)
+                except InterruptProcessingException:
+                    ckpt_save(ckpt_run, {
+                        "step": step,
+                        "model": trainee.state_dict(),
+                        "optimizer": trainer.state_dict(),
+                        "scheduler": (lr_schedule.state_dict()
+                                      if lr_schedule is not None else None),
+                        "history": history,
+                        "stopper_best": stopper.best,
+                        "stopper_best_step": stopper.best_step,
+                        "stopper_window": list(stopper._window),
+                        "stopper_since_best": stopper._since_best,
+                        "best_state": best_state,
+                        "best_length": best_length,
+                        "stopped_at": stopped_at,
+                        "shuffler": shuffler.get_state(),
+                        "torch_rng": torch.get_rng_state(),
+                    })
+                    raise
                 if stopped_at is not None and best_state is not None:
                     # Roll back to the best point and cut the history there, so
                     # the outputs are what "the best model of this run" means.
@@ -679,6 +746,9 @@ class LanguageModelTrain(io.ComfyNode):
                         f"- {stopper.describe_stop()}"
                     )
                 trainer.zero_grad(set_to_none=True)
+                # The run finished (naturally or via early stop) - no
+                # continuation is wanted anymore: drop the breakpoint (M3).
+                ckpt_discard(ckpt_run)
             trainee.eval()
             for parameter in trainee.parameters():
                 parameter.grad = None

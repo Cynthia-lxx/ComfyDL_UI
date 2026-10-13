@@ -50,6 +50,9 @@ its cross-entropy curve **under itself while it trains** (the preview card below
   streamed over the built-in WebSocket channel.
 - Built-in memory profiling: peak-memory estimation, traffic-light verdicts, a warning before
   queueing a graph that cannot fit, and post-mortem analysis of failed allocations.
+- Crash Site: execution snapshots with lazy capture (zero overhead on normal runs), one-click
+  resume that skips finished nodes, and breakpoint continuation for the training nodes — an
+  interrupted 10k-step training continues from its breakpoint step instead of starting over.
 - Workflows are saved and loaded as JSON.
 - Runs fully offline: the core downloads nothing unless you ask it to.
 - Still compatible with third-party custom nodes via `custom_nodes/`.
