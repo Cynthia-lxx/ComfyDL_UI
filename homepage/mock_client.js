@@ -466,21 +466,18 @@
   // --------------------------------------------------- extension manifest
   // The real server returns glob('extensions/**/*.js'); replicate it from a
   // generated file (bake_patches.py) + our own home.js entry.
-  // Entries in the manifest are origin-absolute ('/extensions/...'). The
-  // frontend imports them verbatim, so on a subpath deployment (GitHub Pages
-  // project site) they would miss the base path. Resolve each entry against
-  // the page URL at serve time and hand out full absolute URLs.
+  //
+  // IMPORTANT: serve the entries EXACTLY as stored ('/extensions/...'). The
+  // frontend imports each via api.fileURL(entry) = api_base + entry (plain
+  // string concat), and api_base already carries the deployment base path
+  // ('http://host:port' locally, 'https://<user>.github.io/<repo>' on Pages).
+  // Rewriting entries to full absolute URLs here produces a doubled prefix
+  // and a guaranteed 404.
   var extensionsPromise = null;
   function getExtensions() {
     if (!extensionsPromise) {
       extensionsPromise = realFetch('extensions-manifest.json')
         .then(function (res) { return res.ok ? res.json() : []; })
-        .then(function (list) {
-          return (list || []).map(function (entry) {
-            try { return new URL(String(entry).replace(/^\//, ''), location.href).href; }
-            catch (e) { return entry; }
-          });
-        })
         .catch(function () { return []; });
     }
     return extensionsPromise;
