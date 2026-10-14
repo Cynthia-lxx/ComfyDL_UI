@@ -501,12 +501,17 @@
     var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
 
     // Normalize to a pathname so absolute URLs (http://127.0.0.1:8188/api/...)
-    // are intercepted exactly like relative ones.
+    // are intercepted exactly like relative ones. The '/api' segment may sit
+    // behind a deployment base path (GitHub Pages serves this site under
+    // /ComfyDL_UI/), so locate it anywhere in the pathname instead of only
+    // at position 0. A leading '_api' etc. cannot false-positive because the
+    // regex requires a '/' before 'api'.
     var url = rawUrl;
     try { url = new URL(rawUrl, location.href).pathname; } catch (e) { /* keep raw */ }
 
-    if (url.indexOf('/api') === 0 || url.indexOf('api/') === 0) {
-      var key = mockKey(url);
+    var apiAt = url.search(/\/api(\/|$)/);
+    if (apiAt !== -1) {
+      var key = mockKey(url.slice(apiAt));
       console.log('[ComfyFront_sep] API', method, key);
       boot.api(key);
 
