@@ -47,6 +47,7 @@ HOME_EXTENSION_URL = "/extensions/comfydl_home/home.js"
 HOMEPAGE_MARK = "/*ComfyFront_sep:homepage-workflow*/"
 TABS_MARK = "/*ComfyFront_sep:tabs*/"
 PALETTE_MARK = "/*ComfyFront_sep:palette*/"
+TITLES_MARK = "/*ComfyFront_sep:titles*/"
 NO_RESTORE_MARK = "/*ComfyFront_sep:no-restore*/"
 
 STARTUP_WORKFLOW_URL = "./homepage_workflow.json"
@@ -338,6 +339,10 @@ def bake_patches(fp) -> dict:
         ("default_graph", lambda fp_, a_: _patch_default_graph_constant(
             fp_, a_, HOMEPAGE_MINIFIED)),
         ("help_menu", _patch_help_menu),
+        ("titles", _patch_titles),
+        ("manifest_icon", _patch_manifest_icon),
+        ("progress_favicon", _patch_progress_favicon),
+        ("layout_favicon", _patch_layout_favicon),
         ("icon_css", _patch_icon_css),
         ("side_buttons", _patch_sidebar_buttons),
         ("startup_gate", _patch_startup_gate),
@@ -495,6 +500,108 @@ ICON_CSS = (
       "mask:url('./icons/bilibili.svg') no-repeat center/contain}"
     + "</style>"
 )
+
+
+def _patch_layout_favicon(fp, assets: Path) -> bool:
+    """LayoutDefault setup() calls oe(\`/assets/favicon.ico\`) - a
+    root-absolute favicon that 404s under the /<repo>/ deployment base and
+    overwrites the site's own <link rel=icon> tags at runtime. Point it at
+    the self-hosted lemon icon instead (document-relative, subpath-safe).
+    Idempotency: the absolute string is gone once applied.
+    """
+    path = fp._locate(assets, "main-*.js", "LayoutDefault")
+    text = fp._text(path)
+    target = "`/assets/favicon.ico`"
+    if target not in text:
+        print(f"  layout-favicon: already applied ({path.name})")
+        return False
+    text = fp._replace_once(
+        text, target, "`./icons/fav.webp`")
+    fp._write(path, text)
+    print(f"  layout-favicon: applied ({path.name})")
+    return True
+
+
+def _patch_progress_favicon(fp, assets: Path) -> bool:
+    """Disable the execution-progress favicon animation.
+
+    ``useProgressFavicon`` rewrites every <link rel=icon> href at runtime to
+    ``/assets/images/favicon_progress_16x16/frame_*.png`` - root-absolute
+    paths that 404 on a subpath deployment, wiping out the site's own icon.
+    Nothing executes here, so drop the call entirely (the definition stays,
+    unused). Idempotency: the call string is gone once applied.
+    """
+    path = fp._locate(assets, "GraphView-*.js", "useProgressFavicon")
+    text = fp._text(path)
+    call = "setupAutoQueueHandler(),useProgressFavicon(),useBrowserTabTitle();"
+    if call not in text:
+        print(f"  progress-favicon: already applied ({path.name})")
+        return False
+    text = fp._replace_once(
+        text, call, "setupAutoQueueHandler(),useBrowserTabTitle();")
+    fp._write(path, text)
+    print(f"  progress-favicon: applied ({path.name})")
+    return True
+
+
+def _patch_manifest_icon(fp, assets: Path) -> bool:
+    """PWA manifest icons: the bundled entries point at root-absolute
+    /assets/images/comfy-icon-*.png which do not exist on a subpath
+    deployment (guaranteed 404s). Replace them with the self-hosted
+    lemon icon (icons/fav.webp, 474x447). Idempotent via content check.
+    """
+    # Locate by a needle that survives the patch itself (the applied
+    # manifest no longer mentions comfy-icon-192.png).
+    path = fp._locate(assets, "manifest-*.json", "icons")
+    text = fp._text(path)
+    if "icons/fav.webp" in text:
+        print(f"  manifest-icon: already applied ({path.name})")
+        return False
+    start = text.index('"icons": [')
+    end = text.index("],", start) + 2
+    new_icons = ('"icons": [\n'
+                 '    {\n'
+                 '      "src": "./icons/fav.webp",\n'
+                 '      "sizes": "474x447",\n'
+                 '      "type": "image/webp",\n'
+                 '      "purpose": "any"\n'
+                 '    }\n'
+                 '  ],')
+    text = text[:start] + new_icons + text[end:]
+    fp._write(path, text)
+    print(f"  manifest-icon: applied ({path.name})")
+    return True
+
+
+def _patch_titles(fp, assets: Path) -> bool:
+    """Branding: default workflow name and browser tab title.
+
+    * default temporary workflow ``Unsaved Workflow.json`` -> ``Welcome.json``
+      (the tab label is the filename minus its extension);
+    * tab-title constants ``aO``/``oO`` (``ComfyUI`` / `` - ComfyUI``) become
+      ``ComfyDL Index`` / `` - ComfyDL Index``.
+    """
+    path = fp._locate(assets, "GraphView-*.js", "useBrowserTabTitle")
+    text = fp._text(path)
+    if TITLES_MARK in text:
+        print(f"  titles: already applied ({path.name})")
+        return False
+    old = "aO=`ComfyUI`,oO=` - ComfyUI`"
+    if old not in text:
+        raise ValueError("tab title constants not found")
+    text = fp._replace_once(
+        text, old, "aO=`ComfyDL Index`,oO=` - ComfyDL Index`" + TITLES_MARK)
+    fp._write(path, text)
+
+    path2 = fp._locate(assets, "settingStore-*.js", "Unsaved Workflow.json")
+    text2 = fp._text(path2)
+    count = text2.count("`Unsaved Workflow.json`")
+    if count == 0:
+        raise ValueError("default workflow name not found")
+    text2 = text2.replace("`Unsaved Workflow.json`", "`Welcome.json`")
+    fp._write(path2, text2)
+    print(f"  titles: applied (workflow name x{count}, tab title) in {path2.name}")
+    return True
 
 
 def _patch_help_menu(fp, assets: Path) -> bool:

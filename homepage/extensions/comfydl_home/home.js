@@ -424,6 +424,28 @@ function installClickFeedback() {
   console.log('[ComfyDL.Home] click feedback installed (ripple; trail disabled)');
 }
 
+// ------------------------------------------------ logo menu item filtering
+// The logo dropdown (ComfyMenuButton) offers entries this static demo cannot
+// honour. Hide them wherever the popup re-renders. Match by visible English
+// label (the i18n tables are English-first; extend the list if translations
+// change the labels).
+const MENU_HIDE_LABELS = new Set([
+  'browse templates',   // template browser: empty without the templates backend
+  'extensions',         // extension manager: needs the manager backend
+  'contact support',    // cloud support
+]);
+function installMenuFilter() {
+  const hideItems = () => {
+    for (const el of document.querySelectorAll('.comfy-command-menu [class*=menubar-item-link]')) {
+      const label = (el.textContent || '').trim().toLowerCase();
+      if (MENU_HIDE_LABELS.has(label)) el.style.display = 'none';
+    }
+  };
+  const ob = new MutationObserver(hideItems);
+  ob.observe(document.body, { childList: true, subtree: true });
+  console.log('[ComfyDL.Home] logo menu filter armed');
+}
+
 // ---------------------------------------------------------------- register
 app.registerExtension({
   name: 'ComfyDL.Home',
@@ -581,6 +603,9 @@ app.registerExtension({
 
     // Click feedback: ripple on chrome buttons + comet cursor trail.
     installClickFeedback();
+
+    // Hide logo-menu entries that cannot work in this static demo.
+    installMenuFilter();
 
     // Full-screen docs entries (sidebar tab renders the page list; each entry
     // opens the overlay so the half/full-screen catalog always gets room).
