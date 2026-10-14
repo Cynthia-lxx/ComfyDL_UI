@@ -1,0 +1,1 @@
+var e=`h-11 rounded-2xl bg-transparency-white-t8 px-4 text-primary-warm-white placeholder:text-transparency-white-t40 xl:h-12`,t=`mt-2 cursor-pointer self-center border-none bg-transparent p-0 font-[inherit] text-base text-primary-comfy-canvas underline transition-all duration-300 hover:text-white sm:text-lg`;export{t as n,e as t};

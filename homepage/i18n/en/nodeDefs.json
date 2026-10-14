@@ -1,0 +1,20 @@
+{
+  "_meta": "Node display-name/description table (English source of truth). The i18n module reads display_name/description straight from object_info (mock_client.js), which mirrors the values below. Keep the two in sync; add i18n/zh/nodeDefs.json later for Chinese titles.",
+  "localeName": "English",
+  "nodeDefs": {
+    "DocsWelcome": { "display_name": "Welcome", "description": "Hero welcome node: project title, tagline and cover image." },
+    "DocsOverview": { "display_name": "Docs · Overview", "description": "Project positioning (README): what ComfyDL_UI is and where to go next." },
+    "DocsFeatures": { "display_name": "Docs · Features", "description": "Feature highlights: Network & Layers, regression, diffusion, profiling, crash site, data I/O." },
+    "DocsQuickstart": { "display_name": "Docs · Quickstart", "description": "How to use this page: node library, docs nodes, wiring playground." },
+    "DocsContact": { "display_name": "Docs · Contact", "description": "Repository and contact links." },
+    "DocsProfiling": { "display_name": "Docs · Profiling & Crash Site", "description": "README section: live progress, profiling (memory/compute/operators) and the Crash Site save & resume net." },
+    "DocsInstallRun": { "display_name": "Docs · Installation & Running", "description": "README section: installation, virtual environment, launch flags and GPU acceleration." },
+    "DocsShortcuts": { "display_name": "Docs · Shortcuts", "description": "README section: keyboard shortcuts table." },
+    "DocsCredits": { "display_name": "Docs · Docs & Credits", "description": "README section: documentation map, version and credits." },
+    "WebCatalog": { "display_name": "Web · Catalog", "description": "Embedded web page container. Defaults to the Network & Layers interactive catalog (opens at 1200x780)." },
+    "DemoMakeDataset": { "display_name": "Demo · MakeDataset", "description": "Fake tabular dataset generator. Outputs a DATASET slot (teal)." },
+    "DemoLinReg": { "display_name": "Demo · LinReg", "description": "Fake linear-regression trainer. Consumes DATASET, emits nn_model (orange) + loss history." },
+    "DemoTrainingLoop": { "display_name": "Demo · TrainingLoop", "description": "Fake production training loop. Consumes nn_model + DATASET, emits an updated nn_model." },
+    "DemoEvaluate": { "display_name": "Demo · Evaluate", "description": "Fake evaluator. Consumes nn_model + DATASET, emits metrics (TENSOR)." }
+  }
+}

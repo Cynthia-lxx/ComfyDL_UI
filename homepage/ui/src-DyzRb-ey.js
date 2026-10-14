@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";import{Gt as e,Kt as t}from"./vendor-other-BCSx3f8i.js";var n=e({extend:{classGroups:{"font-size":[`text-xxs`,`text-xxxs`],"max-h":[{"max-h":[`none`]}]}}});function cn(...e){return n(t(e))}export{cn as t};

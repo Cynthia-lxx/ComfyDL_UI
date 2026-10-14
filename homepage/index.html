@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><link rel="stylesheet" href="user.css"><link rel="stylesheet" href="api/userdata/user.css"><meta charset="UTF-8"/><title>ComfyUI</title><link rel="icon" type="image/x-icon" href="./ui/favicon.ico"/><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/><link rel="stylesheet" href="materialdesignicons.min.css"/><meta name="mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-status-bar-style" content="black"/><style>@media (prefers-color-scheme:dark){:root{--bg-color:#202020;--fg-color:#ffffff}}body,html{width:100%;height:100%;margin:0;overscroll-behavior:none}body{display:grid;background-color:var(--bg-color);background-image:var(--bg-img);background-position:center;background-size:cover;background-repeat:no-repeat}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}</style><style>#splash-loader{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;contain:strict}#splash-loader svg{width:min(200px,50vw);height:auto;transform:translateZ(0)}#splash-loader .wave-group{animation:splash-rise 4s ease-in-out infinite alternate;will-change:transform;transform:translateZ(0)}#splash-loader .wave-path{animation:splash-wave 1.2s linear infinite;will-change:transform;transform:translateZ(0)}@keyframes splash-rise{from{transform:translateY(280px)}to{transform:translateY(-80px)}}@keyframes splash-wave{from{transform:translateX(0)}to{transform:translateX(-880px)}}@media (prefers-reduced-motion:reduce){#splash-loader .wave-group,#splash-loader .wave-path{animation:none;will-change:auto}#splash-loader .wave-group{transform:translateY(-80px)}}</style><link rel="manifest" href="./ui/manifest-P9przInP.json"/><script type="module" crossorigin src="./ui/index-BAp94dQ0.js"></script><link rel="modulepreload" crossorigin href="./ui/rolldown-runtime-CM1DJQSe.js"><link rel="modulepreload" crossorigin href="./ui/vendor-datadog-CS-2l-KQ.js"><script src="./mock_client.js"></script><style>/*ComfyFront_sep:entrance*/
+:root{--cdl-ease:cubic-bezier(.16,1,.3,1)}
+html:not(.cdl-no-anim):not(.cdl-entrance-done) .side-tool-bar-container .sidebar-item-group > *:not(.cdl-entered){opacity:0}
+html:not(.cdl-no-anim):not(.cdl-entrance-done) .side-tool-bar-container .mt-auto > *:not(.cdl-entered){opacity:0}
+html:not(.cdl-no-anim) #comfyui-body-top:not(.cdl-entered),
+html:not(.cdl-no-anim) #comfyui-body-bottom:not(.cdl-entered),
+html:not(.cdl-no-anim) #comfyui-body-right:not(.cdl-entered){opacity:0}
+html:not(.cdl-booted) #vue-app{visibility:hidden}
+html:not(.cdl-no-anim):not(.cdl-nodes-in) [data-node-id]{opacity:0}
+html:not(.cdl-no-anim):not(.cdl-canvas-in) #graph-canvas-container canvas{opacity:0}
+html:not(.cdl-no-anim):not(.cdl-canvas-in) #graph-canvas-container{background:#020303}
+#graph-canvas-container canvas{transition:opacity 1.6s var(--cdl-ease)}
+</style><style>/*ComfyFront_sep:splash*/
+#splash-loader{background:radial-gradient(1100px 520px at 50% 34%,#141720 0%,#0f1013 58%,#0b0c0f 100%)}
+.cdl-splash{display:flex;flex-direction:column;align-items:center;gap:26px;width:min(560px,86vw)}
+.cdl-brand{display:flex;align-items:center;gap:16px}
+.cdl-logo{width:56px;height:56px;filter:drop-shadow(0 6px 18px rgba(26,188,156,.35))}
+.cdl-brand h1{margin:0;font-size:30px;font-weight:750;letter-spacing:.4px;line-height:1.1}
+.cdl-tag{margin:4px 0 0;font-size:13.5px;color:#9a9aa5}
+.cdl-progress{width:100%;display:flex;flex-direction:column;gap:8px}
+.cdl-track{position:relative;height:14px;border-radius:999px;background:#16171c;border:1px solid #262832;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}
+.cdl-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#1ABC9C,#4cc3a8 55%,#FF8C42);transition:width .5s var(--cdl-ease);position:relative;z-index:1}
+.cdl-stripes{position:absolute;inset:0;z-index:2;background:repeating-linear-gradient(-55deg,rgba(255,255,255,.10) 0 10px,transparent 10px 20px);background-size:200% 100%;animation:cdl-stripes 1.1s linear infinite;mix-blend-mode:overlay;pointer-events:none}
+@keyframes cdl-stripes{to{background-position:-56px 0}}
+.cdl-meta{display:flex;justify-content:space-between;font-size:12.5px;color:#9a9aa5;font-variant-numeric:tabular-nums}
+.cdl-pct{color:#e6e6ec;font-weight:650;font-variant-numeric:tabular-nums}
+.cdl-log{width:100%;height:172px;overflow-y:auto;background:#121318;border:1px solid #262832;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;box-shadow:inset 0 2px 8px rgba(0,0,0,.35)}
+.cdl-line{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:#c9c9d4;animation:cdl-line-in .45s var(--cdl-ease) both;font-variant-numeric:tabular-nums}
+.cdl-t{color:#6b6b76;flex:none}
+.cdl-m{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cdl-s{flex:none;font-size:10.5px;font-weight:650;letter-spacing:.6px;padding:1px 8px;border-radius:999px}
+.cdl-s.ok{color:#1ABC9C;border:1px solid rgba(26,188,156,.45)}
+.cdl-s.run{color:#FF8C42;border:1px solid rgba(255,140,66,.45);animation:cdl-pulse 1s ease-in-out infinite}
+.cdl-line.run .cdl-m{color:#e6e6ec}
+@keyframes cdl-line-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cdl-pulse{50%{opacity:.45}}
+.cdl-foot{font-size:11.5px;color:#6b6b76;letter-spacing:.3px}
+@media (prefers-reduced-motion:reduce){.cdl-stripes,.cdl-line,.cdl-s.run{animation:none}}
+</style><style>/*ComfyFront_sep:icon-css*/
+.icon-\[comfy--qq\]{display:inline-block;width:1em;height:1em;line-height:1;background-color:currentColor;-webkit-mask:url('./icons/qqchat.svg') no-repeat center/contain;mask:url('./icons/qqchat.svg') no-repeat center/contain}
+.icon-\[comfy--bilibili\]{display:inline-block;width:1em;height:1em;line-height:1;background-color:currentColor;-webkit-mask:url('./icons/bilibili.svg') no-repeat center/contain;mask:url('./icons/bilibili.svg') no-repeat center/contain}
+</style><style>/*ComfyFront_sep:mouse-fx*/
+/* ---- sidebar rail buttons ---- */
+.side-tool-bar-container button{transition:transform .18s var(--cdl-ease),background-color .18s var(--cdl-ease),filter .18s var(--cdl-ease),box-shadow .18s var(--cdl-ease)}
+.side-tool-bar-container button:hover{filter:brightness(1.28);transform:translateY(-1px)}
+.side-tool-bar-container button:active{transform:scale(.9);transition-duration:.08s}
+/* ---- topbar buttons (incl. workflow tabs) ---- */
+.comfyui-body-top button{transition:transform .16s var(--cdl-ease),background-color .16s var(--cdl-ease),filter .16s var(--cdl-ease)}
+.comfyui-body-top button:hover{filter:brightness(1.18)}
+.comfyui-body-top button:active{transform:scale(.95);transition-duration:.08s}
+/* ---- bottom status bar buttons ---- */
+.comfyui-body-bottom button{transition:filter .16s var(--cdl-ease),transform .16s var(--cdl-ease)}
+.comfyui-body-bottom button:hover{filter:brightness(1.2)}
+.comfyui-body-bottom button:active{transform:scale(.95)}
+/* ---- canvas nodes (DOM layer): hover lift via filter/shadow ONLY —
+   node position lives in transform, which must never be touched ---- */
+[data-node-id]{transition:filter .18s var(--cdl-ease),box-shadow .18s var(--cdl-ease)}
+[data-node-id]:hover{filter:brightness(1.07);box-shadow:0 6px 22px rgba(0,0,0,.4)}
+[data-node-id] a{cursor:pointer}
+@media (prefers-reduced-motion:reduce){
+.side-tool-bar-container button,.comfyui-body-top button,.comfyui-body-bottom button,[data-node-id]{transition:none}
+.side-tool-bar-container button:hover,.comfyui-body-top button:hover{filter:none;transform:none}
+.side-tool-bar-container button:active,.comfyui-body-top button:active,.comfyui-body-bottom button:active{transform:none}
+[data-node-id]:hover{filter:none;box-shadow:none}}
+</style></head><body class="litegraph grid"><div id="splash-loader" role="status" aria-label="Loading ComfyDL_UI"><div class="cdl-splash"><div class="cdl-brand"><svg class="cdl-logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="cdlG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1ABC9C"/><stop offset="1" stop-color="#FF8C42"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="14" fill="url(#cdlG)"/><g stroke="#0f1013" stroke-width="3.4" fill="none" stroke-linecap="round"><circle cx="21" cy="22" r="5.2" fill="#0f1013" stroke="none"/><circle cx="43" cy="22" r="5.2" fill="#0f1013" stroke="none"/><circle cx="32" cy="44" r="5.2" fill="#0f1013" stroke="none"/><path d="M21 27v6a8 8 0 0 0 8 8h-1"/><path d="M43 27v6a8 8 0 0 1-8 8h1"/></g></svg><div><h1>ComfyDL_UI</h1><p class="cdl-tag">Deep Learning is just a few clicks away!</p></div></div><div class="cdl-progress"><div class="cdl-track"><div class="cdl-fill" id="cdlFill"></div><div class="cdl-stripes"></div></div><div class="cdl-meta"><span id="cdlPhase">Cold start</span><span class="cdl-pct" id="cdlPct">0%</span></div></div><div class="cdl-log" id="cdlLog" aria-live="polite"></div><div class="cdl-foot">static demo &middot; no backend attached &middot; nothing executes</div></div></div><script>;(function () {
+        var bg = '#0f1013', fg = '#e6e6ec';
+        document.documentElement.style.setProperty('--bg-color', bg);
+        document.documentElement.style.setProperty('--fg-color', fg);
+        var el = document.getElementById('splash-loader');
+        if (el) { el.style.background = bg; el.style.color = fg; }
+      })();</script><div id="vue-app"></div></body></html>

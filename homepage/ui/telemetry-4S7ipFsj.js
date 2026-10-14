@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";var e=null;function useTelemetry(){return e}function setTelemetryRegistry(t){e=t}export{useTelemetry as n,setTelemetryRegistry as t};

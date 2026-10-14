@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="559" viewBox="0 0 1240 559" font-family="system-ui,'Segoe UI',sans-serif">
+<rect width="1240" height="559" fill="#0f1013" rx="10"/>
+<g transform="translate(20,12)"><rect width="230" height="523" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#f87171"/><text x="27" y="24" fill="#f87171" font-size="12.5" font-weight="600">Training</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">23</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Evaluate</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">LR Scheduler</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">Language Model Build</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">Language Model Embedding</text>
+<rect x="8" y="126" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="139" fill="#e6e6ec" font-size="11">Language Model Forward</text>
+<rect x="8" y="147" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="160" fill="#e6e6ec" font-size="11">Language Model Generate</text>
+<rect x="8" y="168" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="181" fill="#e6e6ec" font-size="11">Language Model Train</text>
+<rect x="8" y="189" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="202" fill="#e6e6ec" font-size="11">Language Model Transformer Block</text>
+<rect x="8" y="210" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="223" fill="#e6e6ec" font-size="11">Learnable Parameters</text>
+<rect x="8" y="231" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="244" fill="#e6e6ec" font-size="11">Load Language Model</text>
+<rect x="8" y="252" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="265" fill="#e6e6ec" font-size="11">Load Parameters</text>
+<rect x="8" y="273" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="286" fill="#e6e6ec" font-size="11">Loss</text>
+<rect x="8" y="294" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="307" fill="#e6e6ec" font-size="11">Merge Parameters</text>
+<rect x="8" y="315" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="328" fill="#e6e6ec" font-size="11">Metrics</text>
+<rect x="8" y="336" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="349" fill="#e6e6ec" font-size="11">Optimizer</text>
+<rect x="8" y="357" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="370" fill="#e6e6ec" font-size="11">Parameters to Tensor</text>
+<rect x="8" y="378" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="391" fill="#e6e6ec" font-size="11">Parameters to Text</text>
+<rect x="8" y="399" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="412" fill="#e6e6ec" font-size="11">Save Language Model</text>
+<rect x="8" y="420" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="433" fill="#e6e6ec" font-size="11">Save Parameters</text>
+<rect x="8" y="441" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="454" fill="#e6e6ec" font-size="11">Text to Parameters</text>
+<rect x="8" y="462" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="475" fill="#e6e6ec" font-size="11">Training Loop</text>
+<rect x="8" y="483" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="496" fill="#e6e6ec" font-size="11">Training Mode</text>
+<rect x="8" y="504" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="517" fill="#e6e6ec" font-size="11">Training Run Stats</text>
+</g>
+<g transform="translate(262,12)"><rect width="230" height="334" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#34d399"/><text x="27" y="24" fill="#34d399" font-size="12.5" font-weight="600">Activation</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">14</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">ELU</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">GELU</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">Hard Swish</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">Identity</text>
+<rect x="8" y="126" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="139" fill="#e6e6ec" font-size="11">Leaky ReLU</text>
+<rect x="8" y="147" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="160" fill="#e6e6ec" font-size="11">Mish</text>
+<rect x="8" y="168" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="181" fill="#e6e6ec" font-size="11">ReLU</text>
+<rect x="8" y="189" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="202" fill="#e6e6ec" font-size="11">ReLU6</text>
+<rect x="8" y="210" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="223" fill="#e6e6ec" font-size="11">SELU</text>
+<rect x="8" y="231" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="244" fill="#e6e6ec" font-size="11">SiLU</text>
+<rect x="8" y="252" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="265" fill="#e6e6ec" font-size="11">Sigmoid</text>
+<rect x="8" y="273" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="286" fill="#e6e6ec" font-size="11">Softmax</text>
+<rect x="8" y="294" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="307" fill="#e6e6ec" font-size="11">Softplus</text>
+<rect x="8" y="315" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="328" fill="#e6e6ec" font-size="11">Tanh</text>
+</g>
+<g transform="translate(262,358)"><rect width="230" height="82" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#2dd4bf"/><text x="27" y="24" fill="#2dd4bf" font-size="12.5" font-weight="600">Pooling</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">2</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Adaptive Pool</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">Pool</text>
+</g>
+<g transform="translate(505,12)"><rect width="230" height="208" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#5b9dff"/><text x="27" y="24" fill="#5b9dff" font-size="12.5" font-weight="600">Basic</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">8</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Add</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">Broadcast</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">Concat</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">Embedding</text>
+<rect x="8" y="126" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="139" fill="#e6e6ec" font-size="11">Flatten</text>
+<rect x="8" y="147" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="160" fill="#e6e6ec" font-size="11">Linear</text>
+<rect x="8" y="168" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="181" fill="#e6e6ec" font-size="11">Multiply</text>
+<rect x="8" y="189" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="202" fill="#e6e6ec" font-size="11">Reshape</text>
+</g>
+<g transform="translate(505,232)"><rect width="230" height="124" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#eab308"/><text x="27" y="24" fill="#eab308" font-size="12.5" font-weight="600">Text</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">4</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Sliding Window</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">Text Decode</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">Text Encode</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">Vocab Build</text>
+</g>
+<g transform="translate(747,12)"><rect width="230" height="208" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#38bdf8"/><text x="27" y="24" fill="#38bdf8" font-size="12.5" font-weight="600">Attention</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">8</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Causal Mask</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">Cross-Attention</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">Multi-Head Attention</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">Padding Mask</text>
+<rect x="8" y="126" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="139" fill="#e6e6ec" font-size="11">Positional Encoding</text>
+<rect x="8" y="147" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="160" fill="#e6e6ec" font-size="11">Self-Attention</text>
+<rect x="8" y="168" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="181" fill="#e6e6ec" font-size="11">Transformer Decoder Block</text>
+<rect x="8" y="189" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="202" fill="#e6e6ec" font-size="11">Transformer Encoder Block</text>
+</g>
+<g transform="translate(747,232)"><rect width="230" height="103" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#fb923c"/><text x="27" y="24" fill="#fb923c" font-size="12.5" font-weight="600">Recurrent</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">3</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">GRU</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">LSTM</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">RNN</text>
+</g>
+<g transform="translate(747,347)"><rect width="230" height="61" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#f472b6"/><text x="27" y="24" fill="#f472b6" font-size="12.5" font-weight="600">Regularization</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">1</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Dropout</text>
+</g>
+<g transform="translate(990,12)"><rect width="230" height="187" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#a78bfa"/><text x="27" y="24" fill="#a78bfa" font-size="12.5" font-weight="600">Normalization</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">7</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">BatchNorm</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">GroupNorm</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">InstanceNorm</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">LayerNorm</text>
+<rect x="8" y="126" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="139" fill="#e6e6ec" font-size="11">RMSNorm</text>
+<rect x="8" y="147" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="160" fill="#e6e6ec" font-size="11">SpectralNorm</text>
+<rect x="8" y="168" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="181" fill="#e6e6ec" font-size="11">WeightNorm</text>
+</g>
+<g transform="translate(990,211)"><rect width="230" height="145" fill="#16171c" stroke="#262832" rx="8"/><circle cx="16" cy="20" r="4" fill="#fbbf24"/><text x="27" y="24" fill="#fbbf24" font-size="12.5" font-weight="600">Convolution</text><text x="218.4" y="24" fill="#9a9aa5" font-size="10" text-anchor="end">5</text>
+<rect x="8" y="42" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="55" fill="#e6e6ec" font-size="11">Conv</text>
+<rect x="8" y="63" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="76" fill="#e6e6ec" font-size="11">ConvTranspose</text>
+<rect x="8" y="84" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="97" fill="#e6e6ec" font-size="11">Pixel Shuffle</text>
+<rect x="8" y="105" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="118" fill="#e6e6ec" font-size="11">Pixel Unshuffle</text>
+<rect x="8" y="126" width="214" height="18" fill="#1c1e24" stroke="#262832" rx="4"/><text x="14" y="139" fill="#e6e6ec" font-size="11">Upsample</text>
+</g>
+</svg>

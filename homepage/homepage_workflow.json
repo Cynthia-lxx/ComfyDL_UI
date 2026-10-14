@@ -1,0 +1,710 @@
+{
+ "id": "ae0dce35-8923-420d-95ac-f37ef2c3b4c8",
+ "revision": 0,
+ "last_node_id": 15,
+ "last_link_id": 5,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "DocsOverview",
+   "pos": [
+    680,
+    40
+   ],
+   "size": [
+    240,
+    40
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsOverview"
+   },
+   "widgets_values": [
+    "<div align=\"center\">\n\n# ComfyDL_UI\n\n**Deep Learning is just a few clicks away!**\n\n</div>\n\n![Cover](readme_assets/cover_v2_HD.png)\n\n## What's This?\n\n**Hardcore-overhauled by AI art software, this is a modular Deep Learning Toolbox GUI, API\nand backend with a graph/nodes interface.**\n\n`ComfyDL_UI` lets you build deep learning workflows — from CNNs to language models — by\nconnecting nodes in a graph, not by writing code. It hosts the\n[ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) node pack as a built-in set of nodes\n(tensors, layers, optimizers, training loops, NLP pipelines, data utilities and\nvisualizations) on top of a trimmed ComfyUI runtime.\n\n> It is **not** the complete original ComfyUI: this repository is a dehydrated fork\n> (see [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)) that keeps the node-graph\n> engine, server and basic image IO, and drops the diffusion-generation stack. If you want the\n> original ComfyUI, get it from <https://github.com/comfyanonymous/ComfyUI>.\n\n## What it looks like\n\nA production-grade tabular regression workflow looks like:\n\n![Tabular regression workflow in ComfyDL_UI](readme_assets/tabular_regression_workflow.png)\n\nLanguage models tell the same story: \n\n![Language Model Train streaming its cross-entropy curve under the node](readme_assets/language_model_train_running.png)\n\n> More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule\n> README ([中文](comfydl/README_zh.md), [FUNCTIONS.md](comfydl/FUNCTIONS.md))."
+   ],
+   "widgets_values_named": {
+    "text": "<div align=\"center\">\n\n# ComfyDL_UI\n\n**Deep Learning is just a few clicks away!**\n\n</div>\n\n![Cover](readme_assets/cover_v2_HD.png)\n\n## What's This?\n\n**Hardcore-overhauled by AI art software, this is a modular Deep Learning Toolbox GUI, API\nand backend with a graph/nodes interface.**\n\n`ComfyDL_UI` lets you build deep learning workflows — from CNNs to language models — by\nconnecting nodes in a graph, not by writing code. It hosts the\n[ComfyDL](https://github.com/Cynthia-lxx/ComfyDL) node pack as a built-in set of nodes\n(tensors, layers, optimizers, training loops, NLP pipelines, data utilities and\nvisualizations) on top of a trimmed ComfyUI runtime.\n\n> It is **not** the complete original ComfyUI: this repository is a dehydrated fork\n> (see [`docs/dehydrate_manifest.md`](docs/dehydrate_manifest.md)) that keeps the node-graph\n> engine, server and basic image IO, and drops the diffusion-generation stack. If you want the\n> original ComfyUI, get it from <https://github.com/comfyanonymous/ComfyUI>.\n\n## What it looks like\n\nA production-grade tabular regression workflow looks like:\n\n![Tabular regression workflow in ComfyDL_UI](readme_assets/tabular_regression_workflow.png)\n\nLanguage models tell the same story: \n\n![Language Model Train streaming its cross-entropy curve under the node](readme_assets/language_model_train_running.png)\n\n> More examples and the complete node reference live in the [`comfydl/`](comfydl/) submodule\n> README ([中文](comfydl/README_zh.md), [FUNCTIONS.md](comfydl/FUNCTIONS.md))."
+   }
+  },
+  {
+   "id": 2,
+   "type": "DocsFeatures",
+   "pos": [
+    680,
+    80
+   ],
+   "size": [
+    240,
+    40
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsFeatures"
+   },
+   "widgets_values": [
+    "## Features\n\n`ComfyDL_UI`'s headline capabilities each get their own section below — the visual editor, the\nbuilt-in node pack, live progress, full profiling, and the Crash Site save & resume net. The\neveryday basics:\n\n- Efficient local execution with asynchronous queueing and partial graph re-execution (only\n  the parts of the graph that changed are re-run).\n- Smart VRAM/RAM management with automatic CPU fallback when no GPU backend is available.\n- Runs fully offline, downloads nothing unless you ask it to.\n- Compatible with third-party custom nodes.\n- Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).\n\n### Visual node-graph editor\n\nBuild deep-learning workflows by connecting nodes instead of writing code: drag, wire, group,\nmute, bypass and collapse; re-run only the parts that changed; save and share the graph as\nplain JSON (a generated PNG reloads the workflow — seeds included — that produced it).\n\n### Most deep-learning operators, built in\n\nYou already know deep learning (don't you?) — here, most of it is a node away. Tensors and shape ops,\nlinear / conv / norm / attention layers, losses, optimizers with gradient clipping, LR\nschedulers, training loops with early stopping, dataset readers and writers (CSV / Excel /\nDB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and\nvisualization — 128 nodes across 21 categories, wired instead of written.\n\nThe catalog at a glance:\n\n![Network & Layers: all 75 nodes grouped by category](readme_assets/network_layers_catalog.svg)\n\nAn **interactive version** — click any node for its description and source — ships at [`catalog/network-and-layers.html`](catalog/network-and-layers.html). View it rendered via [htmlpreview](https://htmlpreview.github.io/?https://github.com/Cynthia-lxx/ComfyDL_UI/blob/master/catalog/network-and-layers.html) or open the file locally."
+   ],
+   "widgets_values_named": {
+    "text": "## Features\n\n`ComfyDL_UI`'s headline capabilities each get their own section below — the visual editor, the\nbuilt-in node pack, live progress, full profiling, and the Crash Site save & resume net. The\neveryday basics:\n\n- Efficient local execution with asynchronous queueing and partial graph re-execution (only\n  the parts of the graph that changed are re-run).\n- Smart VRAM/RAM management with automatic CPU fallback when no GPU backend is available.\n- Runs fully offline, downloads nothing unless you ask it to.\n- Compatible with third-party custom nodes.\n- Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).\n\n### Visual node-graph editor\n\nBuild deep-learning workflows by connecting nodes instead of writing code: drag, wire, group,\nmute, bypass and collapse; re-run only the parts that changed; save and share the graph as\nplain JSON (a generated PNG reloads the workflow — seeds included — that produced it).\n\n### Most deep-learning operators, built in\n\nYou already know deep learning (don't you?) — here, most of it is a node away. Tensors and shape ops,\nlinear / conv / norm / attention layers, losses, optimizers with gradient clipping, LR\nschedulers, training loops with early stopping, dataset readers and writers (CSV / Excel /\nDB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and\nvisualization — 128 nodes across 21 categories, wired instead of written.\n\nThe catalog at a glance:\n\n![Network & Layers: all 75 nodes grouped by category](readme_assets/network_layers_catalog.svg)\n\nAn **interactive version** — click any node for its description and source — ships at [`catalog/network-and-layers.html`](catalog/network-and-layers.html). View it rendered via [htmlpreview](https://htmlpreview.github.io/?https://github.com/Cynthia-lxx/ComfyDL_UI/blob/master/catalog/network-and-layers.html) or open the file locally."
+   }
+  },
+  {
+   "id": 3,
+   "type": "DocsProfiling",
+   "pos": [
+    680,
+    120
+   ],
+   "size": [
+    240,
+    40
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsProfiling"
+   },
+   "widgets_values": [
+    "### Live progress & previews\n\nEvery long-running node reports per-step progress over the built-in WebSocket channel —\ngenerated text appears under the language-model nodes as it is produced, and the top bar\ntracks each run's cost while it executes.\n\n### Profiling — memory, compute & operators\n\nComfyDL_UI profiles everything a graph costs, before and during the run. One panel holds the\nwhole story — the traffic-light memory verdict, the device budget, the compute estimate, the\nper-node breakdown, the measured history and the ATen operator graph:\n\n<p align=\"center\">\n  <img src=\"readme_assets/profiling_operator_panel.png\" alt=\"Expanded profiling panel: SAFE memory verdict, device budget, 18.90 TFLOPs compute estimate, per-node breakdown, measured history and CPU burst log\" width=\"720\" />\n</p>\n\n- **Memory** — peak estimation from parameters and data flow, graded green / amber / red\n  against the device budget; red is **certain OOM** and warns before queueing. The breakdown\n  goes down to tensor families — parameters, gradients, attention scores, FFN, logits — each\n  with its byte count and largest single tensor, right next to the node it analyzes:\n\n  <p align=\"center\">\n    <img src=\"readme_assets/profiling_memory_breakdown_table.png\" alt=\"Per-tensor-family memory breakdown table beside the Language Model Train node it analyzes\" width=\"620\" />\n  </p>\n\n  Pressing Run on a red graph warns with the numbers behind the verdict — and can be\n  overridden:\n\n  <p align=\"center\">\n    <img src=\"readme_assets/profiling_oom_warning.png\" alt=\"Memory warning dialog: estimated peak 2.94 TB vs 2.16 GB free, with Cancel and Confirm\" width=\"620\" />\n  </p>\n\n- **Compute load** — a FLOPs ledger per node family (attention / FFN / logits / conv …) and\n  per-node wall time, with a live top-bar indicator while the run executes.\n- **Operator breakdown** — each node is expanded into the ATen operators it actually executes\n  (`aten.mm`, `aten._softmax`, `aten.conv2d`, …); the op-level ledger cross-checks the formula\n  estimates, and mismatches are flagged, not hidden.\n- **Watchdog** — sampled CPU / RSS facts attributed to the executing node catch the nodes that\n  monopolize the machine mid-run.\n- **Honest about unknowns** — uncovered node types report `unknown`; failed probes fall back\n  to formula values with an explicit `fallback` grade. Panels, badges and dialogs follow the\n  UI language.\n\nDesign notes: [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md),\n[`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md),\n[`docs/profiling-m3-estimator-families.md`](docs/profiling-m3-estimator-families.md),\n[`docs/profiling-m3-opgraph.md`](docs/profiling-m3-opgraph.md).\n\n### Crash Site — save & resume\n\nA safety net for interrupted runs, with **zero overhead while everything works**:\n\n- **Lazy capture** — nothing is written while the workflow runs at full speed; the moment it\n  is interrupted or fails, surviving outputs are written to the snapshot library.\n- **One-click resume** — re-queues the stored prompt and skips every finished node; the\n  skip / re-run statistics appear on the new snapshot card when the run ends.\n- **Scene export** — pick exactly what to keep, per node, with a format per row\n  (safetensors / png / json / db / pt) plus the workflow prompt; files land in the output\n  folder and surface in Results assets.\n- **Breakpoint continuation** — the trainers (Regression Train, Training Loop, Language Model\n  Train) save their complete state at the interrupt moment; a resume continues from the\n  breakpoint step instead of starting a 10k-step training over.\n\nThe snapshot library in the sidebar — every run is filed with its captured nodes; interrupted\nscenes offer Scene export:\n\n<p align=\"center\">\n  <img src=\"readme_assets/crashsite_snapshot_library.png\" alt=\"Crash Site sidebar: snapshot library with captured nodes and Scene export entries\" width=\"440\" />\n</p>\n\nThe scene-export table — choose what to keep and in which format:\n\n<p align=\"center\">\n  <img src=\"readme_assets/crashsite_scene_export.png\" alt=\"Crash Site scene export: per-node checkboxes with format dropdowns and the workflow prompt row\" width=\"520\" />\n</p>\n\n### Live loss map\n\nEvery trainer draws its loss map live on a card right under the node — the raw step loss and\nthe smoothed curve side by side, refreshed as the run progresses — so convergence or\ndivergence is visible at a glance, without opening anything:\n\n<p align=\"center\">\n  <img src=\"readme_assets/loss_map_focus.png\" alt=\"Live loss map preview card under a training node, showing the raw and smoothed loss curves\" width=\"520\" />\n</p>"
+   ],
+   "widgets_values_named": {
+    "text": "### Live progress & previews\n\nEvery long-running node reports per-step progress over the built-in WebSocket channel —\ngenerated text appears under the language-model nodes as it is produced, and the top bar\ntracks each run's cost while it executes.\n\n### Profiling — memory, compute & operators\n\nComfyDL_UI profiles everything a graph costs, before and during the run. One panel holds the\nwhole story — the traffic-light memory verdict, the device budget, the compute estimate, the\nper-node breakdown, the measured history and the ATen operator graph:\n\n<p align=\"center\">\n  <img src=\"readme_assets/profiling_operator_panel.png\" alt=\"Expanded profiling panel: SAFE memory verdict, device budget, 18.90 TFLOPs compute estimate, per-node breakdown, measured history and CPU burst log\" width=\"720\" />\n</p>\n\n- **Memory** — peak estimation from parameters and data flow, graded green / amber / red\n  against the device budget; red is **certain OOM** and warns before queueing. The breakdown\n  goes down to tensor families — parameters, gradients, attention scores, FFN, logits — each\n  with its byte count and largest single tensor, right next to the node it analyzes:\n\n  <p align=\"center\">\n    <img src=\"readme_assets/profiling_memory_breakdown_table.png\" alt=\"Per-tensor-family memory breakdown table beside the Language Model Train node it analyzes\" width=\"620\" />\n  </p>\n\n  Pressing Run on a red graph warns with the numbers behind the verdict — and can be\n  overridden:\n\n  <p align=\"center\">\n    <img src=\"readme_assets/profiling_oom_warning.png\" alt=\"Memory warning dialog: estimated peak 2.94 TB vs 2.16 GB free, with Cancel and Confirm\" width=\"620\" />\n  </p>\n\n- **Compute load** — a FLOPs ledger per node family (attention / FFN / logits / conv …) and\n  per-node wall time, with a live top-bar indicator while the run executes.\n- **Operator breakdown** — each node is expanded into the ATen operators it actually executes\n  (`aten.mm`, `aten._softmax`, `aten.conv2d`, …); the op-level ledger cross-checks the formula\n  estimates, and mismatches are flagged, not hidden.\n- **Watchdog** — sampled CPU / RSS facts attributed to the executing node catch the nodes that\n  monopolize the machine mid-run.\n- **Honest about unknowns** — uncovered node types report `unknown`; failed probes fall back\n  to formula values with an explicit `fallback` grade. Panels, badges and dialogs follow the\n  UI language.\n\nDesign notes: [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md),\n[`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md),\n[`docs/profiling-m3-estimator-families.md`](docs/profiling-m3-estimator-families.md),\n[`docs/profiling-m3-opgraph.md`](docs/profiling-m3-opgraph.md).\n\n### Crash Site — save & resume\n\nA safety net for interrupted runs, with **zero overhead while everything works**:\n\n- **Lazy capture** — nothing is written while the workflow runs at full speed; the moment it\n  is interrupted or fails, surviving outputs are written to the snapshot library.\n- **One-click resume** — re-queues the stored prompt and skips every finished node; the\n  skip / re-run statistics appear on the new snapshot card when the run ends.\n- **Scene export** — pick exactly what to keep, per node, with a format per row\n  (safetensors / png / json / db / pt) plus the workflow prompt; files land in the output\n  folder and surface in Results assets.\n- **Breakpoint continuation** — the trainers (Regression Train, Training Loop, Language Model\n  Train) save their complete state at the interrupt moment; a resume continues from the\n  breakpoint step instead of starting a 10k-step training over.\n\nThe snapshot library in the sidebar — every run is filed with its captured nodes; interrupted\nscenes offer Scene export:\n\n<p align=\"center\">\n  <img src=\"readme_assets/crashsite_snapshot_library.png\" alt=\"Crash Site sidebar: snapshot library with captured nodes and Scene export entries\" width=\"440\" />\n</p>\n\nThe scene-export table — choose what to keep and in which format:\n\n<p align=\"center\">\n  <img src=\"readme_assets/crashsite_scene_export.png\" alt=\"Crash Site scene export: per-node checkboxes with format dropdowns and the workflow prompt row\" width=\"520\" />\n</p>\n\n### Live loss map\n\nEvery trainer draws its loss map live on a card right under the node — the raw step loss and\nthe smoothed curve side by side, refreshed as the run progresses — so convergence or\ndivergence is visible at a glance, without opening anything:\n\n<p align=\"center\">\n  <img src=\"readme_assets/loss_map_focus.png\" alt=\"Live loss map preview card under a training node, showing the raw and smoothed loss curves\" width=\"520\" />\n</p>"
+   }
+  },
+  {
+   "id": 4,
+   "type": "DocsInstallRun",
+   "pos": [
+    680,
+    160
+   ],
+   "size": [
+    240,
+    40
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsInstallRun"
+   },
+   "widgets_values": [
+    "## Installation\n\nRequires Python 3.12+ (3.13 recommended). Any OS with a supported PyTorch build works.\n\nFirst create a virtual environment to keep the dependencies isolated — this avoids conflicts\nwith packages installed elsewhere on your machine:\n\n```bash\ngit clone https://github.com/Cynthia-lxx/ComfyDL_UI\ncd ComfyDL_UI\npython -m venv .venv\n\n.venv\\Scripts\\activate     # Windows\nsource .venv/bin/activate  # Linux / macOS\n```\n\nThen install the dependencies and launch:\n\n```bash\npip install -r requirements.txt\npython main.py\n```\n\nOpen the address it prints. The ComfyDL nodes are already registered as built-ins — nothing\ngoes into `custom_nodes`.\n\n### GPU acceleration\n\nA CPU-only machine works out of the box. For GPU acceleration, install the PyTorch build that\nmatches your hardware into the same environment:\n\n- **NVIDIA**: `pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130`\n- **AMD (Linux, ROCm)**: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2`\n- **Intel Arc**: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/xpu`\n- **Apple Silicon**: follow the [Accelerated PyTorch training on Mac](https://developer.apple.com/metal/pytorch/) guide.\n\nIf you get \"Torch not compiled with CUDA enabled\", `pip uninstall torch` and reinstall with the\nmatching command above.\n\n## Running\n\n```bash\npython main.py\n```\n\nUseful flags (see `python main.py --help` for all of them):\n\n- `--cpu` — force CPU execution.\n- `--port 8188` — change the listening port.\n- `--tls-keyfile key.pem --tls-certfile cert.pem` — serve over HTTPS instead of HTTP.\n\nOn AMD cards not officially covered by ROCm, try `HSA_OVERRIDE_GFX_VERSION=10.3.0 python main.py`\n(RDNA2 and older) or `HSA_OVERRIDE_GFX_VERSION=11.0.0` (RDNA3).\n\n### Notes\n\n- Only parts of the graph whose outputs have all their inputs are executed, and re-submitting\n  an unchanged graph re-runs only the parts that changed.\n- Dragging a generated PNG onto the page loads the workflow (including seeds) that produced it."
+   ],
+   "widgets_values_named": {
+    "text": "## Installation\n\nRequires Python 3.12+ (3.13 recommended). Any OS with a supported PyTorch build works.\n\nFirst create a virtual environment to keep the dependencies isolated — this avoids conflicts\nwith packages installed elsewhere on your machine:\n\n```bash\ngit clone https://github.com/Cynthia-lxx/ComfyDL_UI\ncd ComfyDL_UI\npython -m venv .venv\n\n.venv\\Scripts\\activate     # Windows\nsource .venv/bin/activate  # Linux / macOS\n```\n\nThen install the dependencies and launch:\n\n```bash\npip install -r requirements.txt\npython main.py\n```\n\nOpen the address it prints. The ComfyDL nodes are already registered as built-ins — nothing\ngoes into `custom_nodes`.\n\n### GPU acceleration\n\nA CPU-only machine works out of the box. For GPU acceleration, install the PyTorch build that\nmatches your hardware into the same environment:\n\n- **NVIDIA**: `pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130`\n- **AMD (Linux, ROCm)**: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2`\n- **Intel Arc**: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/xpu`\n- **Apple Silicon**: follow the [Accelerated PyTorch training on Mac](https://developer.apple.com/metal/pytorch/) guide.\n\nIf you get \"Torch not compiled with CUDA enabled\", `pip uninstall torch` and reinstall with the\nmatching command above.\n\n## Running\n\n```bash\npython main.py\n```\n\nUseful flags (see `python main.py --help` for all of them):\n\n- `--cpu` — force CPU execution.\n- `--port 8188` — change the listening port.\n- `--tls-keyfile key.pem --tls-certfile cert.pem` — serve over HTTPS instead of HTTP.\n\nOn AMD cards not officially covered by ROCm, try `HSA_OVERRIDE_GFX_VERSION=10.3.0 python main.py`\n(RDNA2 and older) or `HSA_OVERRIDE_GFX_VERSION=11.0.0` (RDNA3).\n\n### Notes\n\n- Only parts of the graph whose outputs have all their inputs are executed, and re-submitting\n  an unchanged graph re-runs only the parts that changed.\n- Dragging a generated PNG onto the page loads the workflow (including seeds) that produced it."
+   }
+  },
+  {
+   "id": 5,
+   "type": "DocsShortcuts",
+   "pos": [
+    680,
+    200
+   ],
+   "size": [
+    240,
+    40
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsShortcuts"
+   },
+   "widgets_values": [
+    "## Keyboard shortcuts\n\n| Keybind                            | Explanation                                                                                                        |\n|------------------------------------|--------------------------------------------------------------------------------------------------------------------|\n| `Ctrl` + `Enter`                      | Queue up current graph for generation                                                                              |\n| `Ctrl` + `Shift` + `Enter`              | Queue up current graph as first for generation                                                                     |\n| `Ctrl` + `Alt` + `Enter`                | Cancel current generation                                                                                          |\n| `Ctrl` + `Z`/`Ctrl` + `Y`                 | Undo/Redo                                                                                                          |\n| `Ctrl` + `S`                          | Save workflow                                                                                                      |\n| `Ctrl` + `O`                          | Load workflow                                                                                                      |\n| `Ctrl` + `A`                          | Select all nodes                                                                                                   |\n| `Alt `+ `C`                           | Collapse/uncollapse selected nodes                                                                                 |\n| `Ctrl` + `M`                          | Mute/unmute selected nodes                                                                                         |\n| `Ctrl` + `B`                           | Bypass selected nodes (acts like the node was removed from the graph and the wires reconnected through)            |\n| `Delete`/`Backspace`                   | Delete selected nodes                                                                                              |\n| `Ctrl` + `Backspace`                   | Delete the current graph                                                                                           |\n| `Space`                              | Move the canvas around when held and moving the cursor                                                             |\n| `Ctrl`/`Shift` + `Click`                 | Add clicked node to selection                                                                                      |\n| `Ctrl` + `C`/`Ctrl` + `V`                  | Copy and paste selected nodes (without maintaining connections to outputs of unselected nodes)                     |\n| `Ctrl` + `C`/`Ctrl` + `Shift` + `V`          | Copy and paste selected nodes (maintaining connections from outputs of selected nodes to inputs of pasted nodes)   |\n| `Shift` + `Drag`                       | Move multiple selected nodes at the same time                                                                      |\n| `Ctrl` + `D`                           | Load default graph                                                                                                 |\n| `Alt` + `+`                          | Canvas Zoom in                                                                                                     |\n| `Alt` + `-`                          | Canvas Zoom out                                                                                                    |\n| `Ctrl` + `Shift` + LMB + Vertical drag | Canvas Zoom in/out                                                                                                 |\n| `P`                                  | Pin/Unpin selected nodes                                                                                           |\n| `Ctrl` + `G`                           | Group selected nodes                                                                                               |\n| `Q`                                 | Toggle visibility of the queue                                                                                     |\n| `H`                                  | Toggle visibility of history                                                                                       |\n| `R`                                  | Refresh graph                                                                                                      |\n| `F`                                  | Show/Hide menu                                                                                                      |\n| `.`                                  | Fit view to selection (Whole graph when nothing is selected)                                                        |\n| Double-Click LMB                   | Open node quick search palette                                                                                     |\n| `Shift` + Drag                       | Move multiple wires at once                                                                                        |\n| `Ctrl` + `Alt` + LMB                   | Disconnect all wires from clicked slot                                                                             |\n\n`Ctrl` can also be replaced with `Cmd` instead for macOS users."
+   ],
+   "widgets_values_named": {
+    "text": "## Keyboard shortcuts\n\n| Keybind                            | Explanation                                                                                                        |\n|------------------------------------|--------------------------------------------------------------------------------------------------------------------|\n| `Ctrl` + `Enter`                      | Queue up current graph for generation                                                                              |\n| `Ctrl` + `Shift` + `Enter`              | Queue up current graph as first for generation                                                                     |\n| `Ctrl` + `Alt` + `Enter`                | Cancel current generation                                                                                          |\n| `Ctrl` + `Z`/`Ctrl` + `Y`                 | Undo/Redo                                                                                                          |\n| `Ctrl` + `S`                          | Save workflow                                                                                                      |\n| `Ctrl` + `O`                          | Load workflow                                                                                                      |\n| `Ctrl` + `A`                          | Select all nodes                                                                                                   |\n| `Alt `+ `C`                           | Collapse/uncollapse selected nodes                                                                                 |\n| `Ctrl` + `M`                          | Mute/unmute selected nodes                                                                                         |\n| `Ctrl` + `B`                           | Bypass selected nodes (acts like the node was removed from the graph and the wires reconnected through)            |\n| `Delete`/`Backspace`                   | Delete selected nodes                                                                                              |\n| `Ctrl` + `Backspace`                   | Delete the current graph                                                                                           |\n| `Space`                              | Move the canvas around when held and moving the cursor                                                             |\n| `Ctrl`/`Shift` + `Click`                 | Add clicked node to selection                                                                                      |\n| `Ctrl` + `C`/`Ctrl` + `V`                  | Copy and paste selected nodes (without maintaining connections to outputs of unselected nodes)                     |\n| `Ctrl` + `C`/`Ctrl` + `Shift` + `V`          | Copy and paste selected nodes (maintaining connections from outputs of selected nodes to inputs of pasted nodes)   |\n| `Shift` + `Drag`                       | Move multiple selected nodes at the same time                                                                      |\n| `Ctrl` + `D`                           | Load default graph                                                                                                 |\n| `Alt` + `+`                          | Canvas Zoom in                                                                                                     |\n| `Alt` + `-`                          | Canvas Zoom out                                                                                                    |\n| `Ctrl` + `Shift` + LMB + Vertical drag | Canvas Zoom in/out                                                                                                 |\n| `P`                                  | Pin/Unpin selected nodes                                                                                           |\n| `Ctrl` + `G`                           | Group selected nodes                                                                                               |\n| `Q`                                 | Toggle visibility of the queue                                                                                     |\n| `H`                                  | Toggle visibility of history                                                                                       |\n| `R`                                  | Refresh graph                                                                                                      |\n| `F`                                  | Show/Hide menu                                                                                                      |\n| `.`                                  | Fit view to selection (Whole graph when nothing is selected)                                                        |\n| Double-Click LMB                   | Open node quick search palette                                                                                     |\n| `Shift` + Drag                       | Move multiple wires at once                                                                                        |\n| `Ctrl` + `Alt` + LMB                   | Disconnect all wires from clicked slot                                                                             |\n\n`Ctrl` can also be replaced with `Cmd` instead for macOS users."
+   }
+  },
+  {
+   "id": 6,
+   "type": "DocsCredits",
+   "pos": [
+    680,
+    240
+   ],
+   "size": [
+    240,
+    40
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsCredits"
+   },
+   "widgets_values": [
+    "## Documentation\n\n- [`comfydl/`](comfydl/) — the node pack: `README.md` / `README_zh.md` and the complete node\n  references `FUNCTIONS.md` / `FUNCTIONS_zh.md`.\n- [`docs/`](docs/) — fork-specific notes: dehydration manifest, branding, built-in node pack,\n  memory profiling, and the step-by-step reform design documents.\n- [`AGENTS.md`](AGENTS.md) — how this repository is worked on.\n- [中文说明](README_zh.md)\n\n## Version and credits\n\n- **Version** — `v0.3.1`, dehydrated from ComfyUI `v0.34.0`.\n- **Maintainer** — [Cynthia-lxx](https://github.com/Cynthia-lxx).\n- **License** — GPL-3.0, for this repository and the `comfydl/` submodule\n  ([`LICENSE`](LICENSE), [`comfydl/LICENSE`](comfydl/LICENSE)).\n\nThis project is derived from [ComfyUI](https://github.com/comfyanonymous/ComfyUI) by\ncomfyanonymous and contributors. Upstream ComfyUI keeps its own copyright and maintainers; both\nnotices are listed at the end of [`LICENSE`](LICENSE). The upstream project's website, docs and\ncommunity live at <https://www.comfy.org/> and are maintained separately from ComfyDL_UI.\n\n<p align=\"center\">\n  <img src=\"readme_assets/dev_2333.png\" alt=\"\" />\n</p>"
+   ],
+   "widgets_values_named": {
+    "text": "## Documentation\n\n- [`comfydl/`](comfydl/) — the node pack: `README.md` / `README_zh.md` and the complete node\n  references `FUNCTIONS.md` / `FUNCTIONS_zh.md`.\n- [`docs/`](docs/) — fork-specific notes: dehydration manifest, branding, built-in node pack,\n  memory profiling, and the step-by-step reform design documents.\n- [`AGENTS.md`](AGENTS.md) — how this repository is worked on.\n- [中文说明](README_zh.md)\n\n## Version and credits\n\n- **Version** — `v0.3.1`, dehydrated from ComfyUI `v0.34.0`.\n- **Maintainer** — [Cynthia-lxx](https://github.com/Cynthia-lxx).\n- **License** — GPL-3.0, for this repository and the `comfydl/` submodule\n  ([`LICENSE`](LICENSE), [`comfydl/LICENSE`](comfydl/LICENSE)).\n\nThis project is derived from [ComfyUI](https://github.com/comfyanonymous/ComfyUI) by\ncomfyanonymous and contributors. Upstream ComfyUI keeps its own copyright and maintainers; both\nnotices are listed at the end of [`LICENSE`](LICENSE). The upstream project's website, docs and\ncommunity live at <https://www.comfy.org/> and are maintained separately from ComfyDL_UI.\n\n<p align=\"center\">\n  <img src=\"readme_assets/dev_2333.png\" alt=\"\" />\n</p>"
+   }
+  },
+  {
+   "id": 7,
+   "type": "DocsQuickstart",
+   "pos": [
+    920,
+    40
+   ],
+   "size": [
+    560,
+    120
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsQuickstart"
+   },
+   "widgets_values": [
+    "# This page\n\nYou are looking at the real ComfyDL_UI interface, running as a static homepage. Read the README on the left, then try the wiring playground below: drag a link off any coloured slot and drop it on a matching type. Nothing executes here."
+   ],
+   "widgets_values_named": {
+    "text": "# This page\n\nYou are looking at the real ComfyDL_UI interface, running as a static homepage. Read the README on the left, then try the wiring playground below: drag a link off any coloured slot and drop it on a matching type. Nothing executes here."
+   }
+  },
+  {
+   "id": 8,
+   "type": "DocsContact",
+   "pos": [
+    -200,
+    640
+   ],
+   "size": [
+    360,
+    290
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsContact"
+   },
+   "widgets_values": [
+    "## Contact\n\n- GitHub: [Cynthia-lxx/ComfyDL_UI](https://github.com/Cynthia-lxx/ComfyDL_UI)\n- Maintainer: [Cynthia-lxx](https://github.com/Cynthia-lxx)\n- Issues: https://github.com/Cynthia-lxx/ComfyDL_UI/issues\n- QQ: 3924522420  \n- Bilibili: [CynthiaLx_](https://space.bilibili.com/3493290083093446)\n\nLicense: [GPL-3.0](https://github.com/Cynthia-lxx/ComfyDL_UI?tab=GPL-3.0-1-ov-file). \n\nDerived from [ComfyUI](https://github.com/Comfy-Org/ComfyUI) \nby [comfyanonymous aka Comfy-Org](https://github.com/Comfy-Org)  \nand [360+ contributors](https://github.com/Comfy-Org/ComfyUI/graphs/contributors)."
+   ],
+   "widgets_values_named": {
+    "text": "## Contact\n\n- GitHub: [Cynthia-lxx/ComfyDL_UI](https://github.com/Cynthia-lxx/ComfyDL_UI)\n- Maintainer: [Cynthia-lxx](https://github.com/Cynthia-lxx)\n- Issues: https://github.com/Cynthia-lxx/ComfyDL_UI/issues\n- QQ: 3924522420  \n- Bilibili: [CynthiaLx_](https://space.bilibili.com/3493290083093446)\n\nLicense: [GPL-3.0](https://github.com/Cynthia-lxx/ComfyDL_UI?tab=GPL-3.0-1-ov-file). \n\nDerived from [ComfyUI](https://github.com/Comfy-Org/ComfyUI) \nby [comfyanonymous aka Comfy-Org](https://github.com/Comfy-Org)  \nand [360+ contributors](https://github.com/Comfy-Org/ComfyUI/graphs/contributors)."
+   }
+  },
+  {
+   "id": 9,
+   "type": "Note",
+   "pos": [
+    920,
+    200
+   ],
+   "size": [
+    560,
+    120
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "Open the \"Docs\" sidebar tab for the interactive node catalog, or drag a \"Web · Catalog\" node here to embed it on the canvas."
+   ],
+   "widgets_values_named": {
+    "text": "Open the \"Docs\" sidebar tab for the interactive node catalog, or drag a \"Web · Catalog\" node here to embed it on the canvas."
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 10,
+   "type": "DemoMakeDataset",
+   "pos": [
+    680,
+    440
+   ],
+   "size": [
+    225,
+    114
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "n_samples",
+     "name": "n_samples",
+     "type": "INT",
+     "widget": {
+      "name": "n_samples"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "noise",
+     "name": "noise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "noise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "dataset",
+     "name": "dataset",
+     "type": "DATASET",
+     "links": [
+      1,
+      3,
+      5
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "DemoMakeDataset"
+   },
+   "widgets_values": [
+    256,
+    0.1
+   ],
+   "widgets_values_named": {
+    "n_samples": 256,
+    "noise": 0.1
+   }
+  },
+  {
+   "id": 11,
+   "type": "DemoLinReg",
+   "pos": [
+    1000,
+    440
+   ],
+   "size": [
+    225,
+    134
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "dataset",
+     "name": "dataset",
+     "type": "DATASET",
+     "link": 1
+    },
+    {
+     "localized_name": "epochs",
+     "name": "epochs",
+     "type": "INT",
+     "widget": {
+      "name": "epochs"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "lr",
+     "name": "lr",
+     "type": "FLOAT",
+     "widget": {
+      "name": "lr"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "nn_model",
+     "links": [
+      2
+     ]
+    },
+    {
+     "localized_name": "loss_history",
+     "name": "loss_history",
+     "type": "TENSOR",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "DemoLinReg"
+   },
+   "widgets_values": [
+    200,
+    0.05
+   ],
+   "widgets_values_named": {
+    "epochs": 200,
+    "lr": 0.05
+   }
+  },
+  {
+   "id": 12,
+   "type": "DemoTrainingLoop",
+   "pos": [
+    1280,
+    440
+   ],
+   "size": [
+    225,
+    106
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "nn_model",
+     "link": 2
+    },
+    {
+     "localized_name": "dataset",
+     "name": "dataset",
+     "type": "DATASET",
+     "link": 3
+    },
+    {
+     "localized_name": "epochs",
+     "name": "epochs",
+     "type": "INT",
+     "widget": {
+      "name": "epochs"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "nn_model",
+     "links": [
+      4
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "DemoTrainingLoop"
+   },
+   "widgets_values": [
+    100
+   ],
+   "widgets_values_named": {
+    "epochs": 100
+   }
+  },
+  {
+   "id": 13,
+   "type": "DemoEvaluate",
+   "pos": [
+    1280,
+    680
+   ],
+   "size": [
+    240,
+    130
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "nn_model",
+     "link": 4
+    },
+    {
+     "localized_name": "dataset",
+     "name": "dataset",
+     "type": "DATASET",
+     "link": 5
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "metrics",
+     "name": "metrics",
+     "type": "TENSOR",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "DemoEvaluate"
+   }
+  },
+  {
+   "id": 14,
+   "type": "DocsWelcome",
+   "pos": [
+    -200,
+    0
+   ],
+   "size": [
+    800,
+    578.765625
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "text",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "DocsWelcome"
+   },
+   "widgets_values": [
+    "# ComfyDL_UI Index Page  \nDeep Learning is just a few clicks away!  \n**Hardcore-overhauled by AI art software, this is a modular Deep Learning Toolbox GUI, API\nand backend with a graph/nodes interface.**\n---\n\n![Cover](readme_assets/cover_v2_HD.png)"
+   ],
+   "widgets_values_named": {
+    "text": "# ComfyDL_UI Index Page  \nDeep Learning is just a few clicks away!  \n**Hardcore-overhauled by AI art software, this is a modular Deep Learning Toolbox GUI, API\nand backend with a graph/nodes interface.**\n---\n\n![Cover](readme_assets/cover_v2_HD.png)"
+   }
+  },
+  {
+   "id": 15,
+   "type": "MarkdownNote",
+   "pos": [
+    200,
+    640
+   ],
+   "size": [
+    400,
+    451.140625
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "![QQ Group](readme_assets/QQgroup.png)"
+   ],
+   "widgets_values_named": {
+    "text": "![QQ Group](readme_assets/QQgroup.png)"
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   10,
+   0,
+   11,
+   0,
+   "DATASET"
+  ],
+  [
+   2,
+   11,
+   0,
+   12,
+   0,
+   "nn_model"
+  ],
+  [
+   3,
+   10,
+   0,
+   12,
+   1,
+   "DATASET"
+  ],
+  [
+   4,
+   12,
+   0,
+   13,
+   0,
+   "nn_model"
+  ],
+  [
+   5,
+   10,
+   0,
+   13,
+   1,
+   "DATASET"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 2,
+   "title": "This page",
+   "bounding": [
+    920,
+    -40,
+    600,
+    400
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "Try it — drag a link!",
+   "bounding": [
+    640,
+    360,
+    880,
+    560
+   ],
+   "color": "#1ABC9C",
+   "flags": {}
+  },
+  {
+   "id": 4,
+   "title": "Docs",
+   "bounding": [
+    640,
+    -40,
+    280,
+    280
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.7536611784507214,
+   "offset": [
+    560.8536492372374,
+    165.3104372161612
+   ]
+  }
+ },
+ "version": 0.4
+}

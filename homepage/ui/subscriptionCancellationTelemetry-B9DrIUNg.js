@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";function getSubscriptionCancellationMetadata({cancelAt:e,duration:t,endDate:n,tier:r}){let i=e??n;return{source:`cancel_plan_menu`,current_tier:r?.toLowerCase(),...t?{cycle:t===`ANNUAL`?`yearly`:`monthly`}:{},...i?{end_date:i}:{}}}export{getSubscriptionCancellationMetadata as t};

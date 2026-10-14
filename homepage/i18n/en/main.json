@@ -1,0 +1,16 @@
+{
+  "_meta": "ComfyFront_sep extension strings. Consumed by extensions/comfydl_home/home.js (key namespace 'home.*'). Edit this table to reword the UI; add i18n/zh/ later for Chinese. The frontend's own UI strings are bundled inside the compiled chunks and are NOT served from here.",
+  "localeName": "English",
+  "home": {
+    "sidebarTitle": "Docs",
+    "sidebarTooltip": "Interactive node catalog and documentation",
+    "sidebarHeading": "ComfyDL_UI documentation",
+    "sidebarHint": "Open a page in a full-screen overlay, or drag the matching node from the Node Library onto the canvas.",
+    "openCatalog": "Network & Layers catalog",
+    "openCatalogHint": "75 nodes - features, I/O and source overview",
+    "close": "Close",
+    "openInNewTab": "Open in new tab",
+    "catalogTabLabel": "Network & Layers",
+    "iframeLoading": "Loading page..."
+  }
+}

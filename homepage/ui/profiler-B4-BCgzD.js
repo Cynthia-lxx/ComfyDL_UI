@@ -1,0 +1,1 @@
+import{n as e,r as t}from"./vendor-datadog-CS-2l-KQ.js";export{e as DEFAULT_RUM_PROFILER_CONFIGURATION,t as createRumProfiler};
