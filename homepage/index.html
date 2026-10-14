@@ -14,7 +14,7 @@ html:not(.cdl-no-anim):not(.cdl-canvas-in) #graph-canvas-container{background:#0
 #splash-loader{background:radial-gradient(1100px 520px at 50% 34%,#141720 0%,#0f1013 58%,#0b0c0f 100%)}
 .cdl-splash{display:flex;flex-direction:column;align-items:center;gap:26px;width:min(560px,86vw)}
 .cdl-brand{display:flex;align-items:center;gap:16px}
-.cdl-logo{width:56px;height:56px;filter:drop-shadow(0 6px 18px rgba(26,188,156,.35))}
+.cdl-logo{width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(26,188,156,.35))}
 .cdl-brand h1{margin:0;font-size:30px;font-weight:750;letter-spacing:.4px;line-height:1.1}
 .cdl-tag{margin:4px 0 0;font-size:13.5px;color:#9a9aa5}
 .cdl-progress{width:100%;display:flex;flex-direction:column;gap:8px}
@@ -62,7 +62,7 @@ html:not(.cdl-no-anim):not(.cdl-canvas-in) #graph-canvas-container{background:#0
 .side-tool-bar-container button:hover,.comfyui-body-top button:hover{filter:none;transform:none}
 .side-tool-bar-container button:active,.comfyui-body-top button:active,.comfyui-body-bottom button:active{transform:none}
 [data-node-id]:hover{filter:none;box-shadow:none}}
-</style></head><body class="litegraph grid"><div id="splash-loader" role="status" aria-label="Loading ComfyDL_UI"><div class="cdl-splash"><div class="cdl-brand"><svg class="cdl-logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="cdlG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1ABC9C"/><stop offset="1" stop-color="#FF8C42"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="14" fill="url(#cdlG)"/><g stroke="#0f1013" stroke-width="3.4" fill="none" stroke-linecap="round"><circle cx="21" cy="22" r="5.2" fill="#0f1013" stroke="none"/><circle cx="43" cy="22" r="5.2" fill="#0f1013" stroke="none"/><circle cx="32" cy="44" r="5.2" fill="#0f1013" stroke="none"/><path d="M21 27v6a8 8 0 0 0 8 8h-1"/><path d="M43 27v6a8 8 0 0 1-8 8h1"/></g></svg><div><h1>ComfyDL_UI</h1><p class="cdl-tag">Deep Learning is just a few clicks away!</p></div></div><div class="cdl-progress"><div class="cdl-track"><div class="cdl-fill" id="cdlFill"></div><div class="cdl-stripes"></div></div><div class="cdl-meta"><span id="cdlPhase">Cold start</span><span class="cdl-pct" id="cdlPct">0%</span></div></div><div class="cdl-log" id="cdlLog" aria-live="polite"></div><div class="cdl-foot">static demo &middot; no backend attached &middot; nothing executes</div></div></div><script>;(function () {
+</style></head><body class="litegraph grid"><div id="splash-loader" role="status" aria-label="Loading ComfyDL_UI"><div class="cdl-splash"><div class="cdl-brand"><img class="cdl-logo" src="./readme_assets/LoadFX1.gif" alt="Loading animation"><div><h1>ComfyDL_UI</h1><p class="cdl-tag">Deep Learning is just a few clicks away!</p></div></div><div class="cdl-progress"><div class="cdl-track"><div class="cdl-fill" id="cdlFill"></div><div class="cdl-stripes"></div></div><div class="cdl-meta"><span id="cdlPhase">Cold start</span><span class="cdl-pct" id="cdlPct">0%</span></div></div><div class="cdl-log" id="cdlLog" aria-live="polite"></div><div class="cdl-foot">static demo &middot; no backend attached &middot; nothing executes</div></div></div><script>;(function () {
         var bg = '#0f1013', fg = '#e6e6ec';
         document.documentElement.style.setProperty('--bg-color', bg);
         document.documentElement.style.setProperty('--fg-color', fg);

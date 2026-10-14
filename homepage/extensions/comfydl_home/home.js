@@ -297,41 +297,38 @@ function attachIframeWidget(node, nodeData) {
 }
 
 // ------------------------------------------------- click feedback: ripple
-// Material-style ripple on chrome buttons (topbar / bottom bar / icon rail),
-// tinted by the button's own text color (currentColor) so it adapts to any
-// palette. Clipped inside the button via overflow:hidden.
+// Global surface ripple: every left pointerdown spawns a soft ring at the
+// click point in a dedicated overlay layer (pointer-events:none) — works on
+// the canvas, dialogs, menus, panels and buttons alike. Nothing is injected
+// into Vue-managed elements, so no re-render interference.
 const RIPPLE_CSS = `
-.comfyui-body-top button,.comfyui-body-bottom button,.side-tool-bar-container button{position:relative;overflow:hidden}
+#cdl-ripple-layer{position:fixed;inset:0;pointer-events:none;z-index:999998;overflow:hidden}
 .cdl-ripple{position:absolute;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(205,228,255,.95) 0%,rgba(170,205,250,0) 68%);will-change:transform,opacity}
-@media (prefers-reduced-motion:reduce){.cdl-ripple{display:none}}
+@media (prefers-reduced-motion:reduce){#cdl-ripple-layer{display:none}}
 `;
 function installRipple() {
   try {
     const style = document.createElement('style');
     style.textContent = RIPPLE_CSS;
     document.head.appendChild(style);
+    const layer = document.createElement('div');
+    layer.id = 'cdl-ripple-layer';
+    document.body.appendChild(layer);
   } catch (err) { return; }
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    const btn = e.target && e.target.closest && e.target.closest(
-      '.comfyui-body-top button, .comfyui-body-bottom button, .side-tool-bar-container button');
-    if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    if (rect.width < 2 || rect.height < 2) return;
-    const size = Math.max(rect.width, rect.height) * 2.2;
+    const layer = document.getElementById('cdl-ripple-layer');
+    if (!layer) return;
+    const size = 110;
     const r = document.createElement('span');
     r.className = 'cdl-ripple';
     r.style.width = r.style.height = size + 'px';
-    r.style.left = (e.clientX - rect.left - size / 2) + 'px';
-    r.style.top = (e.clientY - rect.top - size / 2) + 'px';
-    btn.appendChild(r);
-    if (!installRipple._logged) {
-      installRipple._logged = true;
-      console.log('[ComfyDL.Home] first ripple spawned on:', btn.className);
-    }
+    r.style.left = (e.clientX - size / 2) + 'px';
+    r.style.top = (e.clientY - size / 2) + 'px';
+    layer.appendChild(r);
     const anim = r.animate(
-      [{ transform: 'scale(0)', opacity: .55 }, { transform: 'scale(1)', opacity: 0 }],
-      { duration: 520, easing: 'cubic-bezier(.2,.6,.3,1)' });
+      [{ transform: 'scale(.25)', opacity: .5 }, { transform: 'scale(1)', opacity: 0 }],
+      { duration: 480, easing: 'cubic-bezier(.2,.6,.3,1)' });
     anim.onfinish = () => r.remove();
     anim.oncancel = () => r.remove();
   }, { passive: true });
@@ -421,8 +418,10 @@ function installTrail() {
 
 function installClickFeedback() {
   installRipple();
-  installTrail();
-  console.log('[ComfyDL.Home] click feedback installed (ripple + comet trail)');
+  // Comet cursor trail disabled by user preference — restore the call below
+  // to bring it back (the implementation is kept intact).
+  // installTrail();
+  console.log('[ComfyDL.Home] click feedback installed (ripple; trail disabled)');
 }
 
 // ---------------------------------------------------------------- register
