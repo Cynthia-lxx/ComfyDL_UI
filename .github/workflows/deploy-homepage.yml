@@ -1,0 +1,53 @@
+# Deploys the static homepage (./homepage) to GitHub Pages.
+#
+# "Deploy from a branch" cannot serve a subfolder, so this uses the modern
+# actions flow instead: upload ./homepage as a Pages artifact, then deploy it.
+# One-time setup in the repo UI (no other knobs exist):
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+#
+# Notes:
+#  - Pages served via Actions never runs Jekyll, so no .nojekyll is needed.
+#  - All asset references in ./homepage are relative (./ui/..., ./mock_client.js),
+#    so the site works at the /ComfyDL_UI/ subpath it gets on github.io.
+#  - Re-deploys only when the site itself (or this workflow) changes.
+
+name: Deploy homepage to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'homepage/**'
+      - '.github/workflows/deploy-homepage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: homepage
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
