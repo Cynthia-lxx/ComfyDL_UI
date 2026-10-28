@@ -127,6 +127,8 @@ check(
         "linear_regression_from_scratch",
         "tabular_regression_production",
         "regression_model_reuse",
+        "classification_from_scratch",
+        "tabular_classification_production",
     },
     str(sorted(comfydl_names)),
 )

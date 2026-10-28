@@ -178,6 +178,40 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-10-05",
             "openSource": True,
         },
+        {
+            "name": "classification_from_scratch",
+            "title": "Classification: From Scratch",
+            "description": (
+                "The softmax-regression textbook recipe in one graph: "
+                "zero-initialised W / b, a hand-written softmax cross-entropy "
+                "and full-batch GD — watch the loss collapse from ln(k). "
+                "Predictions flow into a confusion matrix, rendered with "
+                "per-cell counts. Switch the generator to moons/circles to "
+                "see a linear model plateau."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "jpg",
+            "tags": ["classification", "training", "from scratch", "confusion matrix"],
+            "date": "2026-10-28",
+            "openSource": True,
+        },
+        {
+            "name": "tabular_classification_production",
+            "title": "Tabular Classification: Production",
+            "description": (
+                "A production classification pipeline on data generated "
+                "in-graph: dataset preview, one-box Classification Train "
+                "(stratified split, standardisation, Adam, early stopping, "
+                "live loss preview) and the predictions evaluated into a "
+                "rendered confusion matrix. Swap the generator for a CSV / "
+                "XLSX / DB reader to run your own data."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "jpg",
+            "tags": ["classification", "dataset", "production", "confusion matrix"],
+            "date": "2026-10-28",
+            "openSource": True,
+        },
     ],
 }
 
@@ -208,6 +242,16 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "对已保存的回归模型做推理：仅凭 .pt 文件重建架构（无需训练器与骨架），Model Forward "
             "跑新数据并把预测与真值导出 CSV。请先运行一次《Tabular Regression: Production》"
             "以生成 output/regression_model.pt。"
+        ),
+        "classification_from_scratch": (
+            "一张图跑通 softmax 回归教科书闭环：零初始化 W / b、手写 softmax 交叉熵、全批量梯度下降"
+            "——看 loss 从 ln(k) 塌缩；预测流入混淆矩阵并渲染成带数值标注的热图。把生成器切到 "
+            "moons/circles 可直观看到线性模型的极限。"
+        ),
+        "tabular_classification_production": (
+            "图内生成数据的生产级分类管线：数据集预览、一盒式 Classification Train（分层切分、标准化、"
+            "Adam、早停、实时 loss 预览），预测送入混淆矩阵渲染热图。把生成器换成 CSV / XLSX / DB "
+            "读取节点即可跑你自己的数据。"
         ),
     },
 }

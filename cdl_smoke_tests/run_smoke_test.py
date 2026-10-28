@@ -136,6 +136,20 @@ def _seed_fixtures(sandbox: Path) -> None:
         sandbox / "output" / "regression_model.pt",
     )
 
+    # Classification model fixture: CdlClassificationModelLoad defaults its
+    # path to "output/classification_model.pt" — a _Regressor-shaped
+    # state_dict with a 2-wide logit head (k=2 classes) so the load node
+    # reconstructs a classifier instead of failing on a missing file.
+    torch.save(
+        {
+            "core.0.weight": torch.zeros(2, 3),
+            "core.0.bias": torch.zeros(2),
+            "mean": torch.zeros(3),
+            "std": torch.ones(3),
+        },
+        sandbox / "output" / "classification_model.pt",
+    )
+
     # --- dataset reader fixtures (csv / txt / json / sqlite) ---
     import csv as _csv, json as _json, sqlite3 as _sqlite3
 
@@ -865,6 +879,28 @@ def _training_pair():
     return features, targets
 
 
+def _blob_pair():
+    """A deterministic tiny 3-class problem: three well-separated blobs.
+
+    The classification counterpart of :meth:`_training_pair` — the same recipe
+    as ``CdlClassificationDataGen('blobs')`` inlined, so the checks can demand
+    near-perfect held-out accuracy instead of only "returned something".
+    Labels are returned as float class indices (the DATASET / TENSOR label
+    contract the classification trainers accept).
+
+    Named ``_blob_pair`` (not ``_classification_pair``) to stay distinct from
+    the pre-existing ``(logits, classes)`` pair of the same name used by the
+    loss / metric nodes.
+    """
+    import torch
+
+    generator = torch.Generator().manual_seed(7)
+    centers = torch.tensor([[3.0, 0.0], [-1.5, 2.598], [-1.5, -2.598]])
+    labels = torch.repeat_interleave(torch.arange(3), 40)
+    features = centers[labels] + 0.2 * torch.randn((120, 2), generator=generator)
+    return features, labels.to(torch.float32)
+
+
 def _f_params(cfg: dict, name: str) -> dict[str, Any]:
     """``PARAMS`` dummy: a trainable set carrying the names the family addresses.
 
@@ -1222,6 +1258,20 @@ _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     "CdlRegressionTrain": {
         "X": lambda cfg, name: _training_pair()[0],
         "y": lambda cfg, name: _training_pair()[1],
+    },
+    # Classification family: the matched 3-blob pair, so the trainers are
+    # demanded to actually separate the classes (accuracy checks below).
+    "CdlSoftmaxTrain": {
+        "X": lambda cfg, name: _blob_pair()[0],
+        "y": lambda cfg, name: _blob_pair()[1],
+    },
+    "CdlClassificationTrain": {
+        "X": lambda cfg, name: _blob_pair()[0],
+        "y": lambda cfg, name: _blob_pair()[1],
+    },
+    "CdlConfusionMatrixEval": {
+        "y_true": lambda cfg, name: _blob_pair()[1],
+        "y_pred": lambda cfg, name: _blob_pair()[1],  # perfect predictor
     },
     "TrainingParametersMerge": {"params_b": _f_params_alt},
     # Loss / Metrics: a *matched* float pair, so the default widgets (mse / mae)
@@ -2105,6 +2155,145 @@ def _check_formula_data_gen(result: Any, args: dict[str, Any]) -> None:
     )
     assert dataset.target_name == "y", f"unexpected target name: {dataset.target_name}"
     assert dataset.meta.get("source") in ("formula", "model"), "missing provenance metadata"
+
+
+def _check_classification_data_gen(result: Any, args: dict[str, Any]) -> None:
+    """The classification generator must produce balanced 2-D class-labelled data.
+
+    Verifies the three-port contract: ``X`` ``[n, 2]`` finite float, ``y`` a
+    1-D integer vector of class indices ``0..k-1`` with every class present,
+    and a labelled ``DATASET`` whose labels are the same indices stored as
+    float (the universal DATASET contract) with provenance metadata.
+    """
+    import torch
+
+    X, y, dataset = _as_tuple(result)
+    mode = args["mode"]
+    k = 2 if mode == "moons" else int(args["n_classes"])
+    n = int(args["n_per_class"]) * k
+    assert tuple(X.shape) == (n, 2), f"X must be [n, 2], got {tuple(X.shape)}"
+    assert X.dtype == torch.float32, f"X must be float32, got {X.dtype}"
+    assert tuple(y.shape) == (n,), f"y must be [n], got {tuple(y.shape)}"
+    assert y.dtype == torch.int64, f"y must be long class indices, got {y.dtype}"
+    assert int(y.min()) == 0 and int(y.max()) == k - 1, f"class indices must span 0..{k-1}"
+    for c in range(k):
+        assert int((y == c).sum()) == int(args["n_per_class"]), f"class {c} is not balanced"
+    assert torch.isfinite(X).all(), "features must be finite"
+
+    from comfydl.nodes.data_types import CdlDataset as _CdlDataset
+
+    assert isinstance(dataset, _CdlDataset), f"dataset must be a CdlDataset, got {type(dataset)}"
+    assert dataset.n_samples == n and dataset.n_features == 2, "dataset shape disagrees with X"
+    assert dataset.labels is not None and dataset.meta.get("source") == "classification", (
+        "dataset must be labelled with provenance metadata"
+    )
+
+
+def _check_softmax_train(result: Any, args: dict[str, Any]) -> None:
+    """The textbook softmax trainer must fit the separable 3-blob pair.
+
+    Verifies the five-port contract (``W`` / ``b`` / ``logits`` /
+    ``probabilities`` / ``loss_history``): shapes against the inferred class
+    count, a proper probability simplex, and a loss curve that started at
+    ``ln(k)`` (zero initialisation) and collapsed — the convex problem must
+    actually be solved, not merely returned.
+    """
+    import math
+
+    import torch
+
+    W, b, logits, probs, curve = _as_tuple(result)
+    X, y = _blob_pair()
+    k = int(y.max()) + 1
+    n, f = X.shape
+    assert tuple(W.shape) == (k, f), f"W must be [k, f], got {tuple(W.shape)}"
+    assert tuple(b.shape) == (k,), f"b must be [k], got {tuple(b.shape)}"
+    assert tuple(logits.shape) == (n, k) and tuple(probs.shape) == (n, k), (
+        f"logits/probs must be [n, k], got {tuple(logits.shape)} / {tuple(probs.shape)}"
+    )
+    assert torch.allclose(probs.sum(dim=1), torch.ones(n), atol=1e-5), (
+        "probabilities rows must sum to 1"
+    )
+    assert float(probs.min()) >= 0.0, "probabilities must be non-negative"
+    assert abs(float(curve[0]) - math.log(k)) < 1e-4, (
+        f"zero-initialised cross-entropy must start at ln(k)={math.log(k):.4f}, got {float(curve[0]):.4f}"
+    )
+    assert float(curve[-1]) < float(curve[0]) / 10, (
+        f"loss must collapse on the separable blobs, {float(curve[0]):.4f} -> {float(curve[-1]):.4f}"
+    )
+
+
+def _check_classification_train(result: Any, args: dict[str, Any]) -> None:
+    """The one-box classifier must separate the 3-blob pair and stay reusable.
+
+    Verifies the five-port contract: a real ``nn.Module`` (drops into
+    ``CdlNNForward`` / ``CdlModelSave``), held-out accuracy in [0, 1] and
+    high on the separated blobs, integer predictions within the class range,
+    a proper probability simplex, and a non-empty loss curve.
+    """
+    import torch
+
+    model, accuracy, predictions, probs, curve = _as_tuple(result)
+    X, y = _blob_pair()
+    k = int(y.max()) + 1
+    n = X.shape[0]
+    import torch.nn as _nn
+
+    assert isinstance(model, _nn.Module), f"model must be an nn.Module, got {type(model)}"
+    assert 0.0 <= float(accuracy) <= 1.0, f"accuracy must be in [0, 1], got {float(accuracy)}"
+    assert float(accuracy) > 0.9, (
+        f"held-out accuracy must separate the blobs, got {float(accuracy):.4f}"
+    )
+    assert predictions.dtype == torch.int64, f"predictions must be long, got {predictions.dtype}"
+    assert int(predictions.min()) >= 0 and int(predictions.max()) <= k - 1, (
+        "predictions must be class indices 0..k-1"
+    )
+    assert tuple(probs.shape) == (n, k), f"probabilities must be [n, k], got {tuple(probs.shape)}"
+    assert torch.allclose(probs.sum(dim=1), torch.ones(n), atol=1e-4), (
+        "probabilities rows must sum to 1"
+    )
+    assert curve.dim() == 1 and curve.numel() > 0, "loss_history must be a non-empty 1-D tensor"
+
+
+def _check_confusion_matrix_eval(result: Any, args: dict[str, Any]) -> None:
+    """A perfect predictor fed to both inputs must yield a diagonal matrix.
+
+    The harness wires ``y_true`` / ``y_pred`` to the same 3-blob labels, so
+    the matrix is the identity-scaled diagonal, the normalised matrix the
+    identity, and the accuracy exactly 1.0 — the strongest cheap assertion
+    available without recomputing the counts.
+    """
+    import torch
+
+    matrix, normalized, accuracy = _as_tuple(result)
+    k = int(matrix.shape[0])
+    assert matrix.dim() == 2 and matrix.shape[0] == matrix.shape[1], (
+        f"matrix must be square [k, k], got {tuple(matrix.shape)}"
+    )
+    assert torch.equal(matrix, torch.diag(matrix.diag())), (
+        "a perfect predictor must produce a diagonal matrix"
+    )
+    assert torch.allclose(normalized, torch.eye(k)), (
+        "row-normalised diagonal must be the identity"
+    )
+    assert abs(float(accuracy) - 1.0) < 1e-6, f"accuracy must be 1.0, got {float(accuracy)}"
+
+
+def _check_classification_model_load(result: Any, args: dict[str, Any]) -> None:
+    """The skeleton-free loader must rebuild the classifier fixture.
+
+    The fixture state_dict (2-wide logit head, standardisation buffers) must
+    reconstruct into an eval-mode ``nn.Module`` plus a human-readable info
+    line naming the class count.
+    """
+    import torch.nn as _nn
+
+    model, info = _as_tuple(result)
+    assert isinstance(model, _nn.Module), f"model must be an nn.Module, got {type(model)}"
+    assert not model.training, "the restored model must be in eval mode"
+    assert isinstance(info, str) and "classes=2" in info and "restored classifier" in info, (
+        f"info must describe the classifier, got {info!r}"
+    )
 
 
 def _check_regression_train(result: Any, args: dict[str, Any]) -> None:
@@ -3302,6 +3491,11 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "CdlLinRegTrain": [_check_linreg_train],
     "CdlRegressionTrain": [_check_regression_train],
     "CdlFormulaDataGen": [_check_formula_data_gen],
+    "CdlClassificationDataGen": [_check_classification_data_gen],
+    "CdlSoftmaxTrain": [_check_softmax_train],
+    "CdlClassificationTrain": [_check_classification_train],
+    "CdlConfusionMatrixEval": [_check_confusion_matrix_eval],
+    "CdlClassificationModelLoad": [_check_classification_model_load],
     "PoolingSliding": [_check_pooling_sliding],
     "PoolingAdaptive": [_check_pooling_adaptive],
     "ConvolutionConv": [_check_convolution_conv],

@@ -16,6 +16,12 @@ Templates panel promises:
     widget values reaches the noise floor (mae < 0.15, rmse < 0.2 on the
     5000-row formula dataset), predictions are exported to CSV and the table
     preview is produced.
+  - classification_from_scratch: the hand-written softmax cross-entropy
+    collapses from ln(k), the probabilities are a proper simplex and the
+    confusion matrix of the (separable) blobs is diagonal-dominant.
+  - tabular_classification_production: the one-box classifier reaches
+    near-perfect held-out accuracy on the blob dataset, the confusion-matrix
+    accuracy agrees, and both rendered images materialise.
 
 Frontend-only node types (Note / MarkdownNote / PrimitiveNode / Reroute) are
 skipped, mirroring the dead-template scan.
@@ -120,6 +126,8 @@ def main() -> int:
         "linear_regression_from_scratch",
         "tabular_regression_production",
         "regression_model_reuse",
+        "classification_from_scratch",
+        "tabular_classification_production",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -175,6 +183,47 @@ def main() -> int:
     check("C: predictions CSV exported",
           csv_path.exists() and csv_path.stat().st_size > 1000, str(csv_path))
     check("C: preview text written", isinstance(out[7][0], str) and "x0" in out[7][0])
+
+    # --- Template D: classification_from_scratch ------------------------------ #
+    out = _run_workflow(workflows_dir / "classification_from_scratch.json")
+    W, b, logits, probs, curve = out[3]
+    check("D: softmax loss fell >10x (from ln(k))",
+          float(curve[-1]) < float(curve[0]) / 10,
+          f"{float(curve[0]):.4f} -> {float(curve[-1]):.4f}")
+    check("D: first-step loss == ln(3)",
+          abs(float(curve[0]) - 1.0986122886681098) < 1e-4,
+          f"{float(curve[0]):.6f}")
+    check("D: probabilities are a simplex",
+          torch.allclose(probs.sum(dim=1), torch.ones(probs.shape[0]), atol=1e-5))
+    check("D: probabilities non-negative", float(probs.min()) >= 0.0)
+    matrix, normalized, cm_acc = out[4]
+    check("D: matrix rows sum to per-class counts",
+          torch.allclose(matrix.sum(dim=1), torch.full((3,), 200.0)),
+          str(matrix.sum(dim=1).tolist()))
+    check("D: normalized rows sum to 1",
+          torch.allclose(normalized.sum(dim=1), torch.ones(3), atol=1e-5))
+    check("D: eval accuracy near-perfect on separable blobs",
+          float(cm_acc) > 0.95, f"acc={float(cm_acc):.4f}")
+    check("D: diagonal dominant",
+          float(matrix.diag().sum()) > 0.95 * float(matrix.sum()))
+    check("D: renderer produced IMAGE", out[5][0].dim() == 4)
+    check("D: plot produced IMAGE", out[6][0].dim() == 4)
+
+    # --- Template E: tabular_classification_production ------------------------ #
+    out = _run_workflow(workflows_dir / "tabular_classification_production.json")
+    model, accuracy, preds, probs_e, hist = out[5]
+    check("E: held-out accuracy near-perfect",
+          float(accuracy) > 0.9, f"acc={float(accuracy):.4f}")
+    check("E: predictions are class indices in [0, 3)",
+          preds.dtype == torch.int64 and int(preds.min()) >= 0 and int(preds.max()) <= 2)
+    check("E: probabilities shape [n, k]", tuple(probs_e.shape) == (750, 3),
+          str(tuple(probs_e.shape)))
+    matrix_e, _, cm_acc_e = out[6]
+    check("E: confusion-matrix accuracy agrees with trainer",
+          abs(float(cm_acc_e) - float(accuracy)) < 0.15,
+          f"eval {float(cm_acc_e):.4f} vs held-out {float(accuracy):.4f}")
+    check("E: renderer produced IMAGE", out[7][0].dim() == 4)
+    check("E: preview text written", isinstance(out[3][0], str) and "x0" in out[3][0])
 
     return _report()
 
