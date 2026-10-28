@@ -120,6 +120,23 @@ BRAND_LOGO_TAG = (
     + "background:url('/comfydl/motion/DL_trans.png') center/contain no-repeat}"
     + '</style>'
 )
+# The official useProgressFavicon() swaps the favicon at runtime for its
+# execution-progress frames (frame_9.png when idle), which silently overwrote
+# the <link> baked into index.html. Redirect the idle frame to the brand PNG;
+# the 0..8 progress frames keep the official artwork.
+FAVICON_IDLE_OLD = "`/assets/images/favicon_progress_16x16/frame_9.png`"
+FAVICON_IDLE_NEW = "`/comfydl/motion/DL_trans.png`"
+
+# 2026-10-28 regression: 0.3.14's startup path never calls loadDefaultWorkflow.
+# initializeWorkflow -> resolveStartupOutcome serves *veteran* users
+# (Comfy.TutorialCompleted) a bare `app.loadGraphData()` - the built-in SD3
+# demo graph - which is why the old default-workflow patch stopped covering
+# startup. Redirect that bare call through the same /templates overlay
+# (fallback kept), with a loud failure on signature drift.
+STARTUP_WORKFLOW_MARK = "/*ComfyDL_UI:startup-wf*/"
+STARTUP_WORKFLOW_PATTERN = re.compile(
+    r"get\(`Comfy\.TutorialCompleted`\)\?\(await ([\w$]+)\.loadGraphData\(\),`restored`\)"
+)
 SPLASH_BRAND_CSS = (
     '<style id="cdl-splash-style">'
     '#cdl-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;'
@@ -275,6 +292,7 @@ def apply_frontend_patches(web_root: str) -> None:
         ("nn_model slot colour", _patch_nn_model_slot_colour),
         ("DATASET slot colour", _patch_dataset_slot_colour),
         ("default workflow", _patch_default_workflow),
+        ("startup workflow", _patch_startup_workflow),
         ("help menu group", _patch_help_menu),
     ):
         try:
@@ -917,33 +935,96 @@ def _patch_splash_brand(web_root: Path) -> bool:
 def _patch_brand_logo(web_root: Path) -> bool:
     """Swap the favicon and the top-left menu logo to ``DL_trans.png``.
 
-    Two rewrite targets in ``index.html``:
-      - the single favicon ``<link>`` now points at the PNG (type fixed from
-        image/x-icon to image/png);
-      - a <style> block hides the official inline ComfyLogo SVG and paints the
-        ``.comfy-menu-button-wrapper .grid`` wrapper with the PNG (homepage
-        fork's logo-fx technique - a raster image cannot inherit the SVG's
-        currentColor fill).
+    Three rewrite targets:
+      - ``index.html``: the single favicon ``<link>`` points at the PNG (type
+        fixed from image/x-icon to image/png);
+      - ``index.html``: a <style> block hides the official inline ComfyLogo
+        SVG and paints the ``.comfy-menu-button-wrapper .grid`` wrapper with
+        the PNG (homepage fork's logo-fx technique - a raster image cannot
+        inherit the SVG's currentColor fill);
+      - GraphView chunk: ``useProgressFavicon()`` swaps the favicon at runtime
+        for its progress frames (``frame_9.png`` when idle), silently
+        overwriting the baked <link> - its idle frame is redirected to the
+        brand PNG too (the 0..8 progress frames keep official artwork).
 
-    Idempotent via the marker. Returns ``True`` when the file was rewritten.
+    Each target is independently idempotent; the function returns ``True``
+    when anything was rewritten.
     """
+    assets = web_root / "assets"
+    changed = False
+
     path = web_root / "index.html"
     text = _text(path)
-    if BRAND_LOGO_MARK in text:
-        logging.debug(f"{TAG} brand logo already applied")
+    if BRAND_LOGO_MARK not in text:
+        old_link = '<link rel="icon" type="image/x-icon" href="./assets/favicon.ico"/>'
+        if old_link not in text:
+            raise ValueError("official favicon link not found")
+        new_link = '<link rel="icon" type="image/png" href="/comfydl/motion/DL_trans.png"/>'
+        text = text.replace(old_link, new_link)
+
+        if text.count("</head>") != 1:
+            raise ValueError(f"expected exactly one </head> in {path.name}")
+        text = text.replace("</head>", BRAND_LOGO_TAG + "</head>")
+        _write(path, text)
+        logging.info(f"{TAG} brand logo (favicon + menu logo) installed in {path.name}")
+        changed = True
+    else:
+        logging.debug(f"{TAG} brand logo already applied to index.html")
+
+    # The runtime favicon override lives in the GraphView chunk - without
+    # this, useProgressFavicon() puts the official artwork back the moment
+    # the app goes idle and the baked <link> never shows.
+    gv = _locate(assets, "GraphView-*.js", "useProgressFavicon")
+    gv_text = _text(gv)
+    if FAVICON_IDLE_OLD in gv_text:
+        _write(gv, gv_text.replace(FAVICON_IDLE_OLD, FAVICON_IDLE_NEW, 1))
+        logging.info(f"{TAG} progress-favicon idle frame -> DL_trans.png in {gv.name}")
+        changed = True
+    elif FAVICON_IDLE_NEW in gv_text:
+        logging.debug(f"{TAG} progress-favicon idle frame already redirected")
+    else:
+        raise ValueError("useProgressFavicon idle frame signature not found")
+    return changed
+
+
+def _patch_startup_workflow(assets: Path) -> bool:
+    """Redirect the veteran-user startup graph to the ComfyDL template.
+
+    0.3.14's ``resolveStartupOutcome`` loads the built-in SD3 demo via a bare
+    ``app.loadGraphData()`` for users with ``Comfy.TutorialCompleted`` set -
+    the startup path never reaches ``loadDefaultWorkflow`` (patched
+    separately). This rewrite sends that bare call through the
+    ``/templates/<name>.json`` overlay channel, falling back to the upstream
+    graph on any failure. Loud failure on signature drift, like the other
+    workflow patches.
+
+    Returns ``True`` when the chunk was rewritten.
+    """
+    path = _locate(assets, "GraphView-*.js", "resolveStartupOutcome")
+    text = _text(path)
+    if STARTUP_WORKFLOW_MARK in text:
+        logging.debug(f"{TAG} startup workflow already applied")
         return False
 
-    old_link = '<link rel="icon" type="image/x-icon" href="./assets/favicon.ico"/>'
-    if old_link not in text:
-        raise ValueError("official favicon link not found")
-    new_link = '<link rel="icon" type="image/png" href="/comfydl/motion/DL_trans.png"/>'
-    text = text.replace(old_link, new_link)
-
-    if text.count("</head>") != 1:
-        raise ValueError(f"expected exactly one </head> in {path.name}")
-    text = text.replace("</head>", BRAND_LOGO_TAG + "</head>")
+    match = STARTUP_WORKFLOW_PATTERN.search(text)
+    if match is None:
+        raise ValueError("startup loadGraphData call signature not found")
+    app = match.group(1)
+    patched = (
+        f"get(`Comfy.TutorialCompleted`)?(await (async()=>{{"
+        f"try{{const _cdlRes=await fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`,"
+        f"{{cache:`no-store`}});"
+        f"if(_cdlRes.ok){{await {app}.loadGraphData(await _cdlRes.json());return}}}}"
+        f"catch(_cdlErr){{}}"
+        f"await {app}.loadGraphData()"
+        f"}})(),`restored`){STARTUP_WORKFLOW_MARK}"
+    )
+    text = _replace_once(text, match.group(0), patched)
     _write(path, text)
-    logging.info(f"{TAG} brand logo (favicon + menu logo) installed in {path.name}")
+    logging.info(
+        f"{TAG} startup workflow -> /templates/{DEFAULT_WORKFLOW_TEMPLATE}.json "
+        f"in {path.name}"
+    )
     return True
 
 

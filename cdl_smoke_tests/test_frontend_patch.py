@@ -27,7 +27,9 @@ if str(REPO_ROOT) not in sys.path:
 from app.frontend_patch import (  # noqa: E402
     DEFAULT_WORKFLOW_MARK,
     DEFAULT_WORKFLOW_TEMPLATE,
+    STARTUP_WORKFLOW_MARK,
     _patch_default_workflow,
+    _patch_startup_workflow,
     apply_frontend_patches,
 )
 
@@ -64,6 +66,18 @@ def main() -> int:
                   f"templates/{DEFAULT_WORKFLOW_TEMPLATE}.json" in src)
             check("real frontend: keeps the upstream fallback",
                   "loadGraphData(" in src and "catch(_cdlErr)" in src)
+        # Startup workflow (2026-10-28 regression): the veteran-user branch of
+        # resolveStartupOutcome must also go through the overlay template.
+        gv_files = sorted(assets.glob("GraphView-*.js"))
+        startup_srcs = [p for p in gv_files if STARTUP_WORKFLOW_MARK
+                        in p.read_text(encoding="utf-8")]
+        check("real frontend: exactly one patched GraphView chunk",
+              len(startup_srcs) == 1, str([p.name for p in startup_srcs]))
+        if startup_srcs:
+            gsrc = startup_srcs[0].read_text(encoding="utf-8")
+            check("real frontend: startup redirects to the ComfyDL template",
+                  f"templates/{DEFAULT_WORKFLOW_TEMPLATE}.json" in gsrc
+                  and "TutorialCompleted" in gsrc)
         # Idempotency: a second apply must report nothing new.
         before = sorted(
             (p.name, p.stat().st_mtime) for p in assets.glob("settingStore-*.js")
@@ -105,6 +119,36 @@ def main() -> int:
             check("drifted signature raises", False, "no ValueError")
         except ValueError:
             check("drifted signature raises", True)
+
+        # --- synthetic chunk: startup workflow (resolveStartupOutcome) ------ #
+        STOCK_STARTUP = (
+            "resolveStartupOutcome=async()=>n.get(`Comfy.TutorialCompleted`)"
+            "?(await X.loadGraphData(),`restored`):(await ir().loadBlankWorkflow())"
+        )
+        assets3 = sandbox / "assets3"
+        assets3.mkdir()
+        gv3 = assets3 / "GraphView-TEST.js"
+        gv3.write_text(STOCK_STARTUP, encoding="utf-8")
+        check("startup: patch applied", _patch_startup_workflow(assets3) is True)
+        stext = gv3.read_text(encoding="utf-8")
+        check("startup: marker present", STARTUP_WORKFLOW_MARK in stext)
+        check("startup: fetches the overlay template",
+              f"templates/{DEFAULT_WORKFLOW_TEMPLATE}.json" in stext)
+        check("startup: veteran branch still returns restored",
+              "`restored`" in stext)
+        check("startup: upstream fallback kept",
+              "await X.loadGraphData()" in stext and "catch(_cdlErr)" in stext)
+        check("startup: second apply is a no-op",
+              _patch_startup_workflow(assets3) is False)
+        drifted3 = sandbox / "assets4"
+        drifted3.mkdir()
+        (drifted3 / "GraphView-TEST.js").write_text(
+            "resolveStartupOutcome=async()=>renamed()", encoding="utf-8")
+        try:
+            _patch_startup_workflow(drifted3)
+            check("startup: drifted signature raises", False, "no ValueError")
+        except ValueError:
+            check("startup: drifted signature raises", True)
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
 

@@ -46,6 +46,7 @@ def main() -> int:
         I18N_SETTINGS_KEYS,
         MOTION_CSS_MARK,
         MOTION_LOADER_MARK,
+        _locate,
         _patch_motion_css,
         _patch_motion_loader,
         _text,
@@ -219,6 +220,12 @@ def main() -> int:
     png = REPO_ROOT / "app" / "motion_assets" / "DL_trans.png"
     check("B1 DL_trans.png shipped in motion_assets",
           png.is_file() and png.stat().st_size > 5_000)
+    # Runtime override: useProgressFavicon's idle frame must point at the
+    # brand PNG, or the baked <link> is silently overwritten on boot.
+    gv_text = _text(_locate(sandbox / "assets", "GraphView-*.js", "useProgressFavicon"))
+    check("B1 progress-favicon idle frame redirected",
+          "`/comfydl/motion/DL_trans.png`" in gv_text
+          and "favicon_progress_16x16/frame_9.png" not in gv_text)
 
     return report()
 
