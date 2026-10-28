@@ -72,7 +72,14 @@ def main() -> int:
         traceback.print_exc()
         check("M1 patches apply cleanly", False, repr(exc))
         return report()
-    check("M1 patches apply cleanly", css_applied and loader_applied)
+    # applied False is fine when the source index.html was already baked by a
+    # live server run (the pip frontend is patched in place at startup) —
+    # then the marks must already be there, which the next checks verify.
+    already = MOTION_CSS_MARK in baseline or MOTION_LOADER_MARK in baseline
+    check("M1 patches apply cleanly (or source already baked)",
+          (css_applied and loader_applied)
+          or (already and not css_applied and not loader_applied),
+          f"css={css_applied} loader={loader_applied}")
 
     text = _text(index)
     check("M1 css mark present", MOTION_CSS_MARK in text)
@@ -92,9 +99,12 @@ def main() -> int:
     check("M1 no duplicate markers",
           text.count(MOTION_CSS_MARK) == 1 and text.count(MOTION_LOADER_MARK) == 1)
 
-    # Unpatched baseline untouched (both marks absent before patching).
-    check("M1 baseline had no motion marks",
-          MOTION_CSS_MARK not in baseline and MOTION_LOADER_MARK not in baseline)
+    # Baseline contract: the pip frontend is either pristine (both marks
+    # absent, patches just applied) or fully baked by a live run (both marks
+    # already present). A half-baked index.html would mean a torn patch.
+    check("M1 baseline is pristine-or-fully-baked",
+          ((MOTION_CSS_MARK not in baseline) and (MOTION_LOADER_MARK not in baseline))
+          or ((MOTION_CSS_MARK in baseline) and (MOTION_LOADER_MARK in baseline)))
 
     # --- M2: motion.js contract -------------------------------------------
     motion = REPO_ROOT / "app" / "motion_assets" / "motion.js"
@@ -110,6 +120,10 @@ def main() -> int:
     check("M2 ripple overlay layer", "cdl-ripple-layer" in src)
     check("M2 ripple only on left button", "e.button !== 0" in src)
     check("M2 unloadable ripple (setting off)", "uninstallRipple" in src)
+    check("M2 sidebar panel expand/collapse animation",
+          "sidebar-content-container" in src and "side-bar-panel" in src
+          and "installSidebarPanelAnimation" in src
+          and "uninstallSidebarPanelAnimation" in src)
     check("M2 shared easing", "cubic-bezier(.16,1,.3,1)" in src)
     check("M2 cdlCancelAfter contract", "cdlCancelAfter" in src)
     check("M2 populate-gated containers", "playWhenPopulated" in src)

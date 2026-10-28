@@ -67,6 +67,7 @@
     entranceDone: false,
     rippleInstalled: false,
     rippleLayer: null,
+    sidebarObserver: null,
   };
 
   // ------------------------------------------------------------- helpers ----
@@ -109,6 +110,7 @@
   function disableAll() {
     htmlClasses().add("cdl-motion-off");
     state.entranceDone = true;
+    uninstallSidebarPanelAnimation();
   }
 
   // ------------------------------------------------------------- ripple ----
@@ -153,6 +155,59 @@
     if (state.rippleLayer) {
       try { state.rippleLayer.remove(); } catch (e) { /* noop */ }
       state.rippleLayer = null;
+    }
+  }
+
+  // ------------------------------------- sidebar panel expand / collapse ----
+  // The tab panel is a splitter panel (.side-bar-panel): expanding mounts a
+  // .sidebar-content-container into it, collapsing removes the container and
+  // flips the panel's width class. Expand = slide the content in; collapse =
+  // a soft pulse on the icon rail as feedback. One MutationObserver on body
+  // watches for both (childList for the mount, class attributes for the
+  // width-class flip). The animations only touch opacity/transform of the
+  // observer targets themselves - no class writes - so the observer can never
+  // re-trigger itself.
+  function installSidebarPanelAnimation() {
+    if (state.sidebarObserver || reduceMotion()) return;
+    try {
+      const ob = new MutationObserver((muts) => {
+        if (!state.enabled) return;
+        for (const m of muts) {
+          if (m.type === "attributes") {
+            const cls = String(m.target.className || "");
+            if (!cls.includes("side-bar-panel")) continue;
+            if (!m.target.querySelector(".sidebar-content-container")) {
+              // collapse: soft pulse on the icon rail as feedback
+              const rail = document.querySelector(".side-tool-bar-container");
+              if (rail) animate(rail,
+                [{ opacity: 1 }, { opacity: .72 }, { opacity: 1 }],
+                { duration: 260 });
+            }
+          } else {
+            for (const n of m.addedNodes) {
+              if (n.nodeType !== 1) continue;
+              const c = String(n.className || "");
+              if (c.includes("sidebar-content-container")) {
+                animate(n,
+                  [{ opacity: 0, transform: "translateX(-26px)" }, { opacity: 1, transform: "none" }],
+                  { duration: 340 });
+              }
+            }
+          }
+        }
+      });
+      ob.observe(document.body, {
+        childList: true, subtree: true, attributes: true, attributeFilter: ["class"],
+      });
+      state.sidebarObserver = ob;
+      console.log(TAG, "sidebar panel animation armed");
+    } catch (err) { /* noop */ }
+  }
+
+  function uninstallSidebarPanelAnimation() {
+    if (state.sidebarObserver) {
+      try { state.sidebarObserver.disconnect(); } catch (e) { /* noop */ }
+      state.sidebarObserver = null;
     }
   }
 
@@ -297,6 +352,7 @@
             console.log(TAG, enabled ? "disabled (reduced motion)" : "disabled (setting)");
           } else {
             installRipple();
+            installSidebarPanelAnimation();
             runEntrance();
           }
         },
@@ -311,11 +367,13 @@
             state.enabled = newVal !== false;
             if (!state.enabled) {
               uninstallRipple();
+              uninstallSidebarPanelAnimation();
               disableAll();
               forceReveal();
               console.log(TAG, "disabled via settings");
             } else {
               installRipple();
+              installSidebarPanelAnimation();
               console.log(TAG, "enabled via settings (entrance already played or will play once)");
             }
           },
