@@ -149,6 +149,49 @@ def main() -> int:
     check("M3 Motion group in zh categories",
           I18N_SETTINGS_CATEGORIES_ZH.get("Motion") == "动效")
 
+    # --- S1: branded splash -------------------------------------------------
+    from app.frontend_patch import SPLASH_BRAND_MARK  # noqa: E402
+
+    check("S1 splash patch mark", SPLASH_BRAND_MARK in text)
+    check("S1 official svg replaced",
+          "comfy-mask-splash" not in text
+          and 'aria-label="Loading ComfyUI"' not in text)
+    check("S1 hidden stub keeps official id",
+          text.count('id="splash-loader"') == 1)  # the harmless stub only
+    check("S1 branded layer present",
+          'id="cdl-splash"' in text and "LoadFX1.gif" in text
+          and 'id="cdlLog"' in text and 'id="cdlFill"' in text)
+    check("S1 brand css + reduced-motion",
+          "cdl-splash-style" in text
+          and "prefers-reduced-motion:reduce" in text)
+    # Asset reuse: the GIF ships inside motion_assets (served by server.py).
+    gif = REPO_ROOT / "app" / "motion_assets" / "LoadFX1.gif"
+    check("S1 LoadFX1.gif reused from homepage assets",
+          gif.is_file() and gif.stat().st_size > 100_000)
+
+    # Splash driver contract in motion.js: real signals only.
+    check("S1 driver uses PerformanceObserver buffered",
+          'type: "resource"' in src and "buffered: true" in src)
+    check("S1 driver wraps fetch read-only",
+          "window.fetch = function" in src and "realFetch.apply" in src)
+    check("S1 driver polls workspace store spinner",
+          "ws.spinner" in src)
+    check("S1 falling edge owns fade-out + entrance",
+          "finishSplash" in src
+          and src.count("runEntrance();") >= 2  # finishSplash + no-splash fallback
+          and "setTimeout(done, 650)" in src)
+    check("S1 setup does NOT start the entrance",
+          "installSidebarPanelAnimation();" in src
+          and "installRipple();\\n            runEntrance" not in src)
+    check("S1 no-splash fallback keeps old behavior",
+          "splashDriverActive = false" in src
+          and "!state.splashDriverActive) runEntrance()" in src)
+    check("S1 splash own failsafe (20s)",
+          "20000" in src)
+    check("S1 progress crawl cap 90%", "SPLASH_CRAWL_CAP" in src)
+    check("S1 zh milestone table",
+          "节点定义（画布 + 节点库）" in src and "界面就绪" in src)
+
     return report()
 
 

@@ -16,6 +16,15 @@
  *   2. Ripple click feedback: a page-global, pointer-events:none overlay
  *      layer; every left pointerdown spawns a soft expanding ring. Nothing is
  *      injected into Vue-managed elements.
+ *   3. Splash progress driver: the branded boot screen (#cdl-splash, baked by
+ *      frontend_patch._patch_splash_brand in place of the official wave SVG)
+ *      is fed with REAL signals - PerformanceObserver for chunk loads, a
+ *      read-only fetch wrapper for /api milestones, and polling of
+ *      app.extensionManager.spinner for the boot-sequence falling edge. On
+ *      that falling edge motion.js takes over the splash (the official
+ *      watcher's getElementById hits a hidden stub), fades it out and starts
+ *      the entrance the same instant, so the chrome slides in "through" the
+ *      dissolving splash.
  *
  * Hard rules inherited from the homepage implementation (do not regress):
  *   - Canvas node DOM animation is opacity-ONLY. The Vue node system positions
@@ -68,7 +77,254 @@
     rippleInstalled: false,
     rippleLayer: null,
     sidebarObserver: null,
+    // Splash progress driver (see initSplashProgress).
+    splashDone: false,
+    splashEl: null,
+    splashScore: 0,
+    splashStartedAt: 0,
+    seenApi: {},
+    splashDriverActive: false,
   };
+
+  // ------------------------------------------- splash progress driver ----
+  // Runs from module-evaluation time (before Vue mounts) and drives the
+  // branded splash with REAL signals only:
+  //   - PerformanceObserver(resource, buffered) -> chunk/css load milestones
+  //   - a read-only fetch wrapper -> /api milestones (extensions,
+  //     object_info, settings, ...), named after the homepage fork's table
+  //   - a slow time-based crawl covers the blind JS-only stretches
+  //   - polling app.extensionManager.spinner (the workspace store the App
+  //     component exposes) detects the boot-sequence falling edge (C3)
+  // On the falling edge motion.js takes over the splash from the official
+  // App watcher: the visible layer is #cdl-splash (the official hidden
+  // #splash-loader stub keeps the watcher's getElementById harmless), so we
+  // fade out and remove it ourselves, and the entrance choreography starts
+  // the same instant - UI elements slide in "through" the dissolving splash.
+  const SPLASH_I18N = {
+    en: {
+      page: "Page delivered",
+      chunks: "Interface chunks ({n})",
+      vueMounted: "Interface mounted",
+      extensions: "Extension registry",
+      objectInfo: "Node definitions (canvas + library)",
+      settings: "UI preferences",
+      userdata: "Workspace scan",
+      systemStats: "System telemetry",
+      queue: "Execution queue",
+      misc: "Backend API ({n})",
+      modules: "ComfyDL modules ready",
+      ready: "Interface ready — welcome!",
+    },
+    zh: {
+      page: "页面已送达",
+      chunks: "界面资源加载（{n}）",
+      vueMounted: "界面已挂载",
+      extensions: "扩展注册表",
+      objectInfo: "节点定义（画布 + 节点库）",
+      settings: "界面偏好",
+      userdata: "工作区扫描",
+      systemStats: "系统遥测",
+      queue: "执行队列",
+      misc: "后端接口（{n}）",
+      modules: "ComfyDL 模块就绪",
+      ready: "界面就绪 —— 欢迎使用！",
+    },
+  };
+  const spl = (k, params) => {
+    const dict = I18N[locale] && I18N[locale][k] ? I18N[locale] : I18N.en;
+    let text = dict[k] !== undefined ? dict[k] : I18N.en[k] || k;
+    if (params) {
+      for (const [pk, pv] of Object.entries(params)) {
+        text = text.split("{" + pk + "}").join(String(pv));
+      }
+    }
+    return text;
+  };
+
+  const SPLASH_MAX = 100;
+  const SPLASH_CRAWL_CAP = 90;   // the time-crawl never passes this
+  const SPLASH_CRAWL_MS = 9000;  // crawl duration to reach the cap
+
+  function splashLog(msg) {
+    const logEl = document.getElementById("cdlLog");
+    if (!logEl) return;
+    const line = document.createElement("div");
+    line.className = "cdl-line";
+    const s = ((performance.now() - state.splashStartedAt) / 1000).toFixed(2);
+    line.innerHTML = '<span class="cdl-t">[' + s + 's]</span>'
+      + '<span class="cdl-m">' + String(msg).replace(/[<>&]/g, "") + "</span>"
+      + '<span class="cdl-s ok">OK</span>';
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+    while (logEl.children.length > 60) logEl.removeChild(logEl.firstChild);
+  }
+
+  function splashPhase(text) {
+    const el = document.getElementById("cdlPhase");
+    if (el) el.textContent = text;
+  }
+
+  function splashScore(delta) {
+    state.splashScore = Math.min(SPLASH_MAX, state.splashScore + delta);
+    const pctEl = document.getElementById("cdlPct");
+    const fillEl = document.getElementById("cdlFill");
+    const pct = Math.round(state.splashScore);
+    if (pctEl) pctEl.textContent = pct + "%";
+    if (fillEl) fillEl.style.width = pct + "%";
+  }
+
+  // Time crawl: eases toward SPLASH_CRAWL_CAP so blind stretches (pure-JS
+  // init with no observable signals) never look frozen.
+  function startCrawl() {
+    const tick = () => {
+      if (state.splashDone) return;
+      const elapsed = performance.now() - state.splashStartedAt;
+      const target = Math.min(SPLASH_CRAWL_CAP, (elapsed / SPLASH_CRAWL_MS) * SPLASH_CRAWL_CAP);
+      if (state.splashScore < target) splashScore(Math.min(target - state.splashScore, 2));
+      setTimeout(tick, 120);
+    };
+    setTimeout(tick, 120);
+  }
+
+  // One-time named milestones.
+  function splashMilestone(key, weight, name) {
+    if (state.seenApi[key]) return;
+    state.seenApi[key] = 1;
+    splashLog(name);
+    splashPhase(name);
+    splashScore(weight);
+  }
+
+  function wrapFetch() {
+    if (window.__cdlFetchWrapped) return;
+    window.__cdlFetchWrapped = true;
+    let miscCount = 0;
+    const realFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+      const url = typeof input === "string" ? input : (input && input.url) || "";
+      const p = realFetch.apply(this, arguments);
+      if (url.indexOf("/api/") >= 0 || url.indexOf("/api") === 0) {
+        p.then(() => {
+          try {
+            const path = new URL(url, location.href).pathname.replace(/^.*\/api\/?/, "");
+            if (path === "extensions") splashMilestone("extensions", 8, spl("extensions"));
+            else if (path === "object_info") splashMilestone("objectInfo", 22, spl("objectInfo"));
+            else if (path === "settings" || path === "user/settings") splashMilestone("settings", 5, spl("settings"));
+            else if (path.indexOf("userdata") === 0) splashMilestone("userdata", 5, spl("userdata"));
+            else if (path === "system_stats") splashMilestone("systemStats", 4, spl("systemStats"));
+            else if (path === "queue" || path === "prompt" || path === "history") splashMilestone("queue", 3, spl("queue"));
+            else {
+              miscCount++;
+              splashMilestone("misc:" + path, 2, spl("misc", { n: miscCount }));
+            }
+          } catch (e) { /* naming is cosmetic */ }
+        }).catch(() => { /* fetch errors are the app's business */ });
+      }
+      return p;
+    };
+  }
+
+  function initSplashProgress() {
+    const el = document.getElementById("cdl-splash");
+    if (!el) {
+      // Splash brand patch not applied: no driver, no falling edge to wait
+      // for - the entrance falls back to firing from extension setup().
+      state.splashDriverActive = false;
+      return;
+    }
+    state.splashDriverActive = true;
+    state.splashEl = el;
+    state.splashStartedAt = performance.now();
+
+    splashLog(spl("page"));
+    splashScore(4);
+    startCrawl();
+    wrapFetch();
+
+    // Chunk/css load milestones (buffered:true replays resources that already
+    // finished before this observer was attached).
+    try {
+      const chunkTotal = Math.max(
+        1, document.querySelectorAll("link[rel=modulepreload]").length + 1);
+      let chunkSeen = 0;
+      const po = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          const n = entry.name || "";
+          if (/\.js(\?|$)/.test(n) || /\.css(\?|$)/.test(n)) chunkSeen++;
+        }
+        if (chunkSeen > 0) {
+          splashMilestone("chunks:" + chunkSeen, 12,
+            spl("chunks", { n: Math.min(chunkSeen, chunkTotal) }));
+        }
+      });
+      po.observe({ type: "resource", buffered: true });
+    } catch (e) { /* PerformanceObserver unavailable: crawl covers */ }
+
+    // Vue mount detection: first child inside #vue-app.
+    const vueApp = document.getElementById("vue-app");
+    if (vueApp) {
+      const ob = new MutationObserver(() => {
+        if (vueApp.children.length) {
+          ob.disconnect();
+          splashMilestone("vueMounted", 8, spl("vueMounted"));
+        }
+      });
+      ob.observe(vueApp, { childList: true });
+    }
+
+    // Boot-sequence falling edge (C3): poll the workspace store the App
+    // component exposes. Once seen, take over the splash entirely.
+    const pollSpinner = () => {
+      if (state.splashDone) return;
+      let spin = null;
+      try {
+        const app = getApp();
+        const ws = app && app.extensionManager;
+        if (ws && typeof ws.spinner === "boolean") spin = ws.spinner;
+      } catch (e) { /* not ready yet */ }
+      if (spin === false) {
+        finishSplash();
+        return;
+      }
+      setTimeout(pollSpinner, 50);
+    };
+    setTimeout(pollSpinner, 200);
+
+    // Splash-own failsafe: never hold the UI hostage for more than 20s.
+    setTimeout(() => { if (!state.splashDone) finishSplash(true); }, 20000);
+  }
+
+  function finishSplash(force) {
+    if (state.splashDone) return;
+    state.splashDone = true;
+    splashScore(SPLASH_MAX - state.splashScore);
+    splashLog(spl("ready"));
+    splashPhase(spl("ready"));
+
+    const done = () => {
+      if (state.splashEl) {
+        try { state.splashEl.remove(); } catch (e) { /* noop */ }
+        state.splashEl = null;
+      }
+      // The entrance starts the same instant the splash begins dissolving,
+      // so the chrome slides in "through" it. Disabled / reduced-motion
+      // paths force-reveal instead of animating.
+      if (force || reduceMotion() || !state.enabled) {
+        disableAll();
+        forceReveal();
+      } else {
+        runEntrance();
+      }
+    };
+
+    const el = state.splashEl;
+    if (force || reduceMotion()) { done(); return; }
+    try {
+      el.style.opacity = "0";
+      el.style.transform = "scale(1.015)";
+      setTimeout(done, 650);
+    } catch (e) { done(); }
+  }
 
   // ------------------------------------------------------------- helpers ----
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -318,6 +574,10 @@
 
   // -------------------------------------------------------------- boot ----
   function boot() {
+    // Splash driver first: it needs no comfyAPI and must observe from the
+    // earliest possible moment (this module runs before Vue mounts).
+    initSplashProgress();
+
     const start = () => {
       const app = getApp();
       if (!app || !app.extensionManager) return false;
@@ -349,12 +609,19 @@
 
           if (!enabled || reduceMotion()) {
             disableAll();
+            // The splash driver is disabled-aware: finishSplash() will skip
+            // the entrance and force-reveal when the falling edge arrives.
             console.log(TAG, enabled ? "disabled (reduced motion)" : "disabled (setting)");
           } else {
             installRipple();
             installSidebarPanelAnimation();
-            runEntrance();
+            if (!state.splashDriverActive) runEntrance(); // fallback, no splash
           }
+          // NOTE: runEntrance() is NOT called here. Extension setup runs
+          // while the official splash is still up (spinner=true); the
+          // entrance must start when the splash begins dissolving, which is
+          // the spinner falling edge handled by the splash driver's
+          // finishSplash() (see initSplashProgress).
         },
         settings: [{
           id: SETTING_ENABLED,

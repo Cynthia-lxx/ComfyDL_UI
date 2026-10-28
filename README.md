@@ -164,16 +164,22 @@ divergence is visible at a glance, without opening anything:
   <img src="assets/loss_map_focus.png" alt="Live loss map preview card under a training node, showing the raw and smoothed loss curves" width="520" />
 </p>
 
-### UI motion — staged entrance & click ripple
+### UI motion — branded splash, staged entrance & click ripple
 
-Ported from the homepage fork: chrome elements (topbar, bottom bar, sidebar rail,
-right panel) slide in with a staggered choreography, canvas nodes fade in along a
-diagonal sweep and the canvas grid returns last, and every left click spawns a
-soft ripple on a page-global overlay. One setting governs it all — *Settings >
-ComfyDL > Motion > 界面动效* — plus a hard `prefers-reduced-motion` exemption and
-a 9s failsafe that force-reveals the UI should the module ever fail to load.
-Canvas nodes are animated with opacity only: their position lives in `transform`,
-which the motion module never touches.
+Ported from the homepage fork: the official wave-SVG splash is replaced by the
+branded boot screen (animated logo GIF, progress bar with moving stripes and a
+live boot log) fed with *real* signals — PerformanceObserver for chunk loads,
+a read-only fetch wrapper for `/api` milestones, and polling of the workspace
+store's spinner for the boot-sequence falling edge. On that edge motion.js
+takes over the splash: it fades out (no hard DOM removal) and the entrance
+starts the same instant, so chrome elements (topbar, bottom bar, sidebar rail,
+right panel) slide in *through* the dissolving splash; canvas nodes fade in
+along a diagonal sweep and the canvas grid returns last. Every left click
+spawns a soft ripple on a page-global overlay. One setting governs it all —
+*Settings > ComfyDL > Motion > 界面动效* — plus a hard `prefers-reduced-motion`
+exemption, a 9s pre-hide failsafe and a 20s splash failsafe. Canvas nodes are
+animated with opacity only: their position lives in `transform`, which the
+motion module never touches.
 
 ### Simplified Chinese UI (i18n)
 

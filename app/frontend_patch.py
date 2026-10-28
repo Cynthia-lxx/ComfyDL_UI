@@ -95,6 +95,77 @@ MOTION_CSS_TAG = (
 )
 MOTION_CSS_MARK = "<!--ComfyDL_UI:motion-css-->"
 
+# Branded splash: replaces the official #splash-loader contents with the
+# homepage-fork design (animated logo GIF + progress bar + live boot log).
+# The official element stays in place but hidden (its id is kept so the
+# official App watcher's getElementById finds a harmless hidden stub), and the
+# real splash lives under #cdl-splash - fully owned by motion.js, which fades
+# it out on the spinner falling edge. That removes the hard .remove() flicker
+# and lets the entrance choreography start the moment the splash begins
+# dissolving. Theme colors come from the official inline script via
+# var(--bg-color)/var(--fg-color), so no extra theming is needed.
+SPLASH_BRAND_MARK = "<!--ComfyDL_UI:splash-brand-->"
+SPLASH_BRAND_CSS = (
+    '<style id="cdl-splash-style">'
+    '#cdl-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;'
+    'align-items:center;justify-content:center;contain:strict;'
+    'background:var(--bg-color,#111318);color:var(--fg-color,#e6e6ec);'
+    'transition:opacity .6s var(--cdl-ease),transform .6s var(--cdl-ease)}'
+    '.cdl-splash{display:flex;flex-direction:column;align-items:center;gap:22px;width:min(560px,86vw)}'
+    '.cdl-brand{display:flex;align-items:center;gap:16px}'
+    '.cdl-logo{width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(26,188,156,.35))}'
+    '.cdl-brand h1{margin:0;font-size:30px;font-weight:750;letter-spacing:.4px;line-height:1.1;color:var(--fg-color)}'
+    '.cdl-tag{margin:4px 0 0;font-size:13.5px;color:color-mix(in srgb,var(--fg-color) 60%,transparent)}'
+    '.cdl-progress{width:100%;display:flex;flex-direction:column;gap:8px}'
+    '.cdl-track{position:relative;height:14px;border-radius:999px;'
+    'background:color-mix(in srgb,var(--fg-color) 8%,transparent);'
+    'border:1px solid color-mix(in srgb,var(--fg-color) 16%,transparent);overflow:hidden;'
+    'box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}'
+    '.cdl-fill{height:100%;width:0%;border-radius:999px;'
+    'background:linear-gradient(90deg,#1ABC9C,#4cc3a8 55%,#FF8C42);'
+    'transition:width .5s var(--cdl-ease);position:relative;z-index:1}'
+    '.cdl-stripes{position:absolute;inset:0;z-index:2;'
+    'background:repeating-linear-gradient(-55deg,rgba(255,255,255,.10) 0 10px,transparent 10px 20px);'
+    'background-size:200% 100%;animation:cdl-stripes 1.1s linear infinite;mix-blend-mode:overlay;pointer-events:none}'
+    '@keyframes cdl-stripes{to{background-position:-56px 0}}'
+    '.cdl-meta{display:flex;justify-content:space-between;font-size:12.5px;'
+    'color:color-mix(in srgb,var(--fg-color) 60%,transparent);font-variant-numeric:tabular-nums}'
+    '.cdl-pct{color:var(--fg-color);font-weight:650;font-variant-numeric:tabular-nums}'
+    '.cdl-log{width:100%;height:172px;overflow-y:auto;padding:10px 12px;'
+    'display:flex;flex-direction:column;gap:3px;border-radius:10px;'
+    'background:color-mix(in srgb,var(--fg-color) 5%,transparent);'
+    'border:1px solid color-mix(in srgb,var(--fg-color) 14%,transparent);'
+    'box-shadow:inset 0 2px 8px rgba(0,0,0,.35)}'
+    '.cdl-line{display:flex;align-items:baseline;gap:8px;font-size:12.5px;'
+    'color:color-mix(in srgb,var(--fg-color) 80%,transparent);'
+    'animation:cdl-line-in .45s var(--cdl-ease) both;font-variant-numeric:tabular-nums}'
+    '.cdl-t{color:color-mix(in srgb,var(--fg-color) 42%,transparent);flex:none}'
+    '.cdl-m{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    '.cdl-s{flex:none;font-size:10.5px;font-weight:650;letter-spacing:.6px;padding:1px 8px;border-radius:999px}'
+    '.cdl-s.ok{color:#1ABC9C;border:1px solid rgba(26,188,156,.45)}'
+    '.cdl-s.run{color:#FF8C42;border:1px solid rgba(255,140,66,.45);animation:cdl-pulse 1s ease-in-out infinite}'
+    '.cdl-line.run .cdl-m{color:var(--fg-color)}'
+    '@keyframes cdl-line-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}'
+    '@keyframes cdl-pulse{50%{opacity:.45}}'
+    '.cdl-foot{font-size:11.5px;color:color-mix(in srgb,var(--fg-color) 42%,transparent);letter-spacing:.3px}'
+    '@media (prefers-reduced-motion:reduce){.cdl-stripes,.cdl-line,.cdl-s.run{animation:none}}'
+    '</style>'
+)
+SPLASH_BRAND_DOM = (
+    '<div id="splash-loader" role="status" aria-label="Loading ComfyDL_UI" style="display:none"></div>'
+    '<div id="cdl-splash" role="status" aria-label="Loading ComfyDL_UI">' + SPLASH_BRAND_CSS +
+    '<div class="cdl-splash">'
+    '<div class="cdl-brand"><img class="cdl-logo" src="/comfydl/motion/LoadFX1.gif" alt="">'
+    '<div><h1>ComfyDL_UI</h1><p class="cdl-tag">Deep Learning is just a few clicks away!</p></div></div>'
+    '<div class="cdl-progress"><div class="cdl-track"><div class="cdl-fill" id="cdlFill"></div>'
+    '<div class="cdl-stripes"></div></div>'
+    '<div class="cdl-meta"><span id="cdlPhase">Starting</span>'
+    '<span class="cdl-pct" id="cdlPct">0%</span></div></div>'
+    '<div class="cdl-log" id="cdlLog" aria-live="polite"></div>'
+    '<div class="cdl-foot">ComfyDL_UI &middot; modular deep learning toolbox</div>'
+    '</div></div>'
+)
+
 # Marker comments written into the patched assets: they document who changed the
 # file and double as the idempotency check.
 LOCALE_MARK = "/*ComfyDL_UI:locale*/"
@@ -217,6 +288,8 @@ def apply_frontend_patches(web_root: str) -> None:
         if _patch_motion_css(Path(web_root)):
             motion_applied = True
         if _patch_motion_loader(Path(web_root)):
+            motion_applied = True
+        if _patch_splash_brand(Path(web_root)):
             motion_applied = True
         if motion_applied:
             applied.append("motion loader")
@@ -787,6 +860,40 @@ def _patch_motion_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", MOTION_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} motion module loader injected into {path.name}")
+    return True
+
+
+def _patch_splash_brand(web_root: Path) -> bool:
+    """Replace the official splash contents with the branded boot screen.
+
+    The official ``#splash-loader`` element (wave-animated "Comfy" SVG) is
+    swapped for the homepage-fork boot screen: animated logo GIF, progress
+    bar with moving stripes, and a live boot log fed by motion.js's real
+    signals (resource loads, /api milestones, spinner state). The official
+    element id is kept on a hidden stub so the official App watcher's
+    ``getElementById('splash-loader')?.remove()`` resolves harmlessly; the
+    visible splash lives under ``#cdl-splash`` and is owned end-to-end by
+    motion.js (fade-out on the spinner falling edge, then removal).
+
+    Idempotent via the marker; also re-applies cleanly when the official
+    splash was already replaced (the regex simply finds nothing to replace).
+
+    Returns ``True`` when the file was rewritten.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if SPLASH_BRAND_MARK in text:
+        logging.debug(f"{TAG} splash brand already applied")
+        return False
+
+    # The official splash div contains only the <svg> (no nested div), so the
+    # first </div> after its opening tag closes it.
+    m = re.search(r'<div id="splash-loader"[^>]*>.*?</div>', text, re.DOTALL)
+    if not m:
+        raise ValueError("official #splash-loader element not found")
+    text = text[:m.start()] + SPLASH_BRAND_MARK + SPLASH_BRAND_DOM + text[m.end():]
+    _write(path, text)
+    logging.info(f"{TAG} branded splash installed in {path.name}")
     return True
 
 
