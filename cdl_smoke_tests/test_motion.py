@@ -211,20 +211,23 @@ def main() -> int:
     text = _text(index)  # re-read: B1 may have rewritten the file
 
     check("B1 brand logo mark", BRAND_LOGO_MARK in text)
-    check("B1 favicon points at DL_trans.png",
-          'href="/comfydl/motion/DL_trans.png"' in text
+    check("B1 favicon points at the trimmed derivative",
+          'href="/comfydl/motion/DL_trans_favicon.png"' in text
           and 'type="image/x-icon"' not in text.split("</head>")[0])
     check("B1 menu logo css present",
           ".comfyui-logo{display:none!important}" in text
-          and "background:url('/comfydl/motion/DL_trans.png')" in text)
+          and "background:url('/comfydl/motion/DL_trans_favicon.png')" in text)
     png = REPO_ROOT / "app" / "motion_assets" / "DL_trans.png"
     check("B1 DL_trans.png shipped in motion_assets",
           png.is_file() and png.stat().st_size > 5_000)
+    fav = REPO_ROOT / "app" / "motion_assets" / "DL_trans_favicon.png"
+    check("B1 trimmed favicon derivative shipped",
+          fav.is_file() and fav.stat().st_size > 2_000)
     # Runtime override: useProgressFavicon's idle frame must point at the
     # brand PNG, or the baked <link> is silently overwritten on boot.
     gv_text = _text(_locate(sandbox / "assets", "GraphView-*.js", "useProgressFavicon"))
     check("B1 progress-favicon idle frame redirected",
-          "`/comfydl/motion/DL_trans.png`" in gv_text
+          "`/comfydl/motion/DL_trans_favicon.png`" in gv_text
           and "favicon_progress_16x16/frame_9.png" not in gv_text)
 
     return report()

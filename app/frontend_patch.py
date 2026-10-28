@@ -112,12 +112,18 @@ SPLASH_BRAND_MARK = "<!--ComfyDL_UI:splash-brand-->"
 # raster PNG cannot take its place through a mask/fill, so the same trick as
 # the homepage fork's logo-fx applies: hide the svg and paint the grid wrapper.
 BRAND_LOGO_MARK = "<!--ComfyDL_UI:brand-logo-->"
+# Favicon uses the trimmed square derivative (DL_trans.png has ~50% transparent
+# margins, which renders tiny and skinny at 16px); the menu logo uses it too
+# for a fuller look at 42px.
+FAVICON_TARGET_LINK = ('<link rel="icon" type="image/png" '
+                       'href="/comfydl/motion/DL_trans_favicon.png"/>')
+FAVICON_URL = "/comfydl/motion/DL_trans_favicon.png"
 BRAND_LOGO_TAG = (
     BRAND_LOGO_MARK
     + '<style id="cdl-brand-logo-style">'
     + '.comfyui-logo{display:none!important}'
     + '.comfy-menu-button-wrapper .grid{width:42px;height:42px;'
-    + "background:url('/comfydl/motion/DL_trans.png') center/contain no-repeat}"
+    + f"background:url('{FAVICON_URL}') center/contain no-repeat}}"
     + '</style>'
 )
 # The official useProgressFavicon() swaps the favicon at runtime for its
@@ -125,7 +131,10 @@ BRAND_LOGO_TAG = (
 # the <link> baked into index.html. Redirect the idle frame to the brand PNG;
 # the 0..8 progress frames keep the official artwork.
 FAVICON_IDLE_OLD = "`/assets/images/favicon_progress_16x16/frame_9.png`"
-FAVICON_IDLE_NEW = "`/comfydl/motion/DL_trans.png`"
+# Earlier brand-URL generations accepted as upgrade sources.
+FAVICON_IDLE_PREV = ("`/assets/images/favicon_progress_16x16/frame_9.png`",
+                     "`/comfydl/motion/DL_trans.png`")
+FAVICON_IDLE_NEW = "`/comfydl/motion/DL_trans_favicon.png`"
 
 # 2026-10-28 regression: 0.3.14's startup path never calls loadDefaultWorkflow.
 # initializeWorkflow -> resolveStartupOutcome serves *veteran* users
@@ -955,19 +964,28 @@ def _patch_brand_logo(web_root: Path) -> bool:
 
     path = web_root / "index.html"
     text = _text(path)
-    if BRAND_LOGO_MARK not in text:
-        old_link = '<link rel="icon" type="image/x-icon" href="./assets/favicon.ico"/>'
-        if old_link not in text:
+    # Favicon link: replace whatever icon link is current (official .ico or an
+    # earlier brand generation) with the trimmed-derivative target.
+    if FAVICON_TARGET_LINK not in text:
+        if not re.search(r'<link rel="icon"', text):
             raise ValueError("official favicon link not found")
-        new_link = '<link rel="icon" type="image/png" href="/comfydl/motion/DL_trans.png"/>'
-        text = text.replace(old_link, new_link)
-
+        text = re.sub(r'<link rel="icon"[^>]*/>', FAVICON_TARGET_LINK, text, count=1)
+        changed = True
+    # Menu-logo style block: refresh when its contents drifted (URL upgrades).
+    # NOTE: the marker lives inside the tag (it must be removed together with
+    # a stale style block, then re-injected) - never gate the re-injection on
+    # the marker, or an upgrade deletes the style and leaves nothing behind.
+    if BRAND_LOGO_TAG not in text:
+        text = re.sub(r'<style id="cdl-brand-logo-style">.*?</style>', "",
+                      text, flags=re.DOTALL)
+        text = text.replace(BRAND_LOGO_MARK, "")
         if text.count("</head>") != 1:
             raise ValueError(f"expected exactly one </head> in {path.name}")
         text = text.replace("</head>", BRAND_LOGO_TAG + "</head>")
+        changed = True
+    if changed:
         _write(path, text)
         logging.info(f"{TAG} brand logo (favicon + menu logo) installed in {path.name}")
-        changed = True
     else:
         logging.debug(f"{TAG} brand logo already applied to index.html")
 
@@ -976,9 +994,12 @@ def _patch_brand_logo(web_root: Path) -> bool:
     # the app goes idle and the baked <link> never shows.
     gv = _locate(assets, "GraphView-*.js", "useProgressFavicon")
     gv_text = _text(gv)
-    if FAVICON_IDLE_OLD in gv_text:
-        _write(gv, gv_text.replace(FAVICON_IDLE_OLD, FAVICON_IDLE_NEW, 1))
-        logging.info(f"{TAG} progress-favicon idle frame -> DL_trans.png in {gv.name}")
+    stale = [s for s in FAVICON_IDLE_PREV if s in gv_text]
+    if stale:
+        for s in stale:
+            gv_text = gv_text.replace(s, FAVICON_IDLE_NEW)
+        _write(gv, gv_text)
+        logging.info(f"{TAG} progress-favicon idle frame -> DL_trans_favicon.png in {gv.name}")
         changed = True
     elif FAVICON_IDLE_NEW in gv_text:
         logging.debug(f"{TAG} progress-favicon idle frame already redirected")
