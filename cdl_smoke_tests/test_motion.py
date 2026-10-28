@@ -192,6 +192,34 @@ def main() -> int:
     check("S1 zh milestone table",
           "节点定义（画布 + 节点库）" in src and "界面就绪" in src)
 
+    # --- B1: brand logo (favicon + top-left menu logo) ----------------------
+    from app.frontend_patch import BRAND_LOGO_MARK, _patch_brand_logo  # noqa: E402
+
+    try:
+        logo_applied = _patch_brand_logo(sandbox)
+    except Exception as exc:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        check("B1 brand logo patch applies cleanly", False, repr(exc))
+        return report()
+    # False = source index.html already baked by a live server run.
+    check("B1 brand logo patch applies cleanly (or source already baked)",
+          logo_applied is True
+          or (logo_applied is False and BRAND_LOGO_MARK in _text(index)),
+          str(logo_applied))
+    text = _text(index)  # re-read: B1 may have rewritten the file
+
+    check("B1 brand logo mark", BRAND_LOGO_MARK in text)
+    check("B1 favicon points at DL_trans.png",
+          'href="/comfydl/motion/DL_trans.png"' in text
+          and 'type="image/x-icon"' not in text.split("</head>")[0])
+    check("B1 menu logo css present",
+          ".comfyui-logo{display:none!important}" in text
+          and "background:url('/comfydl/motion/DL_trans.png')" in text)
+    png = REPO_ROOT / "app" / "motion_assets" / "DL_trans.png"
+    check("B1 DL_trans.png shipped in motion_assets",
+          png.is_file() and png.stat().st_size > 5_000)
+
     return report()
 
 

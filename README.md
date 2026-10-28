@@ -175,7 +175,8 @@ takes over the splash: it fades out (no hard DOM removal) and the entrance
 starts the same instant, so chrome elements (topbar, bottom bar, sidebar rail,
 right panel) slide in *through* the dissolving splash; canvas nodes fade in
 along a diagonal sweep and the canvas grid returns last. Every left click
-spawns a soft ripple on a page-global overlay. One setting governs it all —
+spawns a soft ripple on a page-global overlay. The user's `DL_trans.png` also
+replaces the favicon and the top-left menu logo. One setting governs it all —
 *Settings > ComfyDL > Motion > 界面动效* — plus a hard `prefers-reduced-motion`
 exemption, a 9s pre-hide failsafe and a 20s splash failsafe. Canvas nodes are
 animated with opacity only: their position lives in `transform`, which the

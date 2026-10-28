@@ -105,6 +105,21 @@ MOTION_CSS_MARK = "<!--ComfyDL_UI:motion-css-->"
 # dissolving. Theme colors come from the official inline script via
 # var(--bg-color)/var(--fg-color), so no extra theming is needed.
 SPLASH_BRAND_MARK = "<!--ComfyDL_UI:splash-brand-->"
+
+# Brand logo (2026-10-28): the user's DL_trans.png becomes the favicon and the
+# top-left menu logo. The official logo is an inline SVG component
+# (ComfyLogo, currentColor fill) inside .comfy-menu-button-wrapper .grid - a
+# raster PNG cannot take its place through a mask/fill, so the same trick as
+# the homepage fork's logo-fx applies: hide the svg and paint the grid wrapper.
+BRAND_LOGO_MARK = "<!--ComfyDL_UI:brand-logo-->"
+BRAND_LOGO_TAG = (
+    BRAND_LOGO_MARK
+    + '<style id="cdl-brand-logo-style">'
+    + '.comfyui-logo{display:none!important}'
+    + '.comfy-menu-button-wrapper .grid{width:42px;height:42px;'
+    + "background:url('/comfydl/motion/DL_trans.png') center/contain no-repeat}"
+    + '</style>'
+)
 SPLASH_BRAND_CSS = (
     '<style id="cdl-splash-style">'
     '#cdl-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;'
@@ -290,6 +305,8 @@ def apply_frontend_patches(web_root: str) -> None:
         if _patch_motion_loader(Path(web_root)):
             motion_applied = True
         if _patch_splash_brand(Path(web_root)):
+            motion_applied = True
+        if _patch_brand_logo(Path(web_root)):
             motion_applied = True
         if motion_applied:
             applied.append("motion loader")
@@ -894,6 +911,39 @@ def _patch_splash_brand(web_root: Path) -> bool:
     text = text[:m.start()] + SPLASH_BRAND_MARK + SPLASH_BRAND_DOM + text[m.end():]
     _write(path, text)
     logging.info(f"{TAG} branded splash installed in {path.name}")
+    return True
+
+
+def _patch_brand_logo(web_root: Path) -> bool:
+    """Swap the favicon and the top-left menu logo to ``DL_trans.png``.
+
+    Two rewrite targets in ``index.html``:
+      - the single favicon ``<link>`` now points at the PNG (type fixed from
+        image/x-icon to image/png);
+      - a <style> block hides the official inline ComfyLogo SVG and paints the
+        ``.comfy-menu-button-wrapper .grid`` wrapper with the PNG (homepage
+        fork's logo-fx technique - a raster image cannot inherit the SVG's
+        currentColor fill).
+
+    Idempotent via the marker. Returns ``True`` when the file was rewritten.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if BRAND_LOGO_MARK in text:
+        logging.debug(f"{TAG} brand logo already applied")
+        return False
+
+    old_link = '<link rel="icon" type="image/x-icon" href="./assets/favicon.ico"/>'
+    if old_link not in text:
+        raise ValueError("official favicon link not found")
+    new_link = '<link rel="icon" type="image/png" href="/comfydl/motion/DL_trans.png"/>'
+    text = text.replace(old_link, new_link)
+
+    if text.count("</head>") != 1:
+        raise ValueError(f"expected exactly one </head> in {path.name}")
+    text = text.replace("</head>", BRAND_LOGO_TAG + "</head>")
+    _write(path, text)
+    logging.info(f"{TAG} brand logo (favicon + menu logo) installed in {path.name}")
     return True
 
 
