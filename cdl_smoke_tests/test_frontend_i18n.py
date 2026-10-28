@@ -91,7 +91,14 @@ def main() -> int:
         traceback.print_exc()
         check("B2 patch applies cleanly", False, repr(exc))
         return report()
-    check("B2 patch applies cleanly", applied is True)
+    # applied False is fine when the source frontend was already baked by a
+    # live server run (the pip frontend is patched in place at startup) —
+    # then the markers must already be there, which B3+ verify anyway.
+    check("B2 patch applies cleanly (or source already baked)",
+          applied is True
+          or (applied is False
+              and I18N_NODEDEFS_MARK in _text(assets / names["nodeDefs"])),
+          str(applied))
 
     nd_text = _text(assets / names["nodeDefs"])
     check("B3 nodeDefs chunk carries the marker", I18N_NODEDEFS_MARK in nd_text)
@@ -137,7 +144,11 @@ def main() -> int:
         traceback.print_exc()
         check("H2 help menu patch applies cleanly", False, repr(exc))
         return report()
-    check("H2 help menu patch applies cleanly", applied_help is True)
+    # Same as B2: False means the source was already baked by a live run.
+    check("H2 help menu patch applies cleanly (or source already baked)",
+          applied_help is True
+          or (applied_help is False and HELP_MENU_MARK in _text(gv)),
+          str(applied_help))
 
     gv_text = _text(gv)
     check("H3 all four ComfyDL items injected",
