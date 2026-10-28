@@ -33,6 +33,14 @@ Scope guard: only interrupts are checkpointed, never arbitrary node errors -
 a deterministic error would just replay on resume, so continuing from it is
 pointless.  Hard process death is out of scope (same trade as the crash
 site's lazy capture).
+
+Master switch (2026-10-28): the whole helper consults
+``comfy.crashsite_switch.is_master_enabled()``.  When the crash site is
+disabled every entry point short-circuits *before* doing any work - most
+importantly ``run_key`` skips the tensor SHA256 digests (a CPU copy +
+hash of the full training tensors, done once per training execution), and
+``save`` / ``load`` / ``discard`` become no-ops.  The trainer nodes need no
+changes: they hold an empty run key and every helper answers "nothing to do".
 """
 
 from __future__ import annotations
@@ -45,6 +53,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 PRUNE_DAYS = 7
+
+
+def _master_on() -> bool:
+    """The crash site master switch (cheap, no torch import)."""
+    try:
+        from comfy.crashsite_switch import is_master_enabled
+
+        return is_master_enabled()
+    except Exception:  # noqa: BLE001 - switch must never break training
+        return True
 
 
 def checkpoints_root() -> Path:
@@ -97,7 +115,13 @@ def _digest(value: Any) -> Any:
 
 
 def run_key(parts: Any) -> str:
-    """Stable sha256 identity for one training run (see module docstring)."""
+    """Stable sha256 identity for one training run (see module docstring).
+
+    Returns ``""`` when the crash site is master-disabled - callers keep an
+    empty key and every other helper short-circuits on it.
+    """
+    if not _master_on():
+        return ""
     canonical = json.dumps(_digest(parts), sort_keys=True,
                            separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
@@ -126,8 +150,11 @@ def save(run_key: str, payload: Dict[str, Any]) -> bool:
     """Atomically store one checkpoint (interrupt path).
 
     Returns False (and does nothing) when there is no host context - bare
-    execution cannot be resumed, so there is nothing to save for.
+    execution cannot be resumed, so there is nothing to save for.  Also False
+    when the crash site is master-disabled (nothing is ever resumed then).
     """
+    if not _master_on():
+        return False
     prompt_id = current_prompt_id()
     if prompt_id is None:
         return False
@@ -148,8 +175,11 @@ def load(run_key: str) -> Optional[Dict[str, Any]]:
 
     A stored checkpoint whose ``prompt_id`` differs from the executing one
     is stale (a fresh Run, not a resume): it is deleted and None returned,
-    so the caller trains from scratch.
+    so the caller trains from scratch.  None also when the crash site is
+    master-disabled - no resume, no lookup, no disk touch.
     """
+    if not _master_on():
+        return None
     prompt_id = current_prompt_id()
     if prompt_id is None:
         return None
@@ -176,7 +206,12 @@ def load(run_key: str) -> Optional[Dict[str, Any]]:
 
 
 def discard(run_key: str) -> None:
-    """Remove the checkpoint after a run finished (including early stop)."""
+    """Remove the checkpoint after a run finished (including early stop).
+
+    No-op when the crash site is master-disabled (nothing was ever written).
+    """
+    if not _master_on() or not run_key:
+        return
     try:
         _path(run_key).unlink(missing_ok=True)
     except Exception:  # noqa: BLE001

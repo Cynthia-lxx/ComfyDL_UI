@@ -132,6 +132,13 @@ A safety net for interrupted runs, with **zero overhead while everything works**
 - **Breakpoint continuation** — the trainers (Regression Train, Training Loop, Language Model
   Train) save their complete state at the interrupt moment; a resume continues from the
   breakpoint step instead of starting a 10k-step training over.
+- **Master switch** — *Settings > ComfyDL crash site enabled (master switch)* detaches the
+  whole feature from the run path on demand: the snapshot provider is unregistered, so the
+  executor's lifecycle hook and the caching layer stop calling into it entirely, training
+  checkpoints short-circuit before touching the tensors, and Resume refuses with a readable
+  error. Disabled, the run path behaves as if the feature were absent (the snapshot library
+  stays browsable). `--cdl-crashsite-disable` hard-disables until restart;
+  `--cdl-profiling-disable` also hard-disables the crash site (historical wiring).
 
 The snapshot library in the sidebar — every run is filed with its captured nodes; interrupted
 scenes offer Scene export:

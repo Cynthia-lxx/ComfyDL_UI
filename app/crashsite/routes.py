@@ -43,6 +43,69 @@ def set_prompt_queue(prompt_queue, server) -> None:
     _SERVER = server
 
 
+# --- master switch (2026-10-28) ----------------------------------------------
+# GET  /comfydl/crashsite/enabled -> {enabled, hard_disabled}
+# POST /comfydl/crashsite/enabled {"enabled": bool}
+#   A soft disable UNREGISTERS the snapshot provider from
+#   comfy_execution.cache_provider, so the executor's lifecycle hook and the
+#   caching layer stop calling into the crash site entirely - the run path
+#   behaves as if the feature were absent (profiling-switch parity, but
+#   stronger: profiling keeps routes/manual paths, we detach the provider).
+#   Re-enabling registers it back.  --cdl-crashsite-disable (or
+#   --cdl-profiling-disable) makes the POST refuse to re-enable.
+#   The library routes (list / detail / export) stay up either way - browsing
+#   history never touches the run path.
+
+def _provider_registered(provider) -> bool:
+    from comfy_execution.cache_provider import _get_cache_providers
+
+    return provider is not None and provider in _get_cache_providers()
+
+
+@routes.get("/comfydl/crashsite/enabled")
+async def enabled_get(request: web.Request) -> web.Response:
+    from comfy.crashsite_switch import is_hard_disabled, is_master_enabled
+
+    return web.json_response({
+        "enabled": is_master_enabled(),
+        "hard_disabled": is_hard_disabled(),
+    })
+
+
+@routes.post("/comfydl/crashsite/enabled")
+async def enabled_post(request: web.Request) -> web.Response:
+    from comfy.crashsite_switch import (
+        is_hard_disabled,
+        set_master_enabled,
+    )
+    from comfy_execution.cache_provider import (
+        register_cache_provider,
+        unregister_cache_provider,
+    )
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    if not isinstance(payload, dict) or not isinstance(payload.get("enabled"), bool):
+        return web.json_response({"error": "body must be {enabled: bool}"}, status=400)
+    if is_hard_disabled() and payload["enabled"]:
+        return web.json_response({
+            "error": "crash site is hard-disabled (--cdl-crashsite-disable or --cdl-profiling-disable); restart without the flag to re-enable",
+        }, status=409)
+
+    enabled = set_master_enabled(payload["enabled"])
+    provider = _SNAPSHOT_PROVIDER
+    if provider is not None:
+        provider.set_enabled(enabled)
+        if enabled and not _provider_registered(provider):
+            register_cache_provider(provider)
+        elif not enabled and _provider_registered(provider):
+            unregister_cache_provider(provider)
+    proflog("low", "crash site: master switch -> %s", enabled, request=request)
+    return web.json_response({"enabled": enabled})
+
+
 @routes.get("/comfydl/crashsite/snapshots")
 async def snapshots_list(request: web.Request) -> web.Response:
     return web.json_response({"snapshots": store.list_snapshots()})
@@ -134,6 +197,18 @@ async def _resume_impl(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "invalid JSON body"}, status=400)
     snapshot_id = str((payload or {}).get("id") or "")
+    # Master switch: a disabled crash site neither captures nor resumes -
+    # re-queueing into an unregistered provider would run the prompt with no
+    # capture at all (the user asked for "as if the feature were absent").
+    try:
+        from comfy.crashsite_switch import is_master_enabled
+
+        if not is_master_enabled():
+            return web.json_response(
+                {"error": "crash site is disabled; enable it first (Settings or POST /comfydl/crashsite/enabled)"},
+                status=409)
+    except Exception:  # noqa: BLE001 - switch must never break the route
+        pass
     path = store.find_snapshot_file(snapshot_id)
     if path is None:
         return web.json_response({"error": "snapshot not found"}, status=404)

@@ -19,10 +19,15 @@
   const DETAIL_URL = (id) =>
     "/comfydl/crashsite/snapshots/" + encodeURIComponent(id) + "/detail";
   const TAB_ID = "comfydl-crashsite";
+  // Master switch (2026-10-28): mirrors ComfyDL.Profiling.Enabled - the
+  // setting POSTs to the backend, which unregisters the snapshot provider so
+  // the run path behaves as if the crash site were absent.
+  const SETTING_ENABLED = "ComfyDL.CrashSite.Enabled";
+  const ENABLED_URL = "/comfydl/crashsite/enabled";
 
   const state = {
     snapshots: null, loading: false, refreshQueued: false, resuming: null,
-    initialized: false, topbarButton: null,
+    initialized: false, topbarButton: null, masterEnabled: true,
     // Scene export (git-fire M2): the summary table for one snapshot.
     exportFor: null, exportDetail: null, exportBusy: false,
     exportSel: {}, exportFormats: {}, promptSel: true,
@@ -33,6 +38,7 @@
       tab_title: "Crash Site",
       tab_tooltip: "Execution snapshots and breakpoint recovery",
       incremental: "Lazy capture: nothing is written while the workflow runs at full speed. The moment it is interrupted or fails, surviving outputs are written to the snapshot library - just Resume after a crash.",
+      disabled_hint: "Crash site is disabled (Settings > ComfyDL.CrashSite.Enabled): nothing is captured and Resume is unavailable. The library below stays browsable.",
       title: "Snapshot library",
       empty: "No snapshots yet - run or interrupt a workflow to create one.",
       refresh: "Refresh",
@@ -63,6 +69,7 @@
       tab_title: "事故现场",
       tab_tooltip: "工作流执行快照与断点恢复",
       incremental: "惰性捕获：正常运行零开销；工作流被打断或失败的那一刻，缓存中幸存的输出会写入快照库，直接点恢复即可。",
+      disabled_hint: "事故现场已停用（设置 > ComfyDL.CrashSite.Enabled）：不捕获、不可恢复；下方快照库仍可浏览。",
       title: "快照库",
       empty: "暂无快照——运行或打断一次工作流即会生成。",
       refresh: "刷新",
@@ -325,7 +332,8 @@
     const el = state.panelEl;
     if (!el) return;
     const html = '<div class="cs-panel">'
-      + '<div class="cs-hint cs-incremental">' + esc(t("incremental")) + "</div>"
+      + '<div class="cs-hint cs-incremental">'
+      + esc(state.masterEnabled ? t("incremental") : t("disabled_hint")) + "</div>"
       + renderExportSection()
       + '<div class="cs-title-row"><span class="cs-title">' + esc(t("title"))
       + '</span><button class="cs-button" id="cs-refresh">' + esc(t("refresh")) + "</button></div>"
@@ -507,6 +515,7 @@
     if (locale !== "zh") locale = "en";
     registerSidebar();
     mountTopbarButton();
+    await syncEnabledState(); // badge/panel state before the first paint
     fetchSnapshots();
     // M2: refresh the library as executions start and end (a new snapshot
     // opens as "running", the resume statistics note lands on completion)
@@ -530,6 +539,53 @@
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // --- master switch plumbing ------------------------------------------------
+  // Backend is the source of truth: GET on boot, POST per toggle.  A hard-
+  // disabled server refuses the POST with 409 - the setting then flips back
+  // to what the backend reports so the UI never lies.
+  async function syncEnabledState() {
+    try {
+      const res = await fetch(ENABLED_URL);
+      if (!res.ok) return;
+      const data = await res.json();
+      state.masterEnabled = !!data.enabled;
+      applyEnabledVisibility();
+    } catch (e) { /* panel is a courtesy */ }
+  }
+
+  async function applyEnabled(enabled) {
+    try {
+      const res = await fetch(ENABLED_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !!enabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        state.masterEnabled = !!data.enabled;
+      } else {
+        console.warn("[ComfyDL crashsite] master switch rejected:", res.status);
+        await syncEnabledState();
+      }
+    } catch (e) {
+      console.warn("[ComfyDL crashsite] master switch failed:", e);
+      await syncEnabledState();
+    }
+    applyEnabledVisibility();
+    // Re-render so the panel hint row follows the state.
+    if (state.panelEl) renderPanel();
+  }
+
+  function applyEnabledVisibility() {
+    // The topbar shortcut is pure decoration - hide it while disabled so the
+    // dead feature doesn't advertise itself.  The sidebar tab stays: browsing
+    // the snapshot library never touches the run path.
+    if (state.topbarButton && state.topbarButton.element) {
+      state.topbarButton.element.style.display =
+        state.masterEnabled ? "" : "none";
+    }
+  }
 
   // Profiler-style polling: try/catch INSIDE the loop - the host's
   // registerExtension wraps a pinia store and THROWS while the Vue services
@@ -568,7 +624,19 @@
       try {
         getApp().registerExtension({
           name: "ComfyDL.CrashSite",
-          settings: [],
+          settings: [{
+            // Master switch (2026-10-28): detach the whole crash site from
+            // the run path and back.  The backend is informed per-change; a
+            // hard-disabled server refuses the POST and the setting flips
+            // back to the backend's state.
+            id: SETTING_ENABLED,
+            name: "ComfyDL crash site enabled (master switch)",
+            type: "boolean",
+            defaultValue: true,
+            onChange: (newVal) => {
+              void applyEnabled(newVal !== false);
+            },
+          }],
           commands: [],
           async setup() {
             csTrace("setup called (host accepted the extension)");

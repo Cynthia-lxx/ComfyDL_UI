@@ -96,6 +96,11 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
   pt），外加工作流提示词；文件落入 output 目录并进入 Results assets。
 - **断点续训** — 训练节点（Regression Train、Training Loop、Language Model Train）在被打
   断的瞬间保存完整状态；恢复时从断点步继续，而不是把万步训练从头再来。
+- **总开关** — *设置 > ComfyDL crash site enabled (master switch)* 可随时把整个功能从执行
+  路径上摘下来：快照 Provider 被反注册，执行器生命周期钩子与缓存层不再调用它，训练 checkpoint
+  在触碰张量之前就短路，恢复按钮给出可读的拒绝提示。停用后执行路径的行为与"没有装过这个功能"
+  一致（快照库仍可浏览）。`--cdl-crashsite-disable` 硬停用（重启才能恢复）；
+  `--cdl-profiling-disable` 也会连带硬停用事故现场（历史遗留接线）。
 
 侧栏中的快照库——每次运行都会连同捕获的节点一起归档；被打断的现场提供现场导出：
 
