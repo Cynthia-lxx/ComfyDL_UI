@@ -133,9 +133,25 @@
   "CdlBroadcast": {
     "description": "将张量广播到目标形状。封装 torch.broadcast_to。目标形状以逗号分隔字符串输入（如 \"3,1,4\"）。解析错误时返回原张量。"
   },
+  "CdlClassificationDataGen": {
+    "display_name": "Classification Data Generator（分类数据生成器）",
+    "description": "Formula Data Generator 的分类对应物——三种内置二维形状（全部用局部"
+  },
+  "CdlClassificationModelLoad": {
+    "display_name": "Classification Model Load（分类模型加载）",
+    "description": "Classification Train 的免骨架持久化对应节点——与 Regression Model Load"
+  },
+  "CdlClassificationTrain": {
+    "display_name": "Classification Train（分类训练）",
+    "description": "一盒式生产级分类管线——机制与 Regression Train 完全一致（交叉熵头 + 类别索引"
+  },
   "CdlConfusionMatrix": {
     "display_name": "Confusion Matrix（混淆矩阵）",
     "description": "将混淆矩阵渲染为热力图，并在每个格子中标注数值。支持行归一化和自定义数字格式。"
+  },
+  "CdlConfusionMatrixEval": {
+    "display_name": "Confusion Matrix (Eval)（混淆矩阵·计算）",
+    "description": "构建分类器的混淆矩阵——行是真实类别、列是预测类别，对角线是各类别的正确计数，"
   },
   "CdlConv2d": {
     "display_name": "Conv2D（二维卷积）",
@@ -456,6 +472,10 @@
   "CdlShowTrace2D": {
     "display_name": "Show Trace 2D（2D 轨迹图）",
     "description": "可视化二维优化轨迹。绘制一系列点，展示参数 (x1, x2) 在优化过程中的变化。"
+  },
+  "CdlSoftmaxTrain": {
+    "display_name": "Softmax Regression Train（softmax 回归训练·教科书版）",
+    "description": "线性回归训练 的分类对应物——教科书级 softmax 回归配方：零初始化的"
   },
   "CdlSquaredLoss": {
     "display_name": "Squared Loss（平方损失）",
