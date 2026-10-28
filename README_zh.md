@@ -121,6 +121,14 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
   <img src="assets/loss_map_focus.png" alt="训练节点下方的实时 loss map 预览卡，同时展示原始与平滑损失曲线" width="520" />
 </p>
 
+### 界面动效——分阶段入场与点击涟漪
+
+移植自 homepage 分叉：顶栏、底栏、侧栏与右栏按编排依次滑入，画布节点沿对角线依次
+淡入、网格最后回归，每次左键点击在页全局覆盖层上泛起一圈涟漪。一个设置总控——
+*设置 > ComfyDL > 动效 > 界面动效*——另有 `prefers-reduced-motion` 硬豁免与 9 秒
+保险丝（模块加载失败也不会让界面卡在隐形状态）。画布节点只用 opacity 做动画：
+节点位置由 `transform` 决定，动效模块绝不触碰。
+
 ## 安装
 
 需要 Python 3.12+（推荐 3.13）。任何有受支持 PyTorch 构建的操作系统均可。

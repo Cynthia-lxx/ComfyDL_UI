@@ -62,6 +62,39 @@ CRASHSITE_LOADER_TAG = (
 )
 CRASHSITE_LOADER_MARK = "<!--ComfyDL_UI:crashsite-loader-->"
 
+# The Motion module (staged entrance + ripple): a loader script before </body>
+# plus the entrance pre-hide CSS in the <head>. The CSS must ship in the head
+# (not be injected by motion.js at runtime) so it is already in the CSSOM when
+# the first Vue element renders - a runtime injection would race the mount and
+# flicker. The rules are gated on html classes only motion.js (or the 9s
+# failsafe timer baked right next to the CSS) can set, so a failed module load
+# can never leave the UI invisible.
+MOTION_LOADER_TAG = (
+    '<!--ComfyDL_UI:motion-loader-->'
+    '<script type="module" src="/comfydl/motion/motion.js"></script>'
+)
+MOTION_LOADER_MARK = "<!--ComfyDL_UI:motion-loader-->"
+MOTION_CSS_TAG = (
+    '<!--ComfyDL_UI:motion-css-->'
+    '<style id="cdl-motion-prehide">'
+    ':root{--cdl-ease:cubic-bezier(.16,1,.3,1)}'
+    '#graph-canvas-container canvas{transition:opacity 1.6s var(--cdl-ease)}'
+    '@media not (prefers-reduced-motion: reduce){'
+    'html:not(.cdl-motion-off):not(.cdl-entrance-done) .side-tool-bar-container .sidebar-item-group > *:not(.cdl-entered){opacity:0}'
+    'html:not(.cdl-motion-off):not(.cdl-entrance-done) .side-tool-bar-container .mt-auto > *:not(.cdl-entered){opacity:0}'
+    'html:not(.cdl-motion-off):not(.cdl-entrance-done) #comfyui-body-top:not(.cdl-entered),'
+    'html:not(.cdl-motion-off):not(.cdl-entrance-done) #comfyui-body-bottom:not(.cdl-entered),'
+    'html:not(.cdl-motion-off):not(.cdl-entrance-done) #comfyui-body-right:not(.cdl-entered){opacity:0}'
+    'html:not(.cdl-motion-off):not(.cdl-nodes-in) [data-node-id]{opacity:0}'
+    'html:not(.cdl-motion-off):not(.cdl-canvas-in) #graph-canvas-container canvas{opacity:0}'
+    '}'
+    '</style>'
+    '<script>setTimeout(function(){var d=document.documentElement;'
+    "d.classList.add('cdl-canvas-in');d.classList.add('cdl-nodes-in');"
+    "d.classList.add('cdl-entrance-done');},9000);</script>"
+)
+MOTION_CSS_MARK = "<!--ComfyDL_UI:motion-css-->"
+
 # Marker comments written into the patched assets: they document who changed the
 # file and double as the idempotency check.
 LOCALE_MARK = "/*ComfyDL_UI:locale*/"
@@ -119,6 +152,10 @@ I18N_SETTINGS_KEYS = {
         "name": "ComfyDL 性能分析日志级别",
         "tooltip": "后端日志详细程度：off / low / medium / high（默认 off）。",
     },
+    "ComfyDL_Motion_Enabled": {
+        "name": "界面动效（入场编排 + 点击涟漪）",
+        "tooltip": "分阶段入场动画与点击涟漪反馈。改动即时生效；入场动画每次刷新只播放一次。",
+    },
 }
 
 #: settingsCategories deep-merged into the zh main chunk (Settings group names).
@@ -126,6 +163,7 @@ I18N_SETTINGS_CATEGORIES_ZH = {
     "ComfyDL": "ComfyDL 工具包",
     "CrashSite": "事故现场",
     "Profiling": "性能分析",
+    "Motion": "动效",
 }
 
 
@@ -172,6 +210,18 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("crashsite loader")
     except Exception as exc:
         logging.warning(f"{TAG} crashsite loader not applied: {exc}")
+
+    # The Motion module: pre-hide CSS in the head, loader script before </body>.
+    try:
+        motion_applied = False
+        if _patch_motion_css(Path(web_root)):
+            motion_applied = True
+        if _patch_motion_loader(Path(web_root)):
+            motion_applied = True
+        if motion_applied:
+            applied.append("motion loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} motion loader not applied: {exc}")
 
     # One summary line per startup, so an operator can tell a fresh install (some
     # patches just applied) from a warm one (everything was already in place).
@@ -690,6 +740,53 @@ def _patch_crashsite_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", CRASHSITE_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} crashsite panel loader injected into {path.name}")
+    return True
+
+
+def _patch_motion_css(web_root: Path) -> bool:
+    """Inject the entrance pre-hide CSS + failsafe timer into ``index.html``.
+
+    The block goes right before ``</head>`` so the rules are in the CSSOM
+    before the first Vue render (no flicker). Everything is gated on html
+    classes (cdl-motion-off / cdl-entrance-done / cdl-nodes-in / cdl-canvas-in)
+    that only :mod:`app.motion_assets.motion` sets, plus a baked 9s timer that
+    force-reveals everything should the module ever fail to load. The rules
+    themselves sit inside ``@media not (prefers-reduced-motion: reduce)``.
+
+    Returns ``True`` when the file was rewritten.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if MOTION_CSS_MARK in text:
+        logging.debug(f"{TAG} motion css already applied")
+        return False
+
+    if text.count("</head>") != 1:
+        raise ValueError(f"expected exactly one </head> in {path.name}")
+    _write(path, text.replace("</head>", MOTION_CSS_TAG + "</head>"))
+    logging.info(f"{TAG} motion pre-hide css injected into {path.name}")
+    return True
+
+
+def _patch_motion_loader(web_root: Path) -> bool:
+    """Inject the Motion module loader into ``index.html``.
+
+    Same pattern as :func:`_patch_profiling_loader`: the module is served by
+    ``server.py`` from ``/comfydl/motion/`` and this patch only adds the one
+    ``<script type="module">`` tag before ``</body>``.
+
+    Returns ``True`` when the file was rewritten.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if MOTION_LOADER_MARK in text:
+        logging.debug(f"{TAG} motion loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", MOTION_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} motion module loader injected into {path.name}")
     return True
 
 

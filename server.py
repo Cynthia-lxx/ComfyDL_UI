@@ -1328,6 +1328,12 @@ class PromptServer():
         if os.path.isdir(crashsite_assets):
             self.app.add_routes([web.static('/comfydl/crashsite', crashsite_assets)])
 
+        motion_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "motion_assets"
+        )
+        if os.path.isdir(motion_assets):
+            self.app.add_routes([web.static('/comfydl/motion', motion_assets)])
+
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True
         if installed_templates_version:
