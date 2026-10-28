@@ -99,7 +99,8 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
 - **总开关** — *设置 > ComfyDL crash site enabled (master switch)* 可随时把整个功能从执行
   路径上摘下来：快照 Provider 被反注册，执行器生命周期钩子与缓存层不再调用它，训练 checkpoint
   在触碰张量之前就短路，恢复按钮给出可读的拒绝提示。停用后执行路径的行为与"没有装过这个功能"
-  一致（快照库仍可浏览）。`--cdl-crashsite-disable` 硬停用（重启才能恢复）；
+  一致：面板显示醒目警示横幅、快照库不再加载（零请求）、顶栏快捷按钮变为警示样式，重新开启后
+  自动恢复。`--cdl-crashsite-disable` 硬停用（重启才能恢复）；
   `--cdl-profiling-disable` 也会连带硬停用事故现场（历史遗留接线）。
 
 侧栏中的快照库——每次运行都会连同捕获的节点一起归档；被打断的现场提供现场导出：

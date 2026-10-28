@@ -136,8 +136,9 @@ A safety net for interrupted runs, with **zero overhead while everything works**
   whole feature from the run path on demand: the snapshot provider is unregistered, so the
   executor's lifecycle hook and the caching layer stop calling into it entirely, training
   checkpoints short-circuit before touching the tensors, and Resume refuses with a readable
-  error. Disabled, the run path behaves as if the feature were absent (the snapshot library
-  stays browsable). `--cdl-crashsite-disable` hard-disables until restart;
+  error. Disabled, the run path behaves as if the feature were absent: the panel shows a
+  warning banner, the snapshot library is not loaded (zero requests) and the topbar shortcut
+  is restyled as a warning until re-enabled. `--cdl-crashsite-disable` hard-disables until restart;
   `--cdl-profiling-disable` also hard-disables the crash site (historical wiring).
 
 The snapshot library in the sidebar — every run is filed with its captured nodes; interrupted

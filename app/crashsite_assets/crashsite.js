@@ -38,7 +38,9 @@
       tab_title: "Crash Site",
       tab_tooltip: "Execution snapshots and breakpoint recovery",
       incremental: "Lazy capture: nothing is written while the workflow runs at full speed. The moment it is interrupted or fails, surviving outputs are written to the snapshot library - just Resume after a crash.",
-      disabled_hint: "Crash site is disabled (Settings > ComfyDL.CrashSite.Enabled): nothing is captured and Resume is unavailable. The library below stays browsable.",
+      disabled_title: "Crash site is disabled",
+      disabled_body: "Nothing is captured, training checkpoints are off and Resume is unavailable - the run path behaves as if the crash site were absent. Enable it in Settings (ComfyDL.CrashSite.Enabled). The snapshot library is not loaded while disabled.",
+      disabled_tooltip: "Crash site disabled - click for details",
       title: "Snapshot library",
       empty: "No snapshots yet - run or interrupt a workflow to create one.",
       refresh: "Refresh",
@@ -69,7 +71,9 @@
       tab_title: "事故现场",
       tab_tooltip: "工作流执行快照与断点恢复",
       incremental: "惰性捕获：正常运行零开销；工作流被打断或失败的那一刻，缓存中幸存的输出会写入快照库，直接点恢复即可。",
-      disabled_hint: "事故现场已停用（设置 > ComfyDL.CrashSite.Enabled）：不捕获、不可恢复；下方快照库仍可浏览。",
+      disabled_title: "事故现场已停用",
+      disabled_body: "不捕获、不写训练断点、恢复不可用——执行路径与未安装此功能时完全一致。可在设置中开启（ComfyDL.CrashSite.Enabled）。停用期间快照库不加载。",
+      disabled_tooltip: "事故现场已停用——点开查看详情",
       title: "快照库",
       empty: "暂无快照——运行或打断一次工作流即会生成。",
       refresh: "刷新",
@@ -137,6 +141,9 @@
   csTrace("module evaluated");
 
   async function fetchSnapshots() {
+    // Master switch: a disabled crash site loads NOTHING - the library
+    // request itself is a per-execution cost the switch is meant to remove.
+    if (!state.masterEnabled) return;
     const api = getApi();
     if (!api || typeof api.fetchApi !== "function") return;
     if (state.loading) { state.refreshQueued = true; return; }
@@ -331,9 +338,18 @@
   function renderPanel() {
     const el = state.panelEl;
     if (!el) return;
+    // Master switch: a loud, unmissable disabled state instead of the
+    // library - the tab stays open (browsing is harmless) but loads nothing.
+    if (!state.masterEnabled) {
+      el.innerHTML = '<div class="cs-panel">'
+        + '<div class="cs-disabled-banner">'
+        + '<div class="cs-disabled-title">&#9888; ' + esc(t("disabled_title")) + "</div>"
+        + '<div class="cs-disabled-body">' + esc(t("disabled_body")) + "</div>"
+        + "</div></div>";
+      return;
+    }
     const html = '<div class="cs-panel">'
-      + '<div class="cs-hint cs-incremental">'
-      + esc(state.masterEnabled ? t("incremental") : t("disabled_hint")) + "</div>"
+      + '<div class="cs-hint cs-incremental">' + esc(t("incremental")) + "</div>"
       + renderExportSection()
       + '<div class="cs-title-row"><span class="cs-title">' + esc(t("title"))
       + '</span><button class="cs-button" id="cs-refresh">' + esc(t("refresh")) + "</button></div>"
@@ -573,17 +589,28 @@
       await syncEnabledState();
     }
     applyEnabledVisibility();
-    // Re-render so the panel hint row follows the state.
+    // Re-render so the panel follows the state; re-attach the library load
+    // when switching back ON (fetchSnapshots no-ops while disabled).
     if (state.panelEl) renderPanel();
+    if (state.masterEnabled) fetchSnapshots();
   }
 
   function applyEnabledVisibility() {
-    // The topbar shortcut is pure decoration - hide it while disabled so the
-    // dead feature doesn't advertise itself.  The sidebar tab stays: browsing
-    // the snapshot library never touches the run path.
-    if (state.topbarButton && state.topbarButton.element) {
-      state.topbarButton.element.style.display =
-        state.masterEnabled ? "" : "none";
+    // Loud, unmissable disabled state on the topbar shortcut: keep the
+    // button, restyle it as a warning (the user asked for the disabled state
+    // to be VISIBLE, not hidden), swap icon + tooltip.  The sidebar tab
+    // stays too - it now renders the disabled banner and loads nothing.
+    const btn = state.topbarButton;
+    if (!btn || !btn.element) return;
+    const el = btn.element;
+    if (state.masterEnabled) {
+      el.classList.remove("cs-topbar-disabled");
+      el.title = t("tab_tooltip");
+      try { btn.icon = "pi pi-replay"; } catch (e) { /* older ComfyButton */ }
+    } else {
+      el.classList.add("cs-topbar-disabled");
+      el.title = t("disabled_tooltip");
+      try { btn.icon = "pi pi-exclamation-triangle"; } catch (e) { /* older */ }
     }
   }
 
