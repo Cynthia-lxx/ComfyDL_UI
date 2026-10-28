@@ -84,7 +84,7 @@
     "display_name": "基础运算（重塑）"
   },
   "CdlAccuracy": {
-    "display_name": "Accuracy（Accuracy（准确率））",
+    "display_name": "Accuracy（准确率）",
     "description": "计算分类任务的正确预测数量。若预测为多类别 logits，先取 argmax，再与标签比较。"
   },
   "CdlActivation": {
@@ -99,66 +99,66 @@
     "description": "构建加性（Bahdanau）注意力层。前向 (queries, keys, values, valid_lens)，批次优先张量。"
   },
   "CdlAreaChart": {
-    "display_name": "Area Chart（Area Chart（面积图））",
+    "display_name": "Area Chart（面积图）",
     "description": "绘制填充面积图 —— 单序列使用 fill_between，多序列堆叠使用 stackplot。"
   },
   "CdlAssignAnchorToBbox": {
-    "display_name": "Assign Anchor→BBox（Assign Anchor→BBox（锚框指派））",
+    "display_name": "Assign Anchor→BBox（锚框指派）",
     "description": "基于 IoU 将真实边界框分配给锚框。每个锚框被分配给一个 IoU ≥ 阈值的真实框，且每个真实框至少保证有一个锚框与之匹配（取 IoU 最大者）。"
   },
   "CdlBananasDetection": {
-    "display_name": "Bananas Detection（Bananas Detection（香蕉检测数据集））",
+    "display_name": "Bananas Detection（香蕉检测数据集）",
     "description": "加载用于目标检测的香蕉检测数据集。包含带边界框标注的香蕉图像。首次使用时自动下载。"
   },
   "CdlBarChart": {
-    "display_name": "Bar Chart（Bar Chart（柱状图））",
+    "display_name": "Bar Chart（柱状图）",
     "description": "绘制垂直或水平柱状图，可选数值标注。封装 matplotlib.pyplot.bar / barh。"
   },
   "CdlBleu": {
-    "display_name": "BLEU Score（BLEU（BLEU 得分））",
+    "display_name": "BLEU Score（BLEU 得分）",
     "description": "计算预测序列与参考序列之间的 BLEU 分数。支持 BLEU-1 到 BLEU-4（由 max_n 控制）。按空白符分词后计算 n-gram 精度和简洁惩罚。"
   },
   "CdlBoxCenterToCorner": {
-    "display_name": "Box Center→Corner（Box Center→Corner（中心→角点））",
+    "display_name": "Box Center→Corner（中心→角点）",
     "description": "将边界框从中心格式 (cx, cy, w, h) 转回角点格式 (x1, y1, x2, y2)。"
   },
   "CdlBoxCornerToCenter": {
-    "display_name": "Box Corner→Center（Box Corner→Center（角点→中心））",
+    "display_name": "Box Corner→Center（角点→中心）",
     "description": "将边界框从角点格式 (x1, y1, x2, y2) 转换为中心格式 (cx, cy, w, h)。"
   },
   "CdlBoxIou": {
-    "display_name": "Box IoU（Box IoU（交并比））",
+    "display_name": "Box IoU（交并比）",
     "description": "计算两组边界框之间的逐对 IoU（交并比）。返回矩阵 [N1, N2]，其中元素 (i,j) 为 boxes1[i] 与 boxes2[j] 的 IoU。"
   },
   "CdlBroadcast": {
     "description": "将张量广播到目标形状。封装 torch.broadcast_to。目标形状以逗号分隔字符串输入（如 \"3,1,4\"）。解析错误时返回原张量。"
   },
   "CdlConfusionMatrix": {
-    "display_name": "Confusion Matrix（Confusion Matrix（混淆矩阵））",
+    "display_name": "Confusion Matrix（混淆矩阵）",
     "description": "将混淆矩阵渲染为热力图，并在每个格子中标注数值。支持行归一化和自定义数字格式。"
   },
   "CdlConv2d": {
-    "display_name": "Conv2D（Conv2D（二维卷积））",
+    "display_name": "Conv2D（二维卷积）",
     "description": "对输入张量执行二维卷积，使用指定的卷积核。封装 torch.nn.functional.conv2d，支持 stride 和 padding 参数。自动将 2-D/3-D 输入扩展为 4-D (N, C, H, W)，结果去掉 batch 维度返回。"
   },
   "CdlCorr2d": {
-    "display_name": "Corr2D（Corr2D（二维互相关））",
+    "display_name": "Corr2D（二维互相关）",
     "description": "对输入张量执行二维互相关运算——这是卷积操作的基础。"
   },
   "CdlDataLoaderInfo": {
-    "display_name": "DataLoader Info（DataLoader Info（加载器信息））",
+    "display_name": "DataLoader Info（加载器信息）",
     "description": "查看 cdlDataloader 的属性：批次数、批大小和数据集总大小。"
   },
   "CdlDataLoaderPreview": {
-    "display_name": "DataLoader Preview（DataLoader Preview（加载器预览））",
+    "display_name": "DataLoader Preview（加载器预览）",
     "description": "从 cdlDataloader 中取一批样本，渲染为图像网格（IMAGE 输出）。自动适配不同数据格式：图像分类显示带标签的图像；目标检测显示带边界框的图像。"
   },
   "CdlDataLoaderPreviewOutput": {
-    "display_name": "DataLoader Preview (Output)（DataLoader Preview (Output)（加载器预览·输出））",
+    "display_name": "DataLoader Preview (Output)（加载器预览·输出）",
     "description": "与 CdlDataLoaderPreview 相同，但注册为 OUTPUT_NODE，渲染后的图像网格直接在 UI 中显示。"
   },
   "CdlDataLoaderStats": {
-    "display_name": "Dataset Stats（Dataset Stats（数据集统计））",
+    "display_name": "Dataset Stats（数据集统计）",
     "description": "遍历 cdlDataloader，统计标签分布。自动识别标签类型：整数且落在 [0, num_classes) 内的离散类别标签渲染为分类柱状图；连续数值标签（如回归目标，含 (n,1) 二维标签）自动按 num_classes 个区间分桶为直方图。"
   },
   "CdlDatasetPreview": {
@@ -173,7 +173,7 @@
     "description": "将一个 DATASET 拆回 X / y 两个 TENSOR。无标签时 y 返回空张量。"
   },
   "CdlDeviceInfo": {
-    "display_name": "Device Info（Device Info（设备信息））",
+    "display_name": "Device Info（设备信息）",
     "description": "查询当前环境的 GPU 数量和 CUDA 可用性。"
   },
   "CdlDotProductAttention": {
@@ -181,15 +181,15 @@
     "description": "构建缩放点积注意力层。前向 (queries, keys, values, valid_lens)，批次优先张量 (batch, seq, num_hiddens)。"
   },
   "CdlDownload": {
-    "display_name": "Download（Download（数据集下载））",
+    "display_name": "Download（数据集下载）",
     "description": "从 URL 下载文件，支持基于 SHA1 的缓存检查。若本地文件存在且 SHA1 匹配，则跳过下载。"
   },
   "CdlDownloadExtract": {
-    "display_name": "Download + Extract（Download + Extract（下载并解压））",
+    "display_name": "Download + Extract（下载并解压）",
     "description": "下载并解压 d2l DATA_HUB 中注册的数据集。从下拉菜单中选择预注册的数据集（banana-detection、voc2012、cifar10_tiny 等）。"
   },
   "CdlFashionMNIST": {
-    "display_name": "Fashion-MNIST（Fashion-MNIST（时装数据集））",
+    "display_name": "Fashion-MNIST（时装数据集）",
     "description": "加载 Fashion-MNIST 图像分类数据集（训练集 6 万张 / 测试集 1 万张，10 个类别）。首次使用时自动下载（约 30 MB）。"
   },
   "CdlFormulaDataGen": {
@@ -197,23 +197,23 @@
     "description": "从数学公式或已训练模型生成带标签的表格数据集——回归实验的开箱即用数据源。"
   },
   "CdlGRU": {
-    "display_name": "GRU（GRU（门控循环单元）（已弃用））",
+    "display_name": "GRU（门控循环单元）（已弃用）",
     "description": "使用 PyTorch 高层 nn.GRU 构建多层 GRU。前向输入 (num_steps, batch_size, num_inputs)，返回 (output, h_n)。"
   },
   "CdlGetTokensAndSegments": {
-    "display_name": "Get Tokens & Segments（Get Tokens & Segments（取 token 与分段））",
+    "display_name": "Get Tokens & Segments（取 token 与分段）",
     "description": "为 BERT 模型准备输入。将 A 段和 B 段的 token 与 [CLS] 和 [SEP] 标记拼接，并生成段 ID（A 段为 0，B 段为 1）。"
   },
   "CdlGradClipping": {
-    "display_name": "Gradient Clip（Gradient Clip（梯度裁剪））",
+    "display_name": "Gradient Clip（梯度裁剪）",
     "description": "对模型参数执行梯度裁剪。前提条件：必须先通过 loss.backward() 计算梯度。计算所有参数梯度的 L2 范数；若超过阈值 theta，则按比例缩放。"
   },
   "CdlHeatmapsTo3D": {
-    "display_name": "Heatmaps to 3D（Heatmaps to 3D（热图转 3D））",
+    "display_name": "Heatmaps to 3D（热图转 3D）",
     "description": "把抽样/降维后的热力数据导出为真正的 3D 模型。1D → 有厚度的平放条码色带；2D → 同样厚度的彩色平板；3D → 半透明立方体（六个外表面 + 三个正交中截面，内部仍然可读）。颜色量化为 64 个 OBJ 材质，透明度写在 MTL 里，因此立方体保持半透明。把 model_3d 连到内置 Preview3D 节点即可查看。"
   },
   "CdlHistogram": {
-    "display_name": "Histogram（Histogram（直方图））",
+    "display_name": "Histogram（直方图）",
     "description": "绘制张量值分布的直方图，支持可调的 bins 数量、密度归一化和颜色。封装 matplotlib.pyplot.hist。"
   },
   "CdlImageAdjust": {
@@ -241,11 +241,11 @@
     "description": "原地应用 Xavier 均匀分布权重初始化。nn.Linear 与 nn.GRU 层会被初始化，其余层保持不变。"
   },
   "CdlLeNet": {
-    "display_name": "LeNet（LeNet（LeNet 网络））",
+    "display_name": "LeNet（LeNet 网络）",
     "description": "构建经典的 LeNet-5 卷积神经网络。使用 LazyConv2d 和 LazyLinear——输入形状在首次前向传播时自动推断。"
   },
   "CdlLinReg": {
-    "display_name": "Linear Regression（Linear Regression（线性回归））",
+    "display_name": "Linear Regression（线性回归）",
     "description": "线性回归前向计算：\\( \\hat{y} = X w + b \\)"
   },
   "CdlLinRegTrain": {
@@ -253,23 +253,23 @@
     "description": "从零用均方损失上的小批量 SGD 训练 y = X @ w + b。输出学到的 w / b、逐步的 loss_history 与训练集上的 y_hat。"
   },
   "CdlLoadArray": {
-    "display_name": "Load Array → DataLoader（Load Array → DataLoader（数组转加载器））",
+    "display_name": "Load Array → DataLoader（数组转加载器）",
     "description": "将一个或多个张量封装为 PyTorch DataLoader。将 TENSOR 特征和/或标签连接到可选输入槽；节点输出 cdlDataloader。"
   },
   "CdlLoraModelToTensor": {
-    "display_name": "LoRA Model → Tensor（LoRA Model → Tensor（LoRA 转张量））",
+    "display_name": "LoRA Model → Tensor（LoRA 转张量）",
     "description": "把 LORA_MODEL（dict[str, torch.Tensor]）打包成一个 1 维 TENSOR 加 key/shape/dtype 元数据。"
   },
   "CdlLossMapToTensor": {
-    "display_name": "Loss Map → Tensor（Loss Map → Tensor（损失图转张量））",
+    "display_name": "Loss Map → Tensor（损失图转张量）",
     "description": "把 LOSS_MAP（{\"loss\": [Tensor, ...]}）打包成一个 1 维 TENSOR 加 shape/dtype 元数据。"
   },
   "CdlMaskedSoftmax": {
-    "display_name": "Masked Softmax（Masked Softmax（掩码 softmax））",
+    "display_name": "Masked Softmax（掩码 softmax）",
     "description": "在最后一个维度上执行带掩码的 softmax。使用 valid_lens 指定每条序列的有效长度；超出有效长度的位置在 softmax 前被设为一个极大的负值（使概率趋近于 0）。"
   },
   "CdlMessageBox": {
-    "display_name": "MessageBox（MessageBox（消息框））",
+    "display_name": "MessageBox（消息框）",
     "description": "通过 ctypes 调用 user32.dll 中的 MessageBoxW 弹出原生 Windows 消息对话框。支持阻塞和非阻塞两种模式。"
   },
   "CdlModelClone": {
@@ -309,39 +309,39 @@
     "description": "构建多头注意力层。num_hiddens 必须能被 num_heads 整除。前向 (queries, keys, values, valid_lens)，批次优先张量。"
   },
   "CdlMultiboxDetection": {
-    "display_name": "Multibox Detection（Multibox Detection（多框检测））",
+    "display_name": "Multibox Detection（多框检测）",
     "description": "使用 NMS 从模型输出中预测边界框。结合类别预测和偏移量，通过逆偏移变换重建框，并通过 NMS 和置信度阈值过滤。"
   },
   "CdlMultiboxPrior": {
-    "display_name": "Multibox Prior（Multibox Prior（多框先验））",
+    "display_name": "Multibox Prior（多框先验）",
     "description": "在每个像素点生成不同形状的锚框。每个像素的锚框数 = len(sizes) + len(ratios) - 1。"
   },
   "CdlMultiboxTarget": {
-    "display_name": "Multibox Target（Multibox Target（多框目标））",
+    "display_name": "Multibox Target（多框目标）",
     "description": "为锚框生成多框目标训练标签。对批次中每张图像，将真实框分配给锚框并计算偏移目标、掩码和类别标签。"
   },
   "CdlNms": {
-    "display_name": "NMS（NMS（非极大值抑制））",
+    "display_name": "NMS（非极大值抑制）",
     "description": "对边界框执行非极大值抑制（Non-Maximum Suppression）。按分数降序排列，保留与任何更高分框的 IoU 不超过阈值的框。"
   },
   "CdlNoOp": {
-    "display_name": "NoOp（NoOp（空操作））",
+    "display_name": "NoOp（空操作）",
     "description": "空操作节点——接受任意输入但不执行任何计算。等同于 Python 的 pass 或汇编的 NOP。可作为任意数据类型的空接收器、工作流构建时的占位节点，或调试时的旁路工具。"
   },
   "CdlOffsetBoxes": {
-    "display_name": "Offset Boxes（Offset Boxes（偏移框））",
+    "display_name": "Offset Boxes（偏移框）",
     "description": "计算从锚框到分配的真实框的偏移量。中心坐标差缩放 10 倍；宽高比取对数后缩放 5 倍。"
   },
   "CdlOffsetInverse": {
-    "display_name": "Offset Inverse（Offset Inverse（逆偏移））",
+    "display_name": "Offset Inverse（逆偏移）",
     "description": "通过逆变换根据锚框和预测偏移量重建角点格式的边界框坐标。"
   },
   "CdlPieChart": {
-    "display_name": "Pie Chart（Pie Chart（饼图））",
+    "display_name": "Pie Chart（饼图）",
     "description": "绘制饼图（普通或甜甜圈样式）并标注百分比。封装 matplotlib.pyplot.pie。"
   },
   "CdlPlot": {
-    "display_name": "Plot（Plot（曲线图））",
+    "display_name": "Plot（曲线图）",
     "description": "通用 MATLAB 风格折线图。支持多条曲线、自定义轴标签、对数/线性刻度、图例和轴范围。"
   },
   "CdlPositionWiseFFN": {
@@ -407,22 +407,22 @@
     "description": "一盒式生产级回归管线——可选训练/验证拆分、折入模型的 z-score 标准化、小批量 Adam"
   },
   "CdlResNeXtBlock": {
-    "display_name": "ResNeXt Block（ResNeXt Block（ResNeXt 块））",
+    "display_name": "ResNeXt Block（ResNeXt 块）",
     "description": "创建单个 ResNeXt 块，使用分组卷积实现多分支结构。包含瓶颈结构（1×1 降维 → 3×3 分组卷积 → 1×1 升维）+ 可选快捷连接。"
   },
   "CdlResNet18": {
-    "display_name": "ResNet-18（ResNet-18（ResNet-18 网络））",
+    "display_name": "ResNet-18（ResNet-18 网络）",
     "description": "构建修改版 ResNet-18 模型（使用更小的卷积核/步幅/填充，不含最大池化）。包含 4 个残差块组（每组 2 个残差块），通道数分别为 64、128、256、512，后接全局平均池化和全连接层。"
   },
   "CdlReshape": {
     "description": "将张量变形为新的形状。封装 torch.reshape。目标形状以逗号分隔字符串输入（如 \"2,8\"、\"4,-1\"）。解析错误时返回原张量。"
   },
   "CdlResidual": {
-    "display_name": "Residual Block（Residual（残差连接））",
+    "display_name": "Residual Block（残差连接）",
     "description": "创建单个 ResNet 残差块。包含两个卷积层（Conv2d + BatchNorm + ReLU）和一个可选的 1×1 快捷卷积。"
   },
   "CdlScatter": {
-    "display_name": "Scatter（Scatter（散点图））",
+    "display_name": "Scatter（散点图）",
     "description": "绘制二维散点图，可选点颜色和尺寸编码第三维。封装 matplotlib.pyplot.scatter。"
   },
   "CdlSeq2SeqEncoder": {
@@ -430,59 +430,59 @@
     "description": "构建序列到序列学习的 RNN 编码器（嵌入 + 多层 GRU）。前向 X 为 token 索引 (batch, num_steps)，返回 (outputs, state)。"
   },
   "CdlSequenceMask": {
-    "display_name": "Sequence Mask（Sequence Mask（序列掩码））",
+    "display_name": "Sequence Mask（序列掩码）",
     "description": "将序列中超出有效长度的位置替换为指定值。常用于将填充位置置零。"
   },
   "CdlSgdStep": {
-    "display_name": "SGD Step（SGD Step（SGD 单步））",
+    "display_name": "SGD Step（SGD 单步）",
     "description": "执行一步小批量随机梯度下降：\\( \\theta \\leftarrow \\theta - \\eta \\cdot g / \\text{batch\\_size} \\)。前提条件：必须先通过 loss.backward() 计算梯度。梯度在更新后被清零。"
   },
   "CdlShowBboxes": {
-    "display_name": "Show BBoxes（Show BBoxes（画边界框））",
+    "display_name": "Show BBoxes（画边界框）",
     "description": "在图像上绘制边界框。支持自定义标签和颜色；最多渲染 200 个框。坐标必须归一化到 [0,1] 范围。"
   },
   "CdlShowHeatmaps": {
-    "display_name": "Show Heatmaps（Show Heatmaps（显示热图））",
+    "display_name": "Show Heatmaps（显示热图）",
     "description": "与 Show Heatmaps (Output) 相同，但将图表渲染为 IMAGE 张量。"
   },
   "CdlShowHeatmapsOutput": {
-    "display_name": "Show Heatmaps (Output)（Show Heatmaps (Output)（显示热图·输出））",
+    "display_name": "Show Heatmaps (Output)（显示热图·输出）",
     "description": "显示单张热力图并附颜色条。先把张量抽样到元素预算以内，再保留 dims 指定的轴（或由 auto_select 自动挑选）、其余轴按 axis_reduce 归约；最终保留的 1/2/3 个轴决定画什么：条码状色带（1D）、常规平面（2D）或半透明立方体（3D）。输出节点变体。"
   },
   "CdlShowImages": {
-    "display_name": "Show Images（Show Images（显示图像））",
+    "display_name": "Show Images（显示图像）",
     "description": "与 Show Images (Output) 相同，但将图表渲染为 IMAGE 张量，可传递给下游节点。"
   },
   "CdlShowTrace2D": {
-    "display_name": "Show Trace 2D（Show Trace 2D（2D 轨迹图））",
+    "display_name": "Show Trace 2D（2D 轨迹图）",
     "description": "可视化二维优化轨迹。绘制一系列点，展示参数 (x1, x2) 在优化过程中的变化。"
   },
   "CdlSquaredLoss": {
-    "display_name": "Squared Loss（Squared Loss（平方损失））",
+    "display_name": "Squared Loss（平方损失）",
     "description": "计算平方损失：\\( \\frac{1}{2}(\\hat{y} - y)^2 \\)（注意：不做平均）。"
   },
   "CdlStrToTensor": {
-    "display_name": "String → Tensor（Str → Tensor（字符串转张量））",
+    "display_name": "String → Tensor（字符串转张量）",
     "description": "将字符串解析为 PyTorch 张量。支持标准的 Python 列表字面量格式，如 \"[[1,2],[3,4]]\"、\"[1,2,3,4,5]\"。自动处理空白符和尾随逗号。"
   },
   "CdlSyntheticData": {
-    "display_name": "Synthetic Data（Synthetic Data（合成数据））",
+    "display_name": "Synthetic Data（合成数据）",
     "description": "生成合成的线性回归数据集。随机生成权重和特征，通过 \\( y = Xw + b + \\text{噪声} \\) 生成标签。"
   },
   "CdlTensorToLoraModel": {
-    "display_name": "Tensor → LoRA Model（Tensor → LoRA Model（张量转 LoRA））",
+    "display_name": "Tensor → LoRA Model（张量转 LoRA）",
     "description": "LoRA Model → Tensor 的精确逆操作；按 shapes 切分扁平张量，把每段转回记录的 dtype 并重建字典。"
   },
   "CdlTensorToLossMap": {
-    "display_name": "Tensor → Loss Map（Tensor → Loss Map（张量转损失图））",
+    "display_name": "Tensor → Loss Map（张量转损失图）",
     "description": "Loss Map → Tensor 的精确逆操作；重建 {\"loss\": [Tensor, ...]}。"
   },
   "CdlTensorToStr": {
-    "display_name": "Tensor → String（Tensor → Str（张量转字符串））",
+    "display_name": "Tensor → String（张量转字符串）",
     "description": "将张量格式化为人类可读的字符串。显示张量的形状、数据类型、设备信息和数值内容。超过 max_elems 的大张量会被截断（显示前半部分 + 后半部分）。"
   },
   "CdlTensorToValue": {
-    "display_name": "Tensor → Value（Tensor → Value（张量转数值））",
+    "display_name": "Tensor → Value（张量转数值）",
     "description": "把通用 TENSOR 暴露到每种类型一个的具体输出槽上。连你需要的那根线即可；未使用的槽返回 None 且不产生开销。从 Value → Tensor 接回的元数据会被折回重建的 LATENT / AUDIO 字典。"
   },
   "CdlTensorsToDataset": {
@@ -494,7 +494,7 @@
     "description": "对张量操作进行基准测试——在预热 3 次后运行 num_iters 次并报告总耗时与平均耗时。支持 sum、mean、abs、sqrt、neg。当张量位于 GPU 时，计时前后会执行 CUDA 同步。"
   },
   "CdlTokenize": {
-    "display_name": "Tokenize（Tokenize（分词））",
+    "display_name": "Tokenize（分词）",
     "description": "将输入文本按行分词。支持词级别（按空白符分割）和字符级别两种分词模式。每行视为一个句子；行内 token 以逗号分隔输出，行间以换行符分隔。"
   },
   "CdlTransformerEncoder": {
@@ -506,67 +506,67 @@
     "description": "构建单个 Transformer 编码器块（多头注意力 + FFN，含残差与层归一化）。前向 (X, valid_lens)。"
   },
   "CdlTranspose": {
-    "display_name": "Transpose（Transpose（转置））",
+    "display_name": "Transpose（转置）",
     "description": "交换张量的两个维度。封装 torch.transpose。"
   },
   "CdlTruncatePad": {
-    "display_name": "Truncate/Pad（Truncate / Pad（截断与填充））",
+    "display_name": "Truncate/Pad（截断与填充）",
     "description": "将序列截断或填充到固定长度。超长的序列被截断；不足的序列用 padding_token 填充。"
   },
   "CdlTryAllGpus": {
-    "display_name": "Try All GPUs（Try All GPUs（尝试所有 GPU））",
+    "display_name": "Try All GPUs（尝试所有 GPU）",
     "description": "返回所有可用 GPU 设备名的逗号分隔字符串。若无 GPU 可用则返回 \"cpu\"。"
   },
   "CdlTryGpu": {
-    "display_name": "Try GPU（Try GPU（尝试 GPU））",
+    "display_name": "Try GPU（尝试 GPU）",
     "description": "尝试获取索引为 gpu_index 的 GPU 设备名。若该 GPU 不可用则回退到 CPU。"
   },
   "CdlUpdateD": {
-    "display_name": "Update Discriminator（Update D（判别器更新））",
+    "display_name": "Update Discriminator（判别器更新）",
     "description": "执行一次 GAN 判别器的训练更新。使用真实数据 X 和生成器 net_G 从噪声 Z 生成的假数据，计算 BCE 损失并反向传播以更新判别器参数。使用 SGD 优化器（lr=0.01）。"
   },
   "CdlUpdateG": {
-    "display_name": "Update Generator（Update G（生成器更新））",
+    "display_name": "Update Generator（生成器更新）",
     "description": "执行一次 GAN 生成器的训练更新。从噪声 Z 生成假数据，尝试欺骗判别器，计算 BCE 损失并反向传播以更新生成器参数。使用 SGD 优化器（lr=0.01）。"
   },
   "CdlVOCSegmentation": {
-    "display_name": "VOC Segmentation（VOC Segmentation（VOC 分割数据集））",
+    "display_name": "VOC Segmentation（VOC 分割数据集）",
     "description": "加载 PASCAL VOC2012 语义分割数据集（21 个类别）。首次使用时自动下载和解压（约 2 GB）。"
   },
   "CdlValueToTensor": {
-    "display_name": "Value → Tensor（Value → Tensor（数值转张量））",
+    "display_name": "Value → Tensor（数值转张量）",
     "description": "把任意受支持的 Comfy 值拆包成通用 TENSOR。IMAGE / MASK / SIGMAS 原样透传；LATENT 取 samples；AUDIO 取 waveform。无法放进裸张量的元数据从平行插槽输出。"
   },
   "CdlVocClasses": {
-    "display_name": "VOC Classes（VOC Classes（VOC 类别表））",
+    "display_name": "VOC Classes（VOC 类别表）",
     "description": "获取 PASCAL VOC 21 个类别名称。单个索引查询返回该类名；索引 -1 返回所有 21 个类别的逗号分隔列表。"
   },
   "CdlVocColormap2Label": {
-    "display_name": "VOC Colormap→Label（VOC Colormap→Label（调色板转标签））",
+    "display_name": "VOC Colormap→Label（调色板转标签）",
     "description": "构建 VOC RGB 颜色 → 类别索引查找表。输出为 \\( 256^3 \\) 大小的张量；通过颜色编码（R×65536 + G×256 + B）查找类别索引。"
   },
   "CdlVocLabelIndices": {
-    "display_name": "VOC Label Indices（VOC Label Indices（VOC 标签索引））",
+    "display_name": "VOC Label Indices（VOC 标签索引）",
     "description": "将 VOC 标签彩色图像映射为类别索引图。将 RGB 像素编码为单一颜色值，再通过查找表转换为类别索引。"
   },
   "CdlVocRandCrop": {
-    "display_name": "VOC Random Crop（VOC Random Crop（VOC 随机裁剪））",
+    "display_name": "VOC Random Crop（VOC 随机裁剪）",
     "description": "对特征图像和标签图像执行同步随机裁剪。使用相同的随机裁剪参数以保持特征与标签对齐。若请求尺寸超过图像尺寸则回退为中心裁剪。"
   },
   "CdlVocabBuild": {
-    "display_name": "Vocab Build（Vocab Build（词表构建））",
+    "display_name": "Vocab Build（词表构建）",
     "description": "从 token 文本构建词表。统计 token 频率，保留出现次数 ≥ min_freq 的 token，并添加保留 token（如 <pad>、<bos>、<eos>）。<unk> token 自动包含在内。"
   },
   "CdlVocabDecode": {
-    "display_name": "Vocab Decode（Vocab Decode（词表解码））",
+    "display_name": "Vocab Decode（词表解码）",
     "description": "使用词表将索引张量转换回 token 字符串。超出范围的索引映射为 <unk>。"
   },
   "CdlVocabEncode": {
-    "display_name": "Vocab Encode（Vocab Encode（词表编码））",
+    "display_name": "Vocab Encode（词表编码）",
     "description": "使用词表将 token 字符串转换为索引张量。词表中不存在的 token 映射为 <unk> 索引。"
   },
   "CdlWhat": {
-    "display_name": "?（What?（这是什么））",
+    "display_name": "?（这是什么）",
     "description": "试一试就知道了~"
   },
   "CdlWriteCSV": {

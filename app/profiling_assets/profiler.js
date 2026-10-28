@@ -240,6 +240,12 @@
       verdict_yellow: "可能 OOM",
       verdict_red: "一定 OOM",
       verdict_unknown: "无估算",
+      // Device-aware phrasing (2026-10-28 user feedback): "OOM" is jargon -
+      // on a CUDA device it is VRAM that explodes, on CPU it is RAM.
+      verdict_yellow_cuda: "显存可能不够",
+      verdict_yellow_cpu: "内存可能不够",
+      verdict_red_cuda: "显存会炸",
+      verdict_red_cpu: "内存会炸",
       verdict_reason_single_exceeds_free: "单个张量已超过空闲内存",
       verdict_reason_total_exceeds_budget: "估算峰值超过设备总量的 90%",
       verdict_reason_below_70_free: "估算峰值保持在空闲内存的 70% 以内",
@@ -258,7 +264,7 @@
       table_title: "按节点分解",
       table_node: "节点",
       table_bytes: "内存",
-      table_single: "最大单笔",
+      table_single: "单张量峰值",
       unknown_node: "未知",
       approx_tag: "近似",
       based_on: "基于假设 {n}",
@@ -268,7 +274,7 @@
         "估算峰值 {peak}，空闲仅 {free}。最大单张量（{largest}）一项就占 {single}。\n\n这是启发式上界估算 - 仍可选择继续运行。",
       confirm_run: "仍然运行",
       confirm_cancel: "取消",
-      run_cancelled: "已取消运行：内存分析判定为红色",
+      run_cancelled: "已取消运行：内存估算超出设备承受范围",
       yellow_toast: "内存估算：{peak} 可能超出空闲内存（{free}）。详见性能分析面板。",
       oom_toast: "检测到内存不足（OOM）- 性能分析面板已给出分析",
       postmortem_title: "内存不足事后分析",
@@ -356,7 +362,7 @@
       timing_empty: "运行一次工作流——每个节点的真实耗时都会落在这里。",
       watchdog_title: "执行监控",
       watchdog_unavailable: "监控不可用（服务端缺少 psutil）",
-      watchdog_bursts: "瞬爆案底",
+      watchdog_bursts: "CPU 瞬爆记录",
       watchdog_systemwide: "整机",
       // M3：算子图探针
       analyze: "分析算子",
@@ -441,6 +447,9 @@
     logLevel: "off",
     // P0: real-execution probe gate (ComfyDL.Profiling.DangerousProbe).
     dangerousProbe: false,
+    // Device-aware zh phrasing (2026-10-28): "cuda" says 显存, "cpu" says
+    // 内存. Resolved once from /system_stats; null = not yet known.
+    deviceType: null,
     // Master switch (2026-10-07): when false the stack is detached from the
     // run path (no graphToPrompt hijack, no listeners, no auto-estimate) and
     // the panels show the empty state. hardDisabled = --cdl-profiling-disable.
@@ -472,6 +481,37 @@
       }
     }
     return text;
+  }
+
+  // Device-aware verdict label (2026-10-28): zh replaces the OOM jargon with
+  // plain talk - 显存 (VRAM) on GPU devices, 内存 (RAM) on CPU. English keeps
+  // the verdict wording untouched. Falls back to t() when the device type is
+  // not yet known or no device variant exists.
+  function verdictLabel(verdict) {
+    const key = "verdict_" + (verdict || "unknown");
+    const dict = I18N[state.locale] || I18N.en;
+    const variant = dict[key + (state.deviceType === "cpu" ? "_cpu" : "_cuda")];
+    return variant !== undefined ? variant : t(key);
+  }
+
+  // One-shot device probe from the official /system_stats endpoint. Best
+  // effort: on any failure we default to "cuda" (the more alarming wording).
+  async function detectDeviceType() {
+    if (state.deviceType) return state.deviceType;
+    try {
+      const api = getApi();
+      const res = api && api.fetchApi
+        ? await api.fetchApi("/system_stats")
+        : await fetch("/system_stats");
+      const data = await res.json();
+      const d = data && data.devices && data.devices[0];
+      const isCpu = d && (d.type === "cpu" || (d.name || "").toLowerCase().startsWith("cpu"));
+      state.deviceType = isCpu ? "cpu" : "cuda";
+    } catch (e) {
+      state.deviceType = "cuda";
+    }
+    plog("low", "device type -> " + state.deviceType);
+    return state.deviceType;
   }
 
   function fmtBytes(n) {
@@ -1584,7 +1624,7 @@
 
     // Verdict header
     html.push('<div class="cdlp-verdict cdlp-v-' + ((r && r.verdict) || "unknown") + '" data-col="left">');
-    html.push('<span class="cdlp-verdict-badge">' + esc(t("verdict_" + ((r && r.verdict) || "unknown"))) + "</span>");
+    html.push('<span class="cdlp-verdict-badge">' + esc(verdictLabel(r && r.verdict)) + "</span>");
     if (r) {
       html.push('<span class="cdlp-verdict-num">' + esc(fmtBytes(r.peak_bytes)) + "</span>");
       if (r.verdict_reason) {
@@ -2009,6 +2049,9 @@
     const app = getApp();
     if (!app) return;
     state.locale = await detectLocale();
+    // Device-aware zh verdict wording; fire-and-forget - the panel renders
+    // with the default wording first and picks the right one once known.
+    detectDeviceType().then(() => { if (state.panelEl) renderPanel(); });
     // Master switch: sync with the backend BEFORE touching the run path.
     // A hard disable (--cdl-profiling-disable) always wins over the setting.
     try {
