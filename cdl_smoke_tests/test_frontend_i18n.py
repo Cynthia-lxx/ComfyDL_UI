@@ -163,6 +163,11 @@ def main() -> int:
     check("H3 injected before the manager push",
           gv_text.find("cdl-docs") < gv_text.find("return e.push({key:`manager`"))
     check("H3 chunk carries the marker", HELP_MENU_MARK in gv_text)
+    # Regression guard (2026-10-28 live breakage): the injected group must be
+    # comma-separated from the last official item, or the chunk dies with
+    # "Unexpected token '{'" and the whole app fails to load.
+    check("H3 group comma-separated from array tail",
+          "/*ComfyDL_UI:help-menu*/,{key:`cdl-docs`" in gv_text)
     check("H4 second run is a no-op", _patch_help_menu(assets) is False)
 
     return report()

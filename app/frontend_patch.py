@@ -317,7 +317,10 @@ def _patch_help_menu(assets: Path) -> bool:
     ])
     text = (
         text[:anchor_idx]
-        + HELP_MENU_MARK + group
+        # The array tail ends with `}}` (last official item) — a leading comma
+        # is required between it and our first injected item, otherwise the
+        # chunk dies with "Unexpected token '{'" and the app never loads.
+        + HELP_MENU_MARK + "," + group
         + text[anchor_idx:]
     )
     _write(path, text)
