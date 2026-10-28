@@ -19,10 +19,15 @@
   const DETAIL_URL = (id) =>
     "/comfydl/crashsite/snapshots/" + encodeURIComponent(id) + "/detail";
   const TAB_ID = "comfydl-crashsite";
+  // Master switch (2026-10-28): mirrors ComfyDL.Profiling.Enabled - the
+  // setting POSTs to the backend, which unregisters the snapshot provider so
+  // the run path behaves as if the crash site were absent.
+  const SETTING_ENABLED = "ComfyDL.CrashSite.Enabled";
+  const ENABLED_URL = "/comfydl/crashsite/enabled";
 
   const state = {
     snapshots: null, loading: false, refreshQueued: false, resuming: null,
-    initialized: false, topbarButton: null,
+    initialized: false, topbarButton: null, masterEnabled: true,
     // Scene export (git-fire M2): the summary table for one snapshot.
     exportFor: null, exportDetail: null, exportBusy: false,
     exportSel: {}, exportFormats: {}, promptSel: true,
@@ -33,6 +38,11 @@
       tab_title: "Crash Site",
       tab_tooltip: "Execution snapshots and breakpoint recovery",
       incremental: "Lazy capture: nothing is written while the workflow runs at full speed. The moment it is interrupted or fails, surviving outputs are written to the snapshot library - just Resume after a crash.",
+      disabled_title: "Crash site is disabled",
+      disabled_body: "Nothing is captured, training checkpoints are off and Resume is unavailable - the run path behaves as if the crash site were absent. Enable it in Settings (ComfyDL.CrashSite.Enabled). The snapshot library is not loaded while disabled.",
+      disabled_tooltip: "Crash site disabled - click for details",
+      setting_enabled_name: "ComfyDL crash site enabled (master switch)",
+      setting_enabled_tooltip: "Off = the crash site is fully detached from the run path: no capture, no checkpoints, no resume.",
       title: "Snapshot library",
       empty: "No snapshots yet - run or interrupt a workflow to create one.",
       refresh: "Refresh",
@@ -63,6 +73,11 @@
       tab_title: "事故现场",
       tab_tooltip: "工作流执行快照与断点恢复",
       incremental: "惰性捕获：正常运行零开销；工作流被打断或失败的那一刻，缓存中幸存的输出会写入快照库，直接点恢复即可。",
+      disabled_title: "事故现场已停用",
+      disabled_body: "不捕获、不写训练断点、恢复不可用——执行路径与未安装此功能时完全一致。可在设置中开启（ComfyDL.CrashSite.Enabled）。停用期间快照库不加载。",
+      disabled_tooltip: "事故现场已停用——点开查看详情",
+      setting_enabled_name: "启用 ComfyDL 事故现场（总开关）",
+      setting_enabled_tooltip: "关闭后事故现场从执行路径上完全摘除：不捕获快照、不写训练断点、恢复不可用。",
       title: "快照库",
       empty: "暂无快照——运行或打断一次工作流即会生成。",
       refresh: "刷新",
@@ -130,6 +145,9 @@
   csTrace("module evaluated");
 
   async function fetchSnapshots() {
+    // Master switch: a disabled crash site loads NOTHING - the library
+    // request itself is a per-execution cost the switch is meant to remove.
+    if (!state.masterEnabled) return;
     const api = getApi();
     if (!api || typeof api.fetchApi !== "function") return;
     if (state.loading) { state.refreshQueued = true; return; }
@@ -324,6 +342,16 @@
   function renderPanel() {
     const el = state.panelEl;
     if (!el) return;
+    // Master switch: a loud, unmissable disabled state instead of the
+    // library - the tab stays open (browsing is harmless) but loads nothing.
+    if (!state.masterEnabled) {
+      el.innerHTML = '<div class="cs-panel">'
+        + '<div class="cs-disabled-banner">'
+        + '<div class="cs-disabled-title">&#9888; ' + esc(t("disabled_title")) + "</div>"
+        + '<div class="cs-disabled-body">' + esc(t("disabled_body")) + "</div>"
+        + "</div></div>";
+      return;
+    }
     const html = '<div class="cs-panel">'
       + '<div class="cs-hint cs-incremental">' + esc(t("incremental")) + "</div>"
       + renderExportSection()
@@ -507,6 +535,7 @@
     if (locale !== "zh") locale = "en";
     registerSidebar();
     mountTopbarButton();
+    await syncEnabledState(); // badge/panel state before the first paint
     fetchSnapshots();
     // M2: refresh the library as executions start and end (a new snapshot
     // opens as "running", the resume statistics note lands on completion)
@@ -530,6 +559,64 @@
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // --- master switch plumbing ------------------------------------------------
+  // Backend is the source of truth: GET on boot, POST per toggle.  A hard-
+  // disabled server refuses the POST with 409 - the setting then flips back
+  // to what the backend reports so the UI never lies.
+  async function syncEnabledState() {
+    try {
+      const res = await fetch(ENABLED_URL);
+      if (!res.ok) return;
+      const data = await res.json();
+      state.masterEnabled = !!data.enabled;
+      applyEnabledVisibility();
+    } catch (e) { /* panel is a courtesy */ }
+  }
+
+  async function applyEnabled(enabled) {
+    try {
+      const res = await fetch(ENABLED_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !!enabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        state.masterEnabled = !!data.enabled;
+      } else {
+        console.warn("[ComfyDL crashsite] master switch rejected:", res.status);
+        await syncEnabledState();
+      }
+    } catch (e) {
+      console.warn("[ComfyDL crashsite] master switch failed:", e);
+      await syncEnabledState();
+    }
+    applyEnabledVisibility();
+    // Re-render so the panel follows the state; re-attach the library load
+    // when switching back ON (fetchSnapshots no-ops while disabled).
+    if (state.panelEl) renderPanel();
+    if (state.masterEnabled) fetchSnapshots();
+  }
+
+  function applyEnabledVisibility() {
+    // Loud, unmissable disabled state on the topbar shortcut: keep the
+    // button, restyle it as a warning (the user asked for the disabled state
+    // to be VISIBLE, not hidden), swap icon + tooltip.  The sidebar tab
+    // stays too - it now renders the disabled banner and loads nothing.
+    const btn = state.topbarButton;
+    if (!btn || !btn.element) return;
+    const el = btn.element;
+    if (state.masterEnabled) {
+      el.classList.remove("cs-topbar-disabled");
+      el.title = t("tab_tooltip");
+      try { btn.icon = "pi pi-replay"; } catch (e) { /* older ComfyButton */ }
+    } else {
+      el.classList.add("cs-topbar-disabled");
+      el.title = t("disabled_tooltip");
+      try { btn.icon = "pi pi-exclamation-triangle"; } catch (e) { /* older */ }
+    }
+  }
 
   // Profiler-style polling: try/catch INSIDE the loop - the host's
   // registerExtension wraps a pinia store and THROWS while the Vue services
@@ -563,12 +650,37 @@
     // may already be over when we finally register.
     let registered = false;
     let attempts = 0;
+    // Best-effort locale detection BEFORE the settings registration so the
+    // Settings panel name renders in the user's language from the start
+    // (init() re-detects later - same pattern as the profiler panel).
+    try {
+      const app0 = getApp();
+      const s = app0 && app0.extensionManager && app0.extensionManager.setting;
+      if (s && typeof s.get === "function") {
+        const v = s.get("Comfy.Locale");
+        if (typeof v === "string" && v) locale = v.split("-")[0];
+      }
+    } catch (e) { /* settings store not ready: init() re-detects */ }
     while (!registered) {
       attempts++;
       try {
         getApp().registerExtension({
           name: "ComfyDL.CrashSite",
-          settings: [],
+          settings: [{
+            // Master switch (2026-10-28): detach the whole crash site from
+            // the run path and back.  The backend is informed per-change; a
+            // hard-disabled server refuses the POST and the setting flips
+            // back to the backend's state.
+            id: SETTING_ENABLED,
+            name: t("setting_enabled_name"),
+            tooltip: t("setting_enabled_tooltip"),
+            category: ["ComfyDL", "CrashSite"],
+            type: "boolean",
+            defaultValue: true,
+            onChange: (newVal) => {
+              void applyEnabled(newVal !== false);
+            },
+          }],
           commands: [],
           async setup() {
             csTrace("setup called (host accepted the extension)");

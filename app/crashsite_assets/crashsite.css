@@ -193,3 +193,34 @@
 .cs-button:disabled { opacity: 0.5; cursor: default; }
 
 .cs-resume { align-self: flex-start; }
+
+/* --- master switch disabled state (2026-10-28) ----------------------------- */
+/* Loud warning banner rendered INSTEAD of the snapshot library while the
+   crash site master switch is off - unmissable, and zero library requests. */
+.cs-disabled-banner {
+  border: 1px solid var(--error-text, #d1352b);
+  background: color-mix(in srgb, var(--error-text, #d1352b) 12%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cs-disabled-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--error-text, #d1352b);
+}
+.cs-disabled-body {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--input-text-read-only, #9a9a9a);
+}
+/* The topbar shortcut stays VISIBLE while disabled (user request) - restyled
+   as a warning instead of the usual quiet icon button. */
+.cs-topbar-disabled {
+  outline: 1px solid var(--error-text, #d1352b);
+  outline-offset: -1px;
+  border-radius: 6px;
+  opacity: 0.85;
+}

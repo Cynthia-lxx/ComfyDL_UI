@@ -132,6 +132,14 @@ A safety net for interrupted runs, with **zero overhead while everything works**
 - **Breakpoint continuation** — the trainers (Regression Train, Training Loop, Language Model
   Train) save their complete state at the interrupt moment; a resume continues from the
   breakpoint step instead of starting a 10k-step training over.
+- **Master switch** — *Settings > ComfyDL crash site enabled (master switch)* detaches the
+  whole feature from the run path on demand: the snapshot provider is unregistered, so the
+  executor's lifecycle hook and the caching layer stop calling into it entirely, training
+  checkpoints short-circuit before touching the tensors, and Resume refuses with a readable
+  error. Disabled, the run path behaves as if the feature were absent: the panel shows a
+  warning banner, the snapshot library is not loaded (zero requests) and the topbar shortcut
+  is restyled as a warning until re-enabled. `--cdl-crashsite-disable` hard-disables until restart;
+  `--cdl-profiling-disable` also hard-disables the crash site (historical wiring).
 
 The snapshot library in the sidebar — every run is filed with its captured nodes; interrupted
 scenes offer Scene export:
@@ -155,6 +163,22 @@ divergence is visible at a glance, without opening anything:
 <p align="center">
   <img src="assets/loss_map_focus.png" alt="Live loss map preview card under a training node, showing the raw and smoothed loss curves" width="520" />
 </p>
+
+### Simplified Chinese UI (i18n)
+
+Switching the ComfyUI language setting to 简体中文 localizes everything ComfyDL_UI adds —
+sidebar tabs, the Profiling and Crash Site panels, node titles (both the built-in comfydl
+nodes and the core Network & Layers nodes such as RMSNorm), the ComfyDL settings entries
+and their panel groups, and the Help menu's ComfyDL link group (docs / QQ group / Bilibili /
+repo, appended as a labelled group after the official entries).
+
+This works by *baking* rather than serving: the 0.3.x frontend never calls the `/i18n`
+endpoint for custom nodes, so at startup `app/frontend_patch.py` merges
+`locales/zh/nodeDefs.json` (regenerate with `cdl_smoke_tests/gen_locales.py`) plus the
+settings translations directly into the frontend's own lazy-loaded zh chunks, located by
+content anchors — robust across frontend builds. Verify with
+`cdl_smoke_tests/test_frontend_i18n.py` (23 checks: chunk resolution, merge placement,
+idempotency, help-menu grouping).
 
 ## Installation
 

@@ -53,6 +53,9 @@
       sidebar_title: "Profiling",
       sidebar_tooltip: "Memory estimation for the current workflow",
       cmd_open: "Open the Profiling panel",
+      setting_log_level: "ComfyDL profiling log level",
+      setting_dangerous: "ComfyDL profiling dangerous probe (executes real node code)",
+      setting_enabled: "ComfyDL profiling enabled (master switch)",
       badge_tooltip: "ComfyDL memory estimate - click to open the Profiling panel",
       budget_title: "Device budget",
       budget_total: "Total",
@@ -225,6 +228,9 @@
       sidebar_title: "性能分析",
       sidebar_tooltip: "当前工作流的内存估算",
       cmd_open: "打开性能分析面板",
+      setting_log_level: "ComfyDL 性能分析日志级别",
+      setting_dangerous: "ComfyDL 性能分析危险探针（执行真实节点代码）",
+      setting_enabled: "启用 ComfyDL 性能分析（总开关）",
       badge_tooltip: "ComfyDL 内存估算 - 点击打开性能分析面板",
       budget_title: "设备预算",
       budget_total: "总量",
@@ -2045,13 +2051,24 @@
     const start = () => {
       const app = getApp();
       if (!app || typeof app.registerExtension !== "function") return false;
+      // Best-effort locale detection BEFORE the settings registration so the
+      // Settings panel names render in the user's language from the start
+      // (a later re-detect in init() covers the late-settings race).
+      try {
+        const s = app.extensionManager && app.extensionManager.setting;
+        if (s && typeof s.get === "function") {
+          const v = s.get("Comfy.Locale");
+          if (typeof v === "string" && v) state.locale = v.split("-")[0];
+        }
+      } catch (e) { /* settings store not ready: init() re-detects */ }
       app.registerExtension({
         name: "ComfyDL.Profiler",
         async setup() { await init(); },
         settings: [
         {
           id: SETTING_LOG_LEVEL,
-          name: "ComfyDL profiling log level",
+          name: t("setting_log_level"),
+          category: ["ComfyDL", "Profiling"],
           type: "combo",
           defaultValue: "off",
           options: [
@@ -2072,7 +2089,8 @@
           // lightweight confirmation; declining reverts the toggle (which
           // re-enters onChange with false - benign).
           id: SETTING_DANGEROUS,
-          name: "ComfyDL profiling dangerous probe (executes real node code)",
+          name: t("setting_dangerous"),
+          category: ["ComfyDL", "Profiling"],
           type: "boolean",
           defaultValue: false,
           onChange: (newVal) => {
@@ -2090,7 +2108,8 @@
           // a hard-disabled server refuses the POST and the panels show the
           // restart hint instead of the Enable button.
           id: SETTING_ENABLED,
-          name: "ComfyDL profiling enabled (master switch)",
+          name: t("setting_enabled"),
+          category: ["ComfyDL", "Profiling"],
           type: "boolean",
           defaultValue: true,
           onChange: (newVal) => {

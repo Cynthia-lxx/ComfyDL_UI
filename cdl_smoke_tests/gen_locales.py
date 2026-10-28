@@ -66,10 +66,27 @@ def parse_doc():
 
 
 def build():
-    """生成 {node_id: {...}}，只保留仍在注册表中的节点。"""
+    """生成 {node_id: {...}}，只保留仍在注册表中的节点。
+
+    2026-10-28：合并 ComfyDL 核心节点（Network & Layers）的中文名表——
+    官方前端自带 model/*、3d 等上游节点的 zh 翻译，但这 75 个自研核心节点
+    官方 locale 没有；FUNCTIONS_zh.md 只覆盖 comfydl 包内的节点，核心节点的
+    中文名以 `core_nodes_zh.CORE_NODE_NAMES_ZH` 为真源（仅 display_name）。
+    """
     documented = parse_doc()
+    from cdl_smoke_tests.core_nodes_zh import CORE_NODE_NAMES_ZH
+
     registered = sorted(comfydl.NODE_CLASS_MAPPINGS)
     pack = {node_id: documented[node_id] for node_id in registered if node_id in documented}
+
+    core_added = 0
+    for node_id, display_name in CORE_NODE_NAMES_ZH.items():
+        if node_id in pack:
+            continue  # comfydl 文档的条目优先（还带 description）
+        pack[node_id] = {"display_name": display_name}
+        core_added += 1
+    if core_added:
+        print(f"已合并 {core_added} 个核心节点（Network & Layers）中文名")
 
     missing = [node_id for node_id in registered if node_id not in documented]
     if missing:

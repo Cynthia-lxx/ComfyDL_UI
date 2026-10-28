@@ -303,22 +303,30 @@ class PromptServer():
             self.profiling_watchdog.start()
 
         # ComfyDL Crash site M1: register the snapshot CacheProvider (hard
-        # disabled by --cdl-profiling-disable; independent of the profiling
-        # master switch otherwise - data safety is not an analysis feature)
-        # and hand the routes their queue/server references.  The /free
+        # disabled by --cdl-profiling-disable or --cdl-crashsite-disable) and
+        # hand the routes their queue/server references.  The /free
         # memory flag resets caches but the provider is stateless w.r.t. the
         # local cache: on_lookup reads the snapshot databases directly.
+        # Master switch (2026-10-28): a SOFT disable (POST
+        # /comfydl/crashsite/enabled) unregisters the provider instead - the
+        # executor's lifecycle hook short-circuits on the empty provider
+        # list, so a disabled crash site costs the run path nothing.
         try:
-            from comfy.profiling.proflog import is_hard_disabled
+            from comfy.crashsite_switch import (
+                is_hard_disabled as crashsite_hard_off_fn,
+                is_master_enabled as crashsite_master_on_fn,
+            )
 
-            crashsite_hard_off = is_hard_disabled()
+            crashsite_hard_off = crashsite_hard_off_fn()
+            crashsite_master_on = crashsite_master_on_fn()
         except Exception:
             crashsite_hard_off = False
+            crashsite_master_on = True
         self.crashsite_provider = crashsite_provider.SnapshotProvider(
             enabled=not crashsite_hard_off, queue=self.prompt_queue)
         crashsite_routes.set_snapshot_provider(self.crashsite_provider)
         crashsite_routes.set_prompt_queue(self.prompt_queue, self)
-        if not crashsite_hard_off:
+        if crashsite_master_on and not crashsite_hard_off:
             from comfy_execution.cache_provider import register_cache_provider
 
             register_cache_provider(self.crashsite_provider)
