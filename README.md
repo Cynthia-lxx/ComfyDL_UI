@@ -164,6 +164,22 @@ divergence is visible at a glance, without opening anything:
   <img src="assets/loss_map_focus.png" alt="Live loss map preview card under a training node, showing the raw and smoothed loss curves" width="520" />
 </p>
 
+### Simplified Chinese UI (i18n)
+
+Switching the ComfyUI language setting to 简体中文 localizes everything ComfyDL_UI adds —
+sidebar tabs, the Profiling and Crash Site panels, node titles (both the built-in comfydl
+nodes and the core Network & Layers nodes such as RMSNorm), the ComfyDL settings entries
+and their panel groups, and the Help menu's ComfyDL link group (docs / QQ group / Bilibili /
+repo, appended as a labelled group after the official entries).
+
+This works by *baking* rather than serving: the 0.3.x frontend never calls the `/i18n`
+endpoint for custom nodes, so at startup `app/frontend_patch.py` merges
+`locales/zh/nodeDefs.json` (regenerate with `cdl_smoke_tests/gen_locales.py`) plus the
+settings translations directly into the frontend's own lazy-loaded zh chunks, located by
+content anchors — robust across frontend builds. Verify with
+`cdl_smoke_tests/test_frontend_i18n.py` (23 checks: chunk resolution, merge placement,
+idempotency, help-menu grouping).
+
 ## Installation
 
 Requires Python 3.12+ (3.13 recommended). Any OS with a supported PyTorch build works.

@@ -439,7 +439,11 @@ def _js_checks() -> None:
     # settings rely on id segmentation (an explicit category array made the
     # entries vanish from the settings panel in this frontend build).
     check("T4r guarded hint i18n", src.count("opgraph_guarded:") >= 2)
-    check("T4s no explicit settings category", "category:" not in src)
+    # 2026-10-28: the frontend_patch i18n bake now deep-merges settingsCategories
+    # into the main chunk, so explicit categories are safe again — settings are
+    # grouped under the ComfyDL panel instead of relying on id segmentation.
+    check("T4s settings grouped under ComfyDL category",
+          src.count("category: [`ComfyDL`") >= 3 or src.count('category: ["ComfyDL"') >= 3)
     # P1 assembled equivalent graph: mode badge, coverage line, exports.
     for needle, name in [
         ('og.mode === "assembled"', "T4t assembled badge branch"),

@@ -80,6 +80,54 @@ ABOUT_END = "/*ComfyDL_UI:about:end*/"
 DEFAULT_WORKFLOW_TEMPLATE = "tabular_regression_production"
 DEFAULT_WORKFLOW_MARK = "/*ComfyDL_UI:default-workflow*/"
 
+# --- zh locale baking (2026-10-28) -------------------------------------------
+#
+# The 0.3.14 frontend NEVER calls the official /i18n endpoint (the custom-node
+# translation funnel), so a locales/zh/*.json file alone is dead data.  This
+# patch merges the repository's zh translations straight into the frontend's
+# own lazy-loaded zh chunks, located VIA CONTENT: the i18n loader chunk maps
+# "./zh/<name>.json" to hashed chunk files whose names differ per build, so
+# nothing here may rely on a file name.
+#
+#   * nodeDefs.json -> Object.assign(<defaultMap>, entries)  node titles
+#   * settings.json -> new vars + export keys                Settings strings
+#   * main.json     -> deep-merge settingsCategories         group names
+#
+# Data source: locales/zh/nodeDefs.json (regenerate with gen_locales.py;
+# 203 entries = 128 ComfyDL doc titles/descriptions + 75 core Network & Layers
+# names from cdl_smoke_tests/core_nodes_zh.py).
+I18N_NODEDEFS_MARK = "/*ComfyDL_UI:i18n-nodedefs*/"
+I18N_MAIN_MARK = "/*ComfyDL_UI:i18n-main*/"
+I18N_SETTINGS_MARK = "/*ComfyDL_UI:i18n-settings*/"
+
+#: The ComfyDL settings whose names are translated into the zh settings chunk.
+#: Keys follow the official convention: the setting id with "." -> "_".
+I18N_SETTINGS_KEYS = {
+    "ComfyDL_CrashSite_Enabled": {
+        "name": "启用 ComfyDL 事故现场（总开关）",
+        "tooltip": "关闭后事故现场从执行路径上完全摘除：不捕获快照、不写训练断点、恢复不可用。",
+    },
+    "ComfyDL_Profiling_Enabled": {
+        "name": "启用 ComfyDL 性能分析（总开关）",
+        "tooltip": "关闭后性能分析栈脱离运行路径：无看门狗采样、无运行计量、无前端钩子。",
+    },
+    "ComfyDL_Profiling_DangerousProbe": {
+        "name": "ComfyDL 性能分析危险探针（执行真实节点代码）",
+        "tooltip": "实测计量需要真实执行节点——仅在理解风险时开启。",
+    },
+    "ComfyDL_Profiling_LogLevel": {
+        "name": "ComfyDL 性能分析日志级别",
+        "tooltip": "后端日志详细程度：off / low / medium / high（默认 off）。",
+    },
+}
+
+#: settingsCategories deep-merged into the zh main chunk (Settings group names).
+I18N_SETTINGS_CATEGORIES_ZH = {
+    "ComfyDL": "ComfyDL 工具包",
+    "CrashSite": "事故现场",
+    "Profiling": "性能分析",
+}
+
 
 def apply_frontend_patches(web_root: str) -> None:
     """Apply every ComfyDL_UI patch to the frontend under ``web_root``.
@@ -95,6 +143,7 @@ def apply_frontend_patches(web_root: str) -> None:
 
     applied = []
     for name, patch in (
+        ("zh locale baking", _patch_zh_locales),
         ("default locale", _patch_default_locale),
         ("Nodes 2.0 default", _patch_nodes2_default),
         ("about panel", _patch_about_panel),
@@ -102,6 +151,7 @@ def apply_frontend_patches(web_root: str) -> None:
         ("nn_model slot colour", _patch_nn_model_slot_colour),
         ("DATASET slot colour", _patch_dataset_slot_colour),
         ("default workflow", _patch_default_workflow),
+        ("help menu group", _patch_help_menu),
     ):
         try:
             if patch(assets):
@@ -210,6 +260,201 @@ def _patch_default_workflow(assets: Path) -> bool:
         f"in {path.name}"
     )
     return True
+
+
+# --- Help menu (2026-10-28) ---------------------------------------------------
+#
+# The frontend's Help dropdown is built in GraphView-*.js (HelpCenterMenuContent)
+# as a literal item array.  Merged in from the homepage fork: the ComfyDL
+# project links (docs / QQ group / Bilibili / repo) join the official menu as a
+# VISIBLE GROUP of their own - every ComfyDL entry is labelled "ComfyDL · ..."
+# and appended after the official items, so the two groups read separately
+# without touching the official entries (feedback / help / docs / discord /
+# github / manager / update all stay).
+HELP_MENU_MARK = "/*ComfyDL_UI:help-menu*/"
+HELP_MENU_INSERT_BEFORE = "];return e.push({key:`manager`"
+HELP_MENU_QQ_URL = (
+    "https://qun.qq.com/universal-share/share?ac=1&authKey=IbE90VoEPI2G0NeI5Gay90"
+    "%2BPfMFD1o/uClv6wpNdhoEA3JqkMsn209yAaRzl7QRb&busi_data=eyJncm91cENvZGUiOiI5MjEyMTk3"
+    "NDciLCJ0b2tlbiI6Ilg1V1NMWEFrZWpFTkVxcm5MN0MwWm1rWm1VTit3OVFrcklmVTA1OGRYQVA4NTFrQmIz"
+    "cW9WZFlRVnpsTXVyK3giLCJ1aW4iOiIzOTI0NTIyNDIwIn0=&data=8KDOpRLkVivBv-jDrxAxAs7qx2TpE7"
+    "gunwCxbzkyMrrBnU0krQ1AVU13M3HR8tOJfHxtVKbMmQiTB-xe1vadaYqHjwYOh8gtLzNlftOUlJc&svctype"
+    "=5&tempid=h5_group_info"
+)
+HELP_MENU_BILIBILI_URL = "https://space.bilibili.com/3493290083093446"
+HELP_MENU_DOCS_URL = "https://github.com/Cynthia-lxx/ComfyDL_UI/tree/master/docs"
+HELP_MENU_REPO_URL = "https://github.com/Cynthia-lxx/ComfyDL_UI"
+
+
+def _patch_help_menu(assets: Path) -> bool:
+    """Append the ComfyDL link group to the official Help dropdown menu."""
+    path = _locate(assets, "GraphView-*.js", "Comfy.ContactSupport")
+    text = _text(path)
+    if HELP_MENU_MARK in text:
+        logging.debug(f"{TAG} help menu already applied")
+        return False
+    anchor_idx = text.find(HELP_MENU_INSERT_BEFORE)
+    if anchor_idx < 0:
+        raise ValueError("help menu array tail not found")
+
+    def item(key: str, icon: str, label: str, url: str) -> str:
+        return (
+            "{key:`" + key + "`,type:`item`,icon:`" + icon + "`,label:`" + label
+            + "`,showExternalIcon:!0,action:()=>{trackResourceClick(`" + key
+            + "`,!0),openExternalLink(`" + url + "`)," + HELP_MENU_MARK
+            + "x(`close`)}}"
+        )
+
+    group = ",".join([
+        item("cdl-docs", "icon-[lucide--book-open]", "ComfyDL · 项目文档",
+             HELP_MENU_DOCS_URL),
+        item("cdl-qq", "icon-[comfy--qq]", "ComfyDL · QQ 交流群",
+             HELP_MENU_QQ_URL),
+        item("cdl-bilibili", "icon-[comfy--bilibili]", "ComfyDL · Bilibili",
+             HELP_MENU_BILIBILI_URL),
+        item("cdl-repo", "icon-[lucide--github]", "ComfyDL · GitHub 仓库",
+             HELP_MENU_REPO_URL),
+    ])
+    text = (
+        text[:anchor_idx]
+        + HELP_MENU_MARK + group
+        + text[anchor_idx:]
+    )
+    _write(path, text)
+    logging.info(f"{TAG} ComfyDL help group appended in {path.name}")
+    return True
+
+
+def _js_str(text: str) -> str:
+    """Render a Python string as a JS template-literal body (backticks)."""
+    return (text.replace("\\", "\\\\")
+                .replace("`", "\\`")
+                .replace("${", "\\${")
+                .replace("\n", "\\n"))
+
+
+def _zh_chunk_names(assets: Path) -> dict:
+    """Resolve the hashed zh chunk file names from the i18n loader chunk.
+
+    The loader maps ``"./zh/<name>.json"`` to lazy chunks whose names differ
+    per frontend build, so the mapping is read at patch time instead of
+    hard-coding hashes.
+    """
+    loader = _locate(assets, "i18n-*.js", '"./zh/nodeDefs.json"')
+    text = _text(loader)
+    names = {}
+    for kind in ("main", "nodeDefs", "settings"):
+        m = re.search(
+            r'"\./zh/' + kind + r'\.json":\(\)=>\w+\(\(\)=>import\(`\./([\w-]+\.js)`',
+            text,
+        )
+        if not m:
+            raise ValueError(f"zh {kind}.json chunk not mapped in {loader.name}")
+        names[kind] = m.group(1)
+    return names
+
+
+def _load_zh_node_defs() -> dict:
+    """The merged zh node-def translations (ComfyDL docs + core names)."""
+    import json
+
+    path = Path(__file__).parents[1] / "locales" / "zh" / "nodeDefs.json"
+    if not path.is_file():
+        raise ValueError(f"missing {path} (run cdl_smoke_tests/gen_locales.py)")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _patch_zh_locales(assets: Path) -> bool:
+    """Bake the repository's zh translations into the frontend's zh chunks.
+
+    Three sub-merges (each idempotent via its own marker, each non-fatal for
+    the others so a partial frontend update cannot take all of them down):
+
+    * ``nodeDefs`` chunk — ``Object.assign(<defaultExport>, {node: {...}})``
+      right before ``export{``: canvas node titles/descriptions in Chinese.
+    * ``settings`` chunk — the ComfyDL settings translations appended as new
+      vars plus export keys (the official ``Id_With_Underscores`` convention).
+    * ``main`` chunk — ``settingsCategories`` deep-merged so the Settings
+      panel groups read 事故现场 / 性能分析 instead of CrashSite / Profiling.
+    """
+    names = _zh_chunk_names(assets)
+    applied = False
+
+    # --- nodeDefs ------------------------------------------------------------
+    nd = assets / names["nodeDefs"]
+    text = _text(nd)
+    if I18N_NODEDEFS_MARK not in text:
+        m = re.search(r"(\w+) as default", text)
+        if not m:
+            raise ValueError(f"no default export in {nd.name}")
+        entries = ",\n".join(
+            f"{json_key}:{{display_name:`{_js_str(v.get('display_name', json_key))}`"
+            + (
+                f",description:`{_js_str(v['description'])}`"
+                if v.get("description")
+                else ""
+            )
+            + "}"
+            for json_key, v in _load_zh_node_defs().items()
+        )
+        insert = f";Object.assign({m.group(1)},{I18N_NODEDEFS_MARK}{{{entries}}});"
+        idx = text.rfind(";export{")
+        if idx < 0:
+            raise ValueError(f"no export statement in {nd.name}")
+        _write(nd, text[:idx] + insert + text[idx:])
+        logging.info(f"{TAG} zh nodeDefs merged into {nd.name}")
+        applied = True
+
+    # --- settings ------------------------------------------------------------
+    st = assets / names["settings"]
+    text = _text(st)
+    if I18N_SETTINGS_MARK not in text:
+        vars_, exports = [], []
+        for i, (key, value) in enumerate(I18N_SETTINGS_KEYS.items()):
+            var = f"_cdlS{i}"
+            vars_.append(
+                f"{var}={{name:`{_js_str(value['name'])}`,"
+                f"tooltip:`{_js_str(value['tooltip'])}`}}"
+            )
+            exports.append(f"{var} as {key}")
+        idx = text.rfind(";export{")
+        if idx < 0:
+            raise ValueError(f"no export statement in {st.name}")
+        text = (
+            text[:idx]
+            + f";{I18N_SETTINGS_MARK}var " + ",".join(vars_) + ";"
+            + text[idx:idx + len(";export{")] + ",".join(exports) + ","
+            + text[idx + len(";export{"):]
+        )
+        _write(st, text)
+        logging.info(f"{TAG} zh settings merged into {st.name}")
+        applied = True
+
+    # --- main (settingsCategories) -------------------------------------------
+    mn = assets / names["main"]
+    text = _text(mn)
+    if I18N_MAIN_MARK not in text:
+        m = re.search(r"(\w+) as default", text)
+        if not m:
+            raise ValueError(f"no default export in {mn.name}")
+        dv = m.group(1)
+        cats = ",".join(
+            f"{json_key}:`{_js_str(v)}`"
+            for json_key, v in I18N_SETTINGS_CATEGORIES_ZH.items()
+        )
+        insert = (
+            f";(function(){{var sc=({dv}.settingsCategories="
+            f"{dv}.settingsCategories||{{}});{I18N_MAIN_MARK}"
+            f"Object.assign(sc,{{{cats}}});}})();"
+        )
+        idx = text.rfind(";export{")
+        if idx < 0:
+            raise ValueError(f"no export statement in {mn.name}")
+        _write(mn, text[:idx] + insert + text[idx:])
+        logging.info(f"{TAG} zh settingsCategories merged into {mn.name}")
+        applied = True
+
+    return applied
 
 
 def _patch_default_locale(assets: Path) -> bool:

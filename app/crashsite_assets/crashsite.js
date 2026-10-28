@@ -41,6 +41,8 @@
       disabled_title: "Crash site is disabled",
       disabled_body: "Nothing is captured, training checkpoints are off and Resume is unavailable - the run path behaves as if the crash site were absent. Enable it in Settings (ComfyDL.CrashSite.Enabled). The snapshot library is not loaded while disabled.",
       disabled_tooltip: "Crash site disabled - click for details",
+      setting_enabled_name: "ComfyDL crash site enabled (master switch)",
+      setting_enabled_tooltip: "Off = the crash site is fully detached from the run path: no capture, no checkpoints, no resume.",
       title: "Snapshot library",
       empty: "No snapshots yet - run or interrupt a workflow to create one.",
       refresh: "Refresh",
@@ -74,6 +76,8 @@
       disabled_title: "事故现场已停用",
       disabled_body: "不捕获、不写训练断点、恢复不可用——执行路径与未安装此功能时完全一致。可在设置中开启（ComfyDL.CrashSite.Enabled）。停用期间快照库不加载。",
       disabled_tooltip: "事故现场已停用——点开查看详情",
+      setting_enabled_name: "启用 ComfyDL 事故现场（总开关）",
+      setting_enabled_tooltip: "关闭后事故现场从执行路径上完全摘除：不捕获快照、不写训练断点、恢复不可用。",
       title: "快照库",
       empty: "暂无快照——运行或打断一次工作流即会生成。",
       refresh: "刷新",
@@ -646,6 +650,17 @@
     // may already be over when we finally register.
     let registered = false;
     let attempts = 0;
+    // Best-effort locale detection BEFORE the settings registration so the
+    // Settings panel name renders in the user's language from the start
+    // (init() re-detects later - same pattern as the profiler panel).
+    try {
+      const app0 = getApp();
+      const s = app0 && app0.extensionManager && app0.extensionManager.setting;
+      if (s && typeof s.get === "function") {
+        const v = s.get("Comfy.Locale");
+        if (typeof v === "string" && v) locale = v.split("-")[0];
+      }
+    } catch (e) { /* settings store not ready: init() re-detects */ }
     while (!registered) {
       attempts++;
       try {
@@ -657,7 +672,9 @@
             // hard-disabled server refuses the POST and the setting flips
             // back to the backend's state.
             id: SETTING_ENABLED,
-            name: "ComfyDL crash site enabled (master switch)",
+            name: t("setting_enabled_name"),
+            tooltip: t("setting_enabled_tooltip"),
+            category: ["ComfyDL", "CrashSite"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal) => {
