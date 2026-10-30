@@ -343,6 +343,17 @@
     });
   }
 
+  // Settings store readiness gate (2026-10-30). registerExtension() processes
+  // `settings` IMMEDIATELY; if that happens before the official settings store
+  // bootstrap ran, the store's load() throws "Setting values must be loaded
+  // before any setting is registered" - an uncaught error that aborts the
+  // bootstrap chain and leaves the whole UI blank. Wait for the store's
+  // isReady signal first (see profiler.js for the full note).
+  function settingsStoreReady(app) {
+    const s = app.extensionManager && app.extensionManager.setting;
+    return !!s && s.isReady === true;
+  }
+
   // Shared easing - identical to the homepage (--cdl-ease).
   const EASE = "cubic-bezier(.16,1,.3,1)";
 
@@ -578,9 +589,10 @@
     // earliest possible moment (this module runs before Vue mounts).
     initSplashProgress();
 
-    const start = () => {
+    const start = (force) => {
       const app = getApp();
       if (!app || !app.extensionManager) return false;
+      if (!force && !settingsStoreReady(app)) return false;
 
       // Best-effort locale detection before settings register (same pattern
       // as profiler.js; init() below re-detects via get()).
@@ -648,7 +660,15 @@
       });
       return true;
     };
-    if (!start()) waitFor(start, 30000, 200);
+    if (!start()) {
+      waitFor(() => start(false), 30000, 200).then((ok) => {
+        if (!ok) {
+          console.warn(TAG,
+            "settings store never signalled ready in 30s; registering without the gate");
+          start(true);
+        }
+      });
+    }
   }
 
   boot();

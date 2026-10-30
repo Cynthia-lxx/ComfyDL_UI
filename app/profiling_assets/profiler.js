@@ -606,6 +606,20 @@
     return false;
   }
 
+  // Settings store readiness gate (2026-10-30). The official settings store
+  // throws "Setting values must be loaded before any setting is registered"
+  // from its load() when ANY extension registered a setting before the store
+  // bootstrap ran - the uncaught error aborts the store bootstrap chain and
+  // the whole UI stays blank. registerExtension() processes `settings`
+  // IMMEDIATELY (not at setup() time), so registration must wait until the
+  // store signals isReady. If the signal never arrives (broken /settings
+  // fetch), the boot fallback registers anyway - degrading to the old racy
+  // behaviour instead of losing the panel forever.
+  function settingsStoreReady(app) {
+    const s = app.extensionManager && app.extensionManager.setting;
+    return !!s && s.isReady === true;
+  }
+
   // ------------------------------------------------------- data & estimate --
   let originalGTP = null;
 
@@ -2091,9 +2105,10 @@
     css.href = CSS_URL;
     document.head.appendChild(css);
 
-    const start = () => {
+    const start = (force) => {
       const app = getApp();
       if (!app || typeof app.registerExtension !== "function") return false;
+      if (!force && !settingsStoreReady(app)) return false;
       // Best-effort locale detection BEFORE the settings registration so the
       // Settings panel names render in the user's language from the start
       // (a later re-detect in init() covers the late-settings race).
@@ -2171,7 +2186,15 @@
       });
       return true;
     };
-    if (!start()) waitFor(start, 30000, 200);
+    if (!start()) {
+      waitFor(() => start(false), 30000, 200).then((ok) => {
+        if (!ok) {
+          console.warn("[ComfyDL profiler]",
+            "settings store never signalled ready in 30s; registering without the gate");
+          start(true);
+        }
+      });
+    }
   }
 
   boot();

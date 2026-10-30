@@ -631,6 +631,17 @@
     return false;
   }
 
+  // Settings store readiness gate (2026-10-30). registerExtension() processes
+  // `settings` IMMEDIATELY; if that happens before the official settings store
+  // bootstrap ran, the store's load() throws "Setting values must be loaded
+  // before any setting is registered" - an uncaught error that aborts the
+  // bootstrap chain and leaves the whole UI blank. Wait for the store's
+  // isReady signal first (see profiler.js for the full note).
+  function settingsStoreReady(app) {
+    const s = app && app.extensionManager && app.extensionManager.setting;
+    return !!s && s.isReady === true;
+  }
+
   async function boot() {
     csTrace("boot called");
     const css = document.createElement("link");
@@ -643,6 +654,15 @@
       return app && typeof app.registerExtension === "function";
     }, 30000, 200);
     if (!ready) { csTrace("host app never became ready (30s)"); return; }
+
+    // Gate on the settings store bootstrap (see settingsStoreReady note).
+    // The '_s' warming errors below were usually this same race surfacing at
+    // store creation; waiting for isReady removes most of them too.
+    const settingsReady = await waitFor(
+      () => settingsStoreReady(getApp()), 30000, 200);
+    if (!settingsReady) {
+      csTrace("settings store never signalled ready (30s); registering anyway");
+    }
 
     // registerExtension can still throw while the extension-service pinia
     // store initializes; retry until it lands.  init() is called manually
