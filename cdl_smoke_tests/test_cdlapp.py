@@ -427,11 +427,55 @@ def main() -> int:
           "card._update" in js
           and "function pulseChart" in js
           and "cdlapp-chart-pulse" in css
-          and "max-width: 520px" in css
-          and "height: 170px" in css
           # a fresh-data glow is feedback, not an entrance replay - it must
           # respect the global motion switch
           and "body.cdlapp-motion-off .cdlapp-chart-pulse" in css)
+    check("A6 user-resizable chart blocks with undistorted text (batch 21)",
+          # native resize handle, flex column (blocks stack, never overlap)
+          "resize: both" in css and "overflow: hidden" in css
+          and "max-width: 100%" in css and "min-height: 150px" in css
+          # strokes stay 1px under any stretch; text lives in HTML overlay
+          and "non-scaling-stroke" in js
+          and "cdlapp-chart-overlay" in js and "cdlapp-chart-overlay" in css
+          and "cdlapp-chart-ylab" in css and "cdlapp-chart-dot" in css)
+
+    # --- A7: batch 20 (curve motion, fonts, run-boundary glow) ---------------
+    check("A7 curve movement: eased points interpolation on persistent lines",
+          "function animatePoints" in js
+          and "requestAnimationFrame" in js
+          and "cancelAnimationFrame(pl._raf)" in js
+          and "const gGrid = svgEl" in js
+          and "const rawPl = svgEl" in js
+          and "const smoothPl = svgEl" in js)
+    check("A7 run-boundary panel glow at got-prompt / finished moments",
+          "executionStart: \"execution_start\"" in js
+          and "cdl_preview_data: onPreviewData" in js
+          and "flashPanel(\"cdlapp-flash-start\")" in js
+          and "flashPanel(\"cdlapp-flash-done\")" in js
+          and "cdlapp-flash-done-k" in css
+          and "body.cdlapp-motion-off .cdlapp-flash-start" in css)
+    check("A7 prose fonts for generated text + app-mode text widgets",
+          # generated-text card and the docked text widgets leave monospace
+          "function appendTyping" in js
+          and "font-family: inherit" in css
+          and "arrange-panel textarea" in css)
+    check("A7 streaming text reveal + stronger curve easing (batch 22)",
+          "cdlapp-typein" in js and "cdlapp-typein" in css
+          and "next.startsWith(lastFull)" in js
+          and "animationDelay" in js
+          and "spans.length > 240" in js
+          and "DUR = 550" in js and "easeOutBack" in js)
+    check("A8 previews pane scrolls instead of clipping (batch 23)",
+          ".cdlapp-sec-previews" in css and "overflow-y: auto" in css
+          and "scrollbar-width: thin" in css
+          and "min-height: 160px" in css)
+    check("A8 Stop (interrupt) button wired to the official api method",
+          'interruptMethod: "interrupt"' in js
+          and 'square: \'<rect width="18" height="18" x="3" y="3" rx="2"/>\'' in js
+          and "function buildProgressSection" in js
+          and "buildProgressSection()" in js
+          and 'stopBtn.style.display = state.runActive ? "" : "none";' in js
+          and '"stop_tooltip"' in js)
     check("A5 dim text is contrast-derived (theme-safe, not a fixed color)",
           "--cdl-dim" in css and "color-mix(in srgb, var(--fg-color" in css
           and css.count("var(--cdl-dim") >= 4

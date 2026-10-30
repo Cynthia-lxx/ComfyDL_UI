@@ -92,10 +92,14 @@
       executionSuccess: "execution_success",
       executionInterrupted: "execution_interrupted",
       executionCached: "execution_cached",
+      // "got prompt" moment - the server picked the job up (batch 20)
+      executionStart: "execution_start",
     },
     commands: {
       toggleLinear: "Comfy.ToggleLinear",
     },
+    // ComfyApi exposes the official run-interrupt call (POST /interrupt)
+    api: { interruptMethod: "interrupt" },
     // z-index band (measured 1.51.9): official splash 9999, primevue
     // tooltip 2000, actionbar 1300.  Stay between tooltip and splash.
     zIndex: { min: 2001, max: 9999, panel: 2100 },
@@ -171,6 +175,8 @@
       prog_title: "Progress",
       prog_idle: "Idle - press Run.",
       prog_node_fmt: "{done} / {total} nodes · {pct}%",
+      stop: "Stop",
+      stop_tooltip: "Interrupt the current run",
       err_title: "Errors",
       err_none: "No errors.",
       err_copy: "Copy details",
@@ -208,6 +214,8 @@
       prog_title: "进度",
       prog_idle: "空闲——按 Run 开始。",
       prog_node_fmt: "{done} / {total} 节点 · {pct}%",
+      stop: "停止",
+      stop_tooltip: "中断当前运行",
       err_title: "错误",
       err_none: "无错误。",
       err_copy: "复制详情",
@@ -689,6 +697,7 @@
       + '<path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/>'
       + '<path d="M16 13H8"/><path d="M16 17H8"/>',
     "chevrons-left": '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+    square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
     "log-in": '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>'
       + '<polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="3"/>',
     "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>'
@@ -756,16 +765,8 @@
     secOut.appendChild(el("div", "cdlapp-empty", t("out_empty")));
     panel.appendChild(secOut);
 
-    // progress section
-    const secProg = el("div", "cdlapp-section cdlapp-sec-progress");
-    secProg.appendChild(el("div", "cdlapp-sec-title", t("prog_title")));
-    const totalWrap = el("div", "cdlapp-total");
-    const totalBar = el("div", "cdlapp-total-bar");
-    totalWrap.appendChild(totalBar);
-    secProg.appendChild(totalWrap);
-    secProg.appendChild(el("div", "cdlapp-total-label", t("prog_idle")));
-    secProg.appendChild(el("div", "cdlapp-prog-rows"));
-    panel.appendChild(secProg);
+    // progress section (shared with the dock builder - see buildProgressSection)
+    panel.appendChild(buildProgressSection());
 
     // errors section
     const secErr = el("div", "cdlapp-section cdlapp-sec-errors");
@@ -820,14 +821,7 @@
     extras.appendChild(secPrev);
 
     // progress section
-    const secProg = el("div", "cdlapp-section cdlapp-sec-progress");
-    secProg.appendChild(el("div", "cdlapp-sec-title", t("prog_title")));
-    const totalWrap = el("div", "cdlapp-total");
-    totalWrap.appendChild(el("div", "cdlapp-total-bar"));
-    secProg.appendChild(totalWrap);
-    secProg.appendChild(el("div", "cdlapp-total-label", t("prog_idle")));
-    secProg.appendChild(el("div", "cdlapp-prog-rows"));
-    extras.appendChild(secProg);
+    extras.appendChild(buildProgressSection());
 
     // errors section
     const secErr = el("div", "cdlapp-section cdlapp-sec-errors");
@@ -1162,12 +1156,55 @@
     return (i === 0 ? v : v.toFixed(1)) + " " + units[i];
   }
 
+  // Progress section builder (batch 23): shared by the legacy overlay and
+  // the docked extras so both carry the Stop (interrupt) button.  The button
+  // is hidden while idle and shown while a run is active (renderProgress
+  // toggles it); clicking calls the official ComfyApi.interrupt() - the
+  // server then emits the interrupted event, which resets the run UI.
+  function buildProgressSection() {
+    const sec = el("div", "cdlapp-section cdlapp-sec-progress");
+    const head = el("div", "cdlapp-sec-title cdlapp-prog-head");
+    head.appendChild(el("span", null, t("prog_title")));
+    const stop = el("button", btnCls("h-10 px-4", "cdlapp-stop-btn"));
+    stop.type = "button";
+    stop.appendChild(iconEl("square"));
+    stop.appendChild(el("span", null, t("stop")));
+    stop.title = t("stop_tooltip");
+    stop.style.display = "none";
+    stop.addEventListener("click", () => {
+      try {
+        const api = getApi();
+        const method = OFFICIAL_SURFACE.api.interruptMethod;
+        if (api && typeof api[method] === "function") {
+          api[method]();
+          console.info(TAG, "interrupt requested");
+        } else {
+          warnOnce("stop", "official interrupt method unavailable");
+        }
+      } catch (e) {
+        console.warn(TAG, "interrupt failed:", e);
+      }
+    });
+    head.appendChild(stop);
+    sec.appendChild(head);
+    const totalWrap = el("div", "cdlapp-total");
+    totalWrap.appendChild(el("div", "cdlapp-total-bar"));
+    sec.appendChild(totalWrap);
+    sec.appendChild(el("div", "cdlapp-total-label", t("prog_idle")));
+    sec.appendChild(el("div", "cdlapp-prog-rows"));
+    return sec;
+  }
+
   function renderProgress() {
     if (!state.panel) return;
     const rowsEl = state.panel.querySelector(".cdlapp-prog-rows");
     const label = state.panel.querySelector(".cdlapp-total-label");
     const bar = state.panel.querySelector(".cdlapp-total-bar");
     if (!rowsEl) return;
+    // Stop (interrupt) button: visible only while a run is active
+    const host = state.extras || state.panel;
+    const stopBtn = host ? host.querySelector(".cdlapp-stop-btn") : null;
+    if (stopBtn) stopBtn.style.display = state.runActive ? "" : "none";
     const run = state.activePrompt ? state.runs.get(state.activePrompt) : null;
     if (!run || run.order.length === 0) {
       rowsEl.textContent = "";
@@ -1349,6 +1386,8 @@
     prefillNodes(state.activePrompt);
     // status dot: teal while executing (CSS hook)
     if (state.extras) state.extras.classList.add("cdlapp-running");
+    // "got prompt" moment glow (batch 20, user request)
+    flashPanel("cdlapp-flash-start");
     renderErrors();
     renderOutputs();
   }
@@ -1531,6 +1570,13 @@
     renderProgress();
   }
 
+  function onExecutionStart(ev) {
+    const d = ev && ev.detail;
+    if (d && d.prompt_id) state.activePrompt = d.prompt_id;
+    if (state.activePrompt === null) state.activePrompt = "default";
+    beginRunIfNew();
+  }
+
   function onExecutionSuccess() {
     if (state.activePrompt) {
       const run = state.runs.get(state.activePrompt);
@@ -1541,6 +1587,8 @@
     endRun();
     renderProgress();
     refreshArtifacts();
+    // "prompt finished" moment glow (batch 20, user request)
+    flashPanel("cdlapp-flash-done");
   }
 
   function onExecutionInterrupted() {
@@ -1619,6 +1667,54 @@
   // is the aspect ratio; the anti-glitch fix is that every push UPDATES the
   // skeleton in place via card._update - only the polylines' points and the
   // tick labels change, plus a soft one-shot pulse, never a card rebuild).
+  // Eased points interpolation (batch 20, user: "曲线的移动"; batch 22
+  // strengthening: 550 ms with a slight easeOutBack so the curve visibly
+  // glides into place instead of snapping).  O(points) per frame, one rAF
+  // per push (~1 Hz) - negligible.  Falls back to a snap when the point
+  // count changes (start/end of a run) or motion is off.
+  function animatePoints(pl, toStr) {
+    const from = pl.getAttribute("points");
+    if (pl._raf) cancelAnimationFrame(pl._raf);
+    pl._raf = null;
+    if (!from || !state.motion
+        || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      pl.setAttribute("points", toStr);
+      return;
+    }
+    const a = from.split(" ").map((s) => s.split(",").map(Number));
+    const b = toStr.split(" ").map((s) => s.split(",").map(Number));
+    if (a.length !== b.length || a.some((p) => p.length < 2)) {
+      pl.setAttribute("points", toStr);
+      return;
+    }
+    const t0 = performance.now();
+    const DUR = 550;
+    const S = 1.2; // mild easeOutBack overshoot (1.0 = none)
+    function frame(t) {
+      const k = Math.min(1, (t - t0) / DUR);
+      const q = k - 1;
+      const e = 1 + q * q * ((S + 1) * q + S); // easeOutBack(S)
+      pl.setAttribute("points", b.map((p, i) => {
+        const o = a[i];
+        return (o[0] + (p[0] - o[0]) * e).toFixed(1) + ","
+          + (o[1] + (p[1] - o[1]) * e).toFixed(1);
+      }).join(" "));
+      if (k < 1) pl._raf = requestAnimationFrame(frame);
+    }
+    pl._raf = requestAnimationFrame(frame);
+  }
+
+  // Interactive loss-curve chart (batch 21 resize/architecture rework):
+  //   - the SVG carries ONLY shapes (grid, curves, best/vline) and every
+  //     stroke uses vector-effect:non-scaling-stroke, so lines keep their
+  //     pixel width no matter how the user stretches the card;
+  //   - ALL text (axis ticks, crosshair readout) and the hover dot live in
+  //     an HTML overlay positioned in percentages - text never distorts,
+  //     whatever the card's aspect ratio ends up being;
+  //   - the card itself is user-resizable (native CSS resize handle) and
+  //     the plots flex - fixed sizes are gone (batch 19/20 stopgap).
+  // The card skeleton is created ONCE per node and every push UPDATES it in
+  // place via card._update (polylines tween - see animatePoints).
   function buildLossChart(d) {
     const card = el("div", "cdlapp-chart-card");
     const head = el("div", "cdlapp-chart-head");
@@ -1628,6 +1724,7 @@
     head.appendChild(meta);
     card.appendChild(head);
 
+    const wrap = el("div", "cdlapp-chart-wrap");
     const svg = svgEl("svg", "cdlapp-chart-svg");
     svg.setAttribute("viewBox", "0 0 240 110");
     svg.setAttribute("preserveAspectRatio", "none");
@@ -1636,33 +1733,74 @@
     let pts = []; // live points, re-read by the hover handlers on every push
     let geom = null;
 
-    // hover crosshair (created once, re-uses the latest pts/geom)
-    const cross = svgEl("g", "cdlapp-chart-cross");
-    cross.style.display = "none";
-    const vline = svgEl("line", "cdlapp-chart-crossline");
-    const dot = svgEl("circle", "cdlapp-chart-dot");
-    dot.setAttribute("r", 2.4);
-    const read = svgEl("text", "cdlapp-chart-read");
-    cross.appendChild(vline); cross.appendChild(dot); cross.appendChild(read);
-    svg.addEventListener("mousemove", (e) => {
+    // persistent shape layers (created ONCE - the eased "curve movement"
+    // relies on updating attributes, never rebuilding elements)
+    const mkShape = (tag, cls) => {
+      const n = svgEl(tag, cls);
+      n.setAttribute("vector-effect", "non-scaling-stroke");
+      return n;
+    };
+    const gGrid = svgEl("g", "cdlapp-chart-gridlayer");
+    const bestLine = mkShape("line", "cdlapp-chart-best");
+    const rawPl = svgEl("polyline", "cdlapp-chart-raw");
+    rawPl.setAttribute("vector-effect", "non-scaling-stroke");
+    const smoothPl = svgEl("polyline", "cdlapp-chart-smooth");
+    smoothPl.setAttribute("vector-effect", "non-scaling-stroke");
+    const vline = mkShape("line", "cdlapp-chart-crossline");
+    svg.appendChild(gGrid);
+    svg.appendChild(bestLine);
+    svg.appendChild(rawPl);
+    svg.appendChild(smoothPl);
+    svg.appendChild(vline);
+    vline.style.display = "none";
+
+    // HTML overlay: text + dot keep their aspect at any card size
+    const overlay = el("div", "cdlapp-chart-overlay");
+    const yLabels = [0, 1, 2].map(() => {
+      const s = el("span", "cdlapp-chart-ylab");
+      overlay.appendChild(s);
+      return s;
+    });
+    const xlab0 = el("span", "cdlapp-chart-xlab cdlapp-chart-xlab0");
+    const xlab1 = el("span", "cdlapp-chart-xlab cdlapp-chart-xlab1");
+    overlay.appendChild(xlab0);
+    overlay.appendChild(xlab1);
+    const dot = el("div", "cdlapp-chart-dot");
+    const read = el("span", "cdlapp-chart-read");
+    dot.style.display = "none";
+    read.style.display = "none";
+    overlay.appendChild(dot);
+    overlay.appendChild(read);
+    wrap.appendChild(svg);
+    wrap.appendChild(overlay);
+
+    // hover: crosshair anchored in percentages of the plot rect
+    wrap.addEventListener("mousemove", (e) => {
       if (!geom || pts.length < 2) return;
-      const rect = svg.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) / rect.width * W;
-      const cx = Math.max(L, Math.min(W - R, mx));
+      const rect = wrap.getBoundingClientRect();
+      const fx = (e.clientX - rect.left) / rect.width;
+      const cx = Math.max(L, Math.min(W - R, fx * W));
       const idx = Math.round((cx - L) / iw * (pts.length - 1));
       const p = pts[Math.max(0, Math.min(pts.length - 1, idx))];
       const px = geom.sx(p[0]), py = geom.sy(p[1]);
+      vline.style.display = "";
       vline.setAttribute("x1", px); vline.setAttribute("x2", px);
       vline.setAttribute("y1", T); vline.setAttribute("y2", T + ih);
-      dot.setAttribute("cx", px); dot.setAttribute("cy", py);
-      read.setAttribute("x", Math.min(px + 4, W - R - 60));
-      read.setAttribute("y", Math.max(T + 8, py - 4));
+      dot.style.display = "";
+      dot.style.left = (px / W * 100) + "%";
+      dot.style.top = (py / H * 100) + "%";
+      read.style.display = "";
+      read.style.left = Math.min(px / W * 100 + 1.5, 82) + "%";
+      read.style.top = Math.max(1, py / H * 100 - 9) + "%";
       read.textContent = "s" + p[0] + " " + fmtNum(p[1]);
-      cross.style.display = "";
     });
-    svg.addEventListener("mouseleave", () => { cross.style.display = "none"; });
+    wrap.addEventListener("mouseleave", () => {
+      vline.style.display = "none";
+      dot.style.display = "none";
+      read.style.display = "none";
+    });
 
-    // in-place redraw of the dynamic layer (everything but the crosshair)
+    // in-place redraw: only attributes/text change, elements persist
     function update(d2) {
       title.textContent = d2.title || "loss";
       meta.textContent = t("chart_step") + " " + d2.step
@@ -1670,8 +1808,16 @@
         + " · " + t("chart_best") + " " + fmtNum(d2.best)
         + (d2.finished ? " · ✓" : "");
       pts = (d2.points || []).filter((p) => p && p.length >= 2);
-      Array.from(svg.children).forEach((n) => { if (n !== cross) n.remove(); });
-      if (pts.length < 2) return;
+      gGrid.textContent = "";
+      if (pts.length < 2) {
+        rawPl.setAttribute("points", "");
+        smoothPl.setAttribute("points", "");
+        bestLine.style.display = "none";
+        yLabels.forEach((s) => { s.textContent = ""; });
+        xlab0.textContent = "";
+        xlab1.textContent = "";
+        return;
+      }
       const xs = pts.map((p) => p[0]);
       const ys = pts.map((p) => p[1]);
       let lo = Math.min.apply(null, ys);
@@ -1687,52 +1833,70 @@
       const sx = (x) => L + iw * (x - x0) / Math.max(1e-9, x1 - x0);
       const sy = (y) => T + ih * (1 - (y - lo) / (hi - lo));
       geom = { sx: sx, sy: sy };
-      const line = (arr, cls) => {
-        const pl = svgEl("polyline", cls);
-        pl.setAttribute("points", arr.map((p) =>
-          sx(p[0]).toFixed(1) + "," + sy(p[1]).toFixed(1)).join(" "));
-        svg.appendChild(pl);
-      };
       for (let f = 0; f <= 2; f++) {
         const y = T + ih * f / 2;
-        const gl = svgEl("line", "cdlapp-chart-grid");
+        const gl = mkShape("line", "cdlapp-chart-grid");
         gl.setAttribute("x1", L); gl.setAttribute("x2", W - R);
         gl.setAttribute("y1", y); gl.setAttribute("y2", y);
-        svg.appendChild(gl);
+        gGrid.appendChild(gl);
+        // y tick label: HTML, vertically aligned to its grid line
         const val = hi - (hi - lo) * f / 2;
-        const tx = svgEl("text", "cdlapp-chart-tick");
-        tx.setAttribute("x", L - 3); tx.setAttribute("y", y + 3);
-        tx.setAttribute("text-anchor", "end");
-        tx.textContent = fmtNum(val);
-        svg.appendChild(tx);
+        yLabels[f].textContent = fmtNum(val);
+        yLabels[f].style.top = (y / H * 100) + "%";
       }
-      const xl = svgEl("text", "cdlapp-chart-tick");
-      xl.setAttribute("x", L); xl.setAttribute("y", H - 3);
-      xl.textContent = String(x0);
-      svg.appendChild(xl);
-      const xr = svgEl("text", "cdlapp-chart-tick");
-      xr.setAttribute("x", W - R); xr.setAttribute("y", H - 3);
-      xr.setAttribute("text-anchor", "end");
-      xr.textContent = String(x1);
-      svg.appendChild(xr);
+      xlab0.textContent = String(x0);
+      xlab1.textContent = String(x1);
       const by = sy(d2.best);
-      if (by >= T && by <= T + ih) {
-        const bl = svgEl("line", "cdlapp-chart-best");
-        bl.setAttribute("x1", L); bl.setAttribute("x2", W - R);
-        bl.setAttribute("y1", by); bl.setAttribute("y2", by);
-        svg.appendChild(bl);
-      }
-      line(pts, "cdlapp-chart-raw");
+      bestLine.style.display = (by >= T && by <= T + ih) ? "" : "none";
+      bestLine.setAttribute("x1", L); bestLine.setAttribute("x2", W - R);
+      bestLine.setAttribute("y1", by); bestLine.setAttribute("y2", by);
+      animatePoints(rawPl, pts.map((p) =>
+        sx(p[0]).toFixed(1) + "," + sy(p[1]).toFixed(1)).join(" "));
       const smooth = movingAvg(pts.map((p) => p[1]), 8);
       if (pts.length >= 8) {
-        line(pts.map((p, i) => [p[0], smooth[i]]), "cdlapp-chart-smooth");
+        animatePoints(smoothPl, pts.map((p, i) =>
+          sx(p[0]).toFixed(1) + "," + sy(smooth[i]).toFixed(1)).join(" "));
+      } else {
+        smoothPl.setAttribute("points", "");
       }
-      svg.appendChild(cross); // crosshair always paints on top
     }
     card._update = update;
     update(d);
-    card.appendChild(svg);
+    card.appendChild(wrap);
     return card;
+  }
+
+  // Streaming text reveal (batch 22, user: "AI chat style fast per-character
+  // fade-in"): only the NEW suffix of the text animates, one span per
+  // character with a tiny stagger - the already-revealed prefix stays as
+  // plain text (compacted periodically so the span count stays bounded).
+  // Total reveal time is capped (~600 ms) no matter how many chars arrive.
+  function appendTyping(body, delta) {
+    const chars = Array.from(delta);
+    if (!chars.length) return;
+    if (!state.motion
+        || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      body.appendChild(document.createTextNode(delta));
+      return;
+    }
+    const per = Math.min(14, Math.max(3, Math.floor(600 / chars.length)));
+    const frag = document.createDocumentFragment();
+    chars.forEach((ch, i) => {
+      const s = document.createElement("span");
+      s.className = "cdlapp-typein";
+      s.style.animationDelay = (i * per) + "ms";
+      s.textContent = ch;
+      frag.appendChild(s);
+    });
+    body.appendChild(frag);
+    // keep the DOM bounded: fold the oldest spans into a plain text node
+    const spans = body.querySelectorAll(".cdlapp-typein");
+    if (spans.length > 240) {
+      const keep = Array.prototype.slice.call(spans, 0, 140);
+      const text = keep.map((s) => s.textContent).join("");
+      body.insertBefore(document.createTextNode(text), body.firstChild);
+      keep.forEach((s) => s.remove());
+    }
   }
 
   function buildTextCard(d) {
@@ -1743,9 +1907,21 @@
     card.appendChild(head);
     const body = el("pre", "cdlapp-chart-body");
     card.appendChild(body);
+    let lastFull = "";
     card._update = function (d2) {
       title.textContent = d2.title || "generated";
-      body.textContent = (d2.lines || []).join("\n");
+      const next = (d2.lines || []).join("\n");
+      if (next === lastFull) return;
+      if (next.length > lastFull.length && next.startsWith(lastFull)) {
+        // streaming append: reveal only the new characters
+        appendTyping(body, next.slice(lastFull.length));
+      } else {
+        // window truncation or a fresh run - rebuild, then reveal the tail
+        const tail = next.slice(-60);
+        body.textContent = next.slice(0, next.length - tail.length);
+        appendTyping(body, tail);
+      }
+      lastFull = next;
       body.scrollTop = body.scrollHeight;
     };
     card._update(d);
@@ -1761,6 +1937,19 @@
     card.classList.remove("cdlapp-chart-pulse");
     void card.offsetWidth; // restart the one-shot animation
     card.classList.add("cdlapp-chart-pulse");
+  }
+
+  // Run-boundary panel glow (batch 20, user request: the "got prompt" and
+  // prompt-finished moments should make the UI light up): a soft inset ring
+  // on the whole docked panel / legacy overlay.  Same motion gating.
+  function flashPanel(cls) {
+    if (!state.motion) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const host = state.extras || state.panel;
+    if (!host) return;
+    host.classList.remove("cdlapp-flash-start", "cdlapp-flash-done");
+    void host.offsetWidth;
+    host.classList.add(cls);
   }
 
   function renderCharts() {
@@ -1849,6 +2038,7 @@
       [E.executionSuccess]: onExecutionSuccess,
       [E.executionInterrupted]: onExecutionInterrupted,
       [E.executionError]: onExecutionError,
+      [E.executionStart]: onExecutionStart,
       // structured live-preview pushes from comfy/loss_preview.py (batch 18)
       cdl_preview_data: onPreviewData,
     };

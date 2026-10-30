@@ -111,6 +111,27 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
 }
 #cdl-app-extras .cdlapp-head { grid-area: head; }
 #cdl-app-extras .cdlapp-sec-previews { grid-area: prev; }
+/* batch 23 (user): many resizable preview blocks can overflow the pane -
+   scroll instead of clipping.  Charts keep their user-set heights, so the
+   section scrolls as a whole; the thumbnail grid keeps a floor height. */
+#cdl-app-extras .cdlapp-sec-previews,
+#cdl-app-panel .cdlapp-sec-previews {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color, #333333) transparent;
+}
+#cdl-app-extras .cdlapp-sec-previews::-webkit-scrollbar,
+#cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar {
+  width: 8px;
+}
+#cdl-app-extras .cdlapp-sec-previews::-webkit-scrollbar-thumb,
+#cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar-thumb {
+  background: var(--border-color, #333333);
+  border-radius: 4px;
+}
+#cdl-app-extras .cdlapp-preview-grid {
+  min-height: 160px;
+}
 #cdl-app-extras .cdlapp-sec-outputs { grid-area: out; }
 #cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
 #cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
@@ -195,7 +216,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
 }
 #cdl-app-extras .cdlapp-preview-grid {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 160px; /* batch 23: floor so charts never starve the grid */
   overflow-y: auto;
 }
 .cdlapp-preview-item {
@@ -476,6 +497,31 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   margin-bottom: 6px;
   font-variant-numeric: tabular-nums;
 }
+/* batch 23: progress head carries the Stop (interrupt) button */
+.cdlapp-prog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cdlapp-stop-btn {
+  height: 26px !important;
+  padding: 0 10px !important;
+  font-size: 11px;
+  gap: 6px;
+}
+.cdlapp-stop-btn svg {
+  width: 11px;
+  height: 11px;
+}
+.cdlapp-stop-btn:hover {
+  border-color: rgba(231, 76, 60, 0.7);
+}
+.cdlapp-stop-btn:hover span,
+.cdlapp-stop-btn:hover svg {
+  color: #e74c3c;
+}
+
 .cdlapp-prog-row {
   display: grid;
   /* last column fits "42% 0:42" on one line (batch 16: pct + eta) */
@@ -585,17 +631,70 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   border-radius: 8px;
   padding: 8px 10px;
   background: var(--comfy-menu-bg, #1e1e1e);
-  /* aspect fix (batch 19, user: the chart looked squashed): the viewBox is
-     240x110 (2.2:1) - stretching it over a full ~900px pane compressed the
-     curves 4x vertically.  Cap the card width and raise the svg height so
-     the plotted aspect lands near ~3:1. */
-  max-width: 520px;
+  /* batch 21 (user): fixed sizes are gone - every preview block is
+     user-resizable via the native corner handle; the flex column layout
+     keeps blocks stacking (never overlapping), max-width caps intrusion
+     into the sibling column. */
+  resize: both;
+  overflow: hidden;
+  width: 100%;
+  height: 230px;
+  min-width: 300px;
+  min-height: 150px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.cdlapp-chart-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  cursor: crosshair;
 }
 .cdlapp-chart-svg {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 170px;
-  cursor: crosshair;
+  height: 100%;
+}
+/* text/marker overlay: HTML elements keep their aspect at any card size */
+.cdlapp-chart-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.cdlapp-chart-ylab {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--cdl-dim, #b8b8b8);
+}
+.cdlapp-chart-xlab {
+  position: absolute;
+  bottom: 0;
+  font-size: 10px;
+  color: var(--cdl-dim, #b8b8b8);
+}
+.cdlapp-chart-xlab0 { left: 17%; }
+.cdlapp-chart-xlab1 { right: 0; }
+.cdlapp-chart-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1abc9c;
+  transform: translate(-50%, -50%);
+}
+.cdlapp-chart-read {
+  position: absolute;
+  font-size: 11px;
+  color: var(--fg-color, #ffffff);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 /* one-shot fresh-data glow (batch 19): border + soft halo fade out */
 @keyframes cdlapp-chart-pulse-k {
@@ -645,6 +744,7 @@ body.cdlapp-motion-off .cdlapp-chart-pulse {
   font-size: 7px;
   font-variant-numeric: tabular-nums;
 }
+/* legacy SVG-text rules retired in batch 21 (text moved to HTML overlay) */
 .cdlapp-chart-raw {
   fill: none;
   stroke: color-mix(in srgb, var(--fg-color, #ffffff) 45%, transparent);
@@ -668,21 +768,70 @@ body.cdlapp-motion-off .cdlapp-chart-pulse {
 .cdlapp-chart-dot {
   fill: #1abc9c;
 }
-.cdlapp-chart-read {
-  fill: var(--fg-color, #ffffff);
-  font-size: 7.5px;
-  font-variant-numeric: tabular-nums;
-}
 .cdlapp-chart-text .cdlapp-chart-body {
   margin: 0;
-  font-family: var(--mono-font-family, ui-monospace, monospace);
-  font-size: 10.5px;
-  line-height: 1.45;
+  /* batch 20 (user): generated text is prose, not code - use the UI font */
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--fg-color, #ffffff);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 150px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+}
+/* batch 22: AI-chat style per-character fade-in for streaming text */
+@keyframes cdlapp-typein-k {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.cdlapp-typein {
+  animation: cdlapp-typein-k 0.16s ease-out both;
+}
+body.cdlapp-motion-off .cdlapp-typein {
+  animation: none !important;
+}
+
+/* batch 20 (user): the app-mode text widgets ship a monospace face - route
+   them to the UI font stack for reading comfort.  Scoped to the docked
+   arrange-panel, same surface we already re-style in dock mode. */
+body.cdlapp-active .comfyui-body .arrange-panel textarea,
+body.cdlapp-active .comfyui-body .arrange-panel input[type="text"] {
+  font-family: inherit;
+}
+
+/* batch 20 (user): run-boundary panel glow - "got prompt" (teal) and
+   "prompt finished" (green) light the whole dock up for a moment */
+@keyframes cdlapp-flash-k {
+  0% {
+    box-shadow: inset 0 0 0 2px rgba(26, 188, 156, 0.75),
+      inset 0 0 26px rgba(26, 188, 156, 0.25);
+  }
+  100% {
+    box-shadow: inset 0 0 0 2px rgba(26, 188, 156, 0),
+      inset 0 0 26px rgba(26, 188, 156, 0);
+  }
+}
+@keyframes cdlapp-flash-done-k {
+  0% {
+    box-shadow: inset 0 0 0 2px rgba(46, 204, 113, 0.8),
+      inset 0 0 26px rgba(46, 204, 113, 0.28);
+  }
+  100% {
+    box-shadow: inset 0 0 0 2px rgba(46, 204, 113, 0),
+      inset 0 0 26px rgba(46, 204, 113, 0);
+  }
+}
+.cdlapp-flash-start {
+  animation: cdlapp-flash-k 0.9s ease-out;
+}
+.cdlapp-flash-done {
+  animation: cdlapp-flash-done-k 1.1s ease-out;
+}
+body.cdlapp-motion-off .cdlapp-flash-start,
+body.cdlapp-motion-off .cdlapp-flash-done {
+  animation: none !important;
 }
 
 /* ------------------------------------------------------------- motion */
