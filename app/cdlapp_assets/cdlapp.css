@@ -223,7 +223,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--comfy-input-bg, #9e9e9e);
+  color: var(--cdl-dim, #b8b8b8); /* contrast-derived, theme-safe */
 }
 
 /* ------------------------------------------------------- legacy overlay */
@@ -383,6 +383,17 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   background: var(--secondary-background-hover, #313235);
 }
 
+/* ------------------------------------------------------- text contrast */
+/* Dim text must keep readable contrast on ANY theme (user callout 2026-10-31:
+   --comfy-input-bg is nearly the background color on dark themes).  All dim
+   text derives from the theme's FOREGROUND color at reduced strength, so a
+   future light theme inherits correct contrast automatically. */
+#cdl-app-extras,
+#cdl-app-panel,
+#cdl-builder-back {
+  --cdl-dim: color-mix(in srgb, var(--fg-color, #ffffff) 62%, transparent);
+}
+
 /* -------------------------------------------------------------- sections */
 .cdlapp-section {
   border: 1px solid var(--border-color, #333333);
@@ -400,8 +411,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   margin-bottom: 8px;
 }
 .cdlapp-empty {
-  color: var(--comfy-input-bg, #9e9e9e);
-  opacity: 0.8;
+  color: var(--cdl-dim, #b8b8b8);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -441,7 +451,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
 }
 .cdlapp-item-size {
   flex: none;
-  color: var(--comfy-input-bg, #9e9e9e);
+  color: var(--cdl-dim, #b8b8b8); /* was --comfy-input-bg: invisible on dark */
   font-size: 10px;
 }
 
@@ -462,13 +472,14 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
 }
 .cdlapp-total-label {
   font-size: 11px;
-  color: var(--comfy-input-bg, #9e9e9e);
+  color: var(--cdl-dim, #b8b8b8);
   margin-bottom: 6px;
   font-variant-numeric: tabular-nums;
 }
 .cdlapp-prog-row {
   display: grid;
-  grid-template-columns: 1fr 56px 34px;
+  /* last column fits "42% 0:42" on one line (batch 16: pct + eta) */
+  grid-template-columns: minmax(0, 1fr) 56px minmax(70px, auto);
   align-items: center;
   gap: 6px;
   padding: 2px 0;
@@ -498,7 +509,15 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 11px;
-  color: var(--comfy-input-bg, #9e9e9e);
+  color: var(--cdl-dim, #b8b8b8);
+  white-space: nowrap;
+}
+.cdlapp-prog-eta {
+  font-size: 10px;
+  opacity: 0.85;
+}
+.cdlapp-st-idle .cdlapp-prog-name {
+  color: var(--cdl-dim, #b8b8b8);
 }
 .cdlapp-st-error .cdlapp-prog-pct { color: #e5484d; }
 .cdlapp-st-done .cdlapp-prog-pct { color: #4caf50; }
@@ -549,4 +568,227 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   overflow: auto;
   max-height: 180px;
   white-space: pre;
+}
+
+/* ----------------------------------------------------- live charts (b18) */
+/* Vector loss-curve / text-snapshot cards inside the previews pane, drawn
+   from the structured cdl_preview_data pushes.  All colors derive from the
+   official CSS variables, so light themes inherit correct contrast. */
+#cdl-app-extras .cdlapp-chart-host {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.cdlapp-chart-card {
+  border: 1px solid var(--border-color, #333333);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--comfy-menu-bg, #1e1e1e);
+  /* aspect fix (batch 19, user: the chart looked squashed): the viewBox is
+     240x110 (2.2:1) - stretching it over a full ~900px pane compressed the
+     curves 4x vertically.  Cap the card width and raise the svg height so
+     the plotted aspect lands near ~3:1. */
+  max-width: 520px;
+}
+.cdlapp-chart-svg {
+  display: block;
+  width: 100%;
+  height: 170px;
+  cursor: crosshair;
+}
+/* one-shot fresh-data glow (batch 19): border + soft halo fade out */
+@keyframes cdlapp-chart-pulse-k {
+  0% {
+    border-color: rgba(26, 188, 156, 0.85);
+    box-shadow: 0 0 0 1px rgba(26, 188, 156, 0.35);
+  }
+  100% {
+    border-color: var(--border-color, #333333);
+    box-shadow: none;
+  }
+}
+.cdlapp-chart-pulse {
+  animation: cdlapp-chart-pulse-k 0.7s ease-out;
+}
+body.cdlapp-motion-off .cdlapp-chart-pulse {
+  animation: none !important;
+}
+.cdlapp-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cdlapp-chart-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-color, #ffffff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdlapp-chart-meta {
+  flex: none;
+  font-size: 10px;
+  color: var(--cdl-dim, #b8b8b8);
+  font-variant-numeric: tabular-nums;
+}
+.cdlapp-chart-grid {
+  stroke: var(--border-color, #333333);
+  stroke-width: 0.5;
+  stroke-dasharray: 3 3;
+}
+.cdlapp-chart-tick {
+  fill: var(--cdl-dim, #b8b8b8);
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.cdlapp-chart-raw {
+  fill: none;
+  stroke: color-mix(in srgb, var(--fg-color, #ffffff) 45%, transparent);
+  stroke-width: 1;
+}
+.cdlapp-chart-smooth {
+  fill: none;
+  stroke: #1abc9c;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.cdlapp-chart-best {
+  stroke: color-mix(in srgb, #ff9f43 70%, transparent);
+  stroke-width: 0.8;
+  stroke-dasharray: 4 3;
+}
+.cdlapp-chart-crossline {
+  stroke: color-mix(in srgb, var(--fg-color, #ffffff) 55%, transparent);
+  stroke-width: 0.6;
+}
+.cdlapp-chart-dot {
+  fill: #1abc9c;
+}
+.cdlapp-chart-read {
+  fill: var(--fg-color, #ffffff);
+  font-size: 7.5px;
+  font-variant-numeric: tabular-nums;
+}
+.cdlapp-chart-text .cdlapp-chart-body {
+  margin: 0;
+  font-family: var(--mono-font-family, ui-monospace, monospace);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--fg-color, #ffffff);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 150px;
+  overflow: auto;
+}
+
+/* ------------------------------------------------------------- motion */
+/* Batch 16: every component animates - entrance / feedback / transition /
+   exit.  Gate: body.cdlapp-motion-off (ComfyDL.AppPanel.Motion setting,
+   default ON) plus an UNCONDITIONAL prefers-reduced-motion exemption (same
+   rule as the homepage entrance choreography).  All keyframes live under
+   body:not(.cdlapp-motion-off), zero official selectors are touched, and
+   only transform/opacity animate (motion discipline). */
+@keyframes cdlapp-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cdlapp-fade-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cdlapp-fade-out {
+  to { opacity: 0; transform: translateY(4px); }
+}
+@keyframes cdlapp-pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes cdlapp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* entrance: sections rise with a small stagger */
+body:not(.cdlapp-motion-off) #cdl-app-extras .cdlapp-section,
+body:not(.cdlapp-motion-off) #cdl-app-panel > .cdlapp-section {
+  animation: cdlapp-rise 0.28s ease both;
+}
+body:not(.cdlapp-motion-off) #cdl-app-extras .cdlapp-section:nth-of-type(2) {
+  animation-delay: 0.05s;
+}
+body:not(.cdlapp-motion-off) #cdl-app-extras .cdlapp-section:nth-of-type(3) {
+  animation-delay: 0.1s;
+}
+body:not(.cdlapp-motion-off) #cdl-app-extras .cdlapp-section:nth-of-type(4) {
+  animation-delay: 0.15s;
+}
+body:not(.cdlapp-motion-off) #cdl-app-extras .cdlapp-head {
+  animation: cdlapp-rise 0.22s ease both;
+}
+
+/* rows / cards / output items slide in as they appear */
+body:not(.cdlapp-motion-off) .cdlapp-item,
+body:not(.cdlapp-motion-off) .cdlapp-prog-row,
+body:not(.cdlapp-motion-off) .cdlapp-err-card,
+body:not(.cdlapp-motion-off) .cdlapp-preview-item {
+  animation: cdlapp-fade-in 0.18s ease both;
+}
+
+/* feedback: press dips, copied check pops, preview zooms, status dot breathes */
+body:not(.cdlapp-motion-off) .cdlapp-btn {
+  transition: transform 0.1s ease, color 0.1s ease,
+    background-color 0.1s ease, border-color 0.1s ease;
+}
+body:not(.cdlapp-motion-off) .cdlapp-btn:active {
+  transform: scale(0.96);
+}
+body:not(.cdlapp-motion-off) .cdlapp-btn.cdlapp-pop svg,
+body:not(.cdlapp-motion-off) .cdlapp-icon.cdlapp-pop svg {
+  animation: cdlapp-pop 0.28s ease both;
+}
+body:not(.cdlapp-motion-off) .cdlapp-preview-img {
+  transition: transform 0.2s ease;
+}
+body:not(.cdlapp-motion-off) .cdlapp-preview-item:hover .cdlapp-preview-img {
+  transform: scale(1.05);
+}
+body:not(.cdlapp-motion-off) .cdlapp-running .cdlapp-title::before {
+  animation: cdlapp-pulse 1.6s ease-in-out infinite;
+}
+
+/* transitions that exist independent of the motion switch (cheap, state
+   clarity) keep their CSS transitions from their own rules above: progress
+   bar widths, splitter hover, preview border. */
+
+/* exit: fade the panel out before unmount (unmountPanel delays removal) */
+.cdlapp-leaving {
+  animation: cdlapp-fade-out 0.16s ease both !important;
+  pointer-events: none;
+}
+
+/* global off switch: kill every animation/transition we ship */
+body.cdlapp-motion-off .cdlapp-section,
+body.cdlapp-motion-off .cdlapp-head,
+body.cdlapp-motion-off .cdlapp-item,
+body.cdlapp-motion-off .cdlapp-prog-row,
+body.cdlapp-motion-off .cdlapp-err-card,
+body.cdlapp-motion-off .cdlapp-preview-item,
+body.cdlapp-motion-off .cdlapp-preview-img,
+body.cdlapp-motion-off .cdlapp-btn,
+body.cdlapp-motion-off .cdlapp-title::before {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* reduced motion: unconditional, overrides everything above */
+@media (prefers-reduced-motion: reduce) {
+  #cdl-app-extras *, #cdl-app-panel *, #cdl-builder-back * {
+    animation: none !important;
+    transition: none !important;
+  }
 }

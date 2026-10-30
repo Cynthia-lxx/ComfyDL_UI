@@ -27,6 +27,9 @@ if str(REPO_ROOT) not in sys.path:
 
 _RESULTS: list = []
 
+# settings ids declared in cdlapp.js (pinned in the A2/A5 checks)
+SETTING_MOTION_ID = '"ComfyDL.AppPanel.Motion"'
+
 
 def check(name: str, cond: bool, detail: str = "") -> None:
     _RESULTS.append((name, bool(cond), detail))
@@ -68,7 +71,9 @@ def main() -> int:
 
     # --- A0: self-contained, read-only panel --------------------------------
     check("A0 no external CDN/URL fetches in cdlapp.js",
-          not re.search(r'https?://(?!localhost|127\.0\.0\.1)', js))
+          # www.w3.org is exempt: it is the SVG *namespace identifier* used
+          # by createElementNS - a spec URI, never a network fetch.
+          not re.search(r'https?://(?!localhost|127\.0\.0\.1|www\.w3\.org)', js))
     check("A0 panel never POSTs (read-only consumer)",
           not re.search(r'method:\s*["\']POST["\']', js))
     check("A0 z-index inside safe band (2001-9999)",
@@ -206,7 +211,7 @@ def main() -> int:
     check("A2 dock: extras appended into the official panel column",
           "function extrasColumn" in js
           and "col.appendChild(state.extras)" in js
-          and "state.extras.remove()" in js)
+          and "ex.remove()" in js)
     check("A2 css: dock rule repositions the official input panel",
           "body.cdlapp-active .comfyui-body .arrange-panel" in css
           and "var(--cdl-dock-left" in css and "#cdl-app-extras" in css)
@@ -371,6 +376,74 @@ def main() -> int:
           and "App 面板" in I18N_SETTINGS_KEYS["ComfyDL_AppPanel_Enabled"]["name"])
     check("A4 zh category present",
           I18N_SETTINGS_CATEGORIES_ZH.get("App") == "App")
+
+    # --- A5: batch 16 UXD round (progress density, contrast, motion) ---------
+    check("A5 progress pre-filled with the full node list at run start",
+          "function prefillNodes" in js
+          and "computeExecutionOrder" in js
+          and "prefillNodes(state.activePrompt);" in js
+          and "n.mode === 2 || n.mode === 4" in js)
+    check("A5 per-node percent next to the bar + overall percent on the label",
+          '"cdlapp-prog-eta"' in js
+          and '{ done: done, total: total, pct: pct }' in js
+          and 'bar.style.width = pct + "%";' in js
+          and 'r.state === "idle"' in js)
+    check("A5 sliding-window speed / ETA estimate (cheap, per-event)",
+          "function noteProgressSample" in js
+          and "function rateOf" in js and "function etaText" in js
+          and "row.lastValue" in js and "row.maxValue" in js
+          and "s.length > 6" in js)
+    check("A5 progress_state payload parsed as the official nodes dict",
+          # comfy_execution/progress.py sends {prompt_id, nodes: {...}};
+          # the flat single-node shape is only a fallback.  NodeState enum:
+          # pending | running | finished | error.
+          'd.nodes && typeof d.nodes === "object"' in js
+          and "n.display_node_id || n.node_id || nid" in js
+          and 'n.state === "finished"' in js
+          and 'n.state === "error"' in js)
+
+    # --- A6: batch 18 vector live previews -----------------------------------
+    check("A6 cdl_preview_data event wired end to end",
+          "cdl_preview_data: onPreviewData" in js
+          and "function onPreviewData" in js
+          and "state.charts.set" in js
+          and "state.charts.clear();" in js)
+    check("A6 vector SVG loss chart (no external chart lib)",
+          "function buildLossChart" in js
+          and 'createElementNS("http://www.w3.org/2000/svg"' in js
+          and '"cdlapp-chart-smooth"' in js
+          and '"cdlapp-chart-raw"' in js
+          and '"cdlapp-chart-best"' in js
+          and 'viewBox", "0 0 240 110"' in js
+          and 'cursor: crosshair' in css)
+    check("A6 chart cards reused incrementally (no animation replay)",
+          "function renderCharts" in js
+          and "dataset.chartKey" in js
+          and "existing.get(key)" in js)
+    check("A6 text snapshot card rendered from structured lines",
+          "function buildTextCard" in js
+          and '"cdlapp-chart-card cdlapp-chart-text"' in js)
+    check("A6 charts update in place with a soft pulse (no hard rebuild)",
+          "card._update" in js
+          and "function pulseChart" in js
+          and "cdlapp-chart-pulse" in css
+          and "max-width: 520px" in css
+          and "height: 170px" in css
+          # a fresh-data glow is feedback, not an entrance replay - it must
+          # respect the global motion switch
+          and "body.cdlapp-motion-off .cdlapp-chart-pulse" in css)
+    check("A5 dim text is contrast-derived (theme-safe, not a fixed color)",
+          "--cdl-dim" in css and "color-mix(in srgb, var(--fg-color" in css
+          and css.count("var(--cdl-dim") >= 4
+          # the near-invisible --comfy-input-bg must be gone from text colors
+          and "color: var(--comfy-input-bg" not in css)
+    check("A5 motion: full animation set + global setting + reduced-motion",
+          SETTING_MOTION_ID in js
+          and "cdlapp-motion-off" in js
+          and "function applyMotion" in js
+          and "cdlapp-leaving" in js
+          and "cdlapp-pop" in js
+          and "prefers-reduced-motion" in css)
 
     # --- B: artifacts routes integration (aiohttp TestServer) ----------------
     import asyncio

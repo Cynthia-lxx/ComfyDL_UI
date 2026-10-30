@@ -35,6 +35,7 @@
   const TAG = "[ComfyDL app-panel]";
   const PANEL_ID = "cdl-app-panel";
   const SETTING_ENABLED = "ComfyDL.AppPanel.Enabled";
+  const SETTING_MOTION = "ComfyDL.AppPanel.Motion";
   const PREVIEW_LIMIT = 12; // thumbnail grid cap (newest first)
 
   // ---------------------------------------------------- OFFICIAL_SURFACE ----
@@ -155,6 +156,9 @@
       out_empty: "Run the app to collect outputs here - files become downloads, text becomes copyable.",
       prev_title: "Previews",
       prev_empty: "Image outputs appear here as a thumbnail grid.",
+      chart_idle: "Live vector charts appear here while a training / generation node streams data.",
+      chart_best: "best",
+      chart_step: "step",
       prev_open: "Open full size",
       splitter_hint: "Drag to resize the zones",
       locate_inputs: "Show the input widgets' nodes on the graph",
@@ -166,7 +170,7 @@
       out_text: "text",
       prog_title: "Progress",
       prog_idle: "Idle - press Run.",
-      prog_node_fmt: "{done} / {total} nodes",
+      prog_node_fmt: "{done} / {total} nodes · {pct}%",
       err_title: "Errors",
       err_none: "No errors.",
       err_copy: "Copy details",
@@ -174,6 +178,8 @@
       back_to_app: "Back to App",
       setting_enabled: "ComfyDL App Panel enabled",
       setting_enabled_tooltip: "Show the ComfyDL companion panel inside the official App mode.",
+      setting_motion: "Panel animations",
+      setting_motion_tooltip: "Enable panel entrance / feedback / transition animations.",
       cat_app: "App",
     },
     zh: {
@@ -187,6 +193,9 @@
       out_empty: "运行后在收集输出：文件可下载，文本可复制。",
       prev_title: "预览",
       prev_empty: "图像输出会以缩略图网格呈现在这里。",
+      chart_idle: "训练 / 生成节点上报实时数据时，矢量图表会出现在这里。",
+      chart_best: "best",
+      chart_step: "step",
       prev_open: "查看原图",
       splitter_hint: "拖动调整分区大小",
       locate_inputs: "在节点图中定位输入所在的节点",
@@ -198,7 +207,7 @@
       out_text: "文本",
       prog_title: "进度",
       prog_idle: "空闲——按 Run 开始。",
-      prog_node_fmt: "{done} / {total} 节点",
+      prog_node_fmt: "{done} / {total} 节点 · {pct}%",
       err_title: "错误",
       err_none: "无错误。",
       err_copy: "复制详情",
@@ -206,6 +215,8 @@
       back_to_app: "返回 App",
       setting_enabled: "启用 ComfyDL App 面板",
       setting_enabled_tooltip: "在官方 App 模式内显示 ComfyDL 伴侣面板。",
+      setting_motion: "面板动效",
+      setting_motion_tooltip: "启用面板的入场 / 操作反馈 / 切换动效。",
       cat_app: "App",
     },
   };
@@ -214,6 +225,7 @@
   const state = {
     locale: "en",
     enabled: true,
+    motion: true,
     mounted: false,
     collapsed: false,
     appMode: false,
@@ -244,6 +256,7 @@
     errors: [], // {node_id, node_type, title, message, etype, traceback}
     outputs: [], // {kind:'image'|'text', name, url?, text?}
     artifacts: [], // {name, path, size, mtime}
+    charts: new Map(), // node_id -> live cdl_preview_data payload (batch 18)
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -504,6 +517,12 @@
         state.appMode = dock;
         if (dock) mountPanel();
         else unmountPanel();
+      } else if (dock && state.mounted && !state.extras && extrasColumn()) {
+        // legacy overlay can upgrade to the native dock when app selections
+        // appear while already in app mode (the official input panel only
+        // exists once selections are configured)
+        unmountPanel();
+        mountPanel();
       }
       // Builder wizard active: provide the return-to-app entry the official
       // builder lacks (exitBuilder hardcodes to the graph).
@@ -795,6 +814,7 @@
     // previews section (image artifacts / image outputs as thumbnails)
     const secPrev = el("div", "cdlapp-section cdlapp-sec-previews");
     secPrev.appendChild(el("div", "cdlapp-sec-title", t("prev_title")));
+    secPrev.appendChild(el("div", "cdlapp-chart-host"));
     secPrev.appendChild(el("div", "cdlapp-preview-grid"));
     secPrev.appendChild(el("div", "cdlapp-empty", t("prev_empty")));
     extras.appendChild(secPrev);
@@ -935,17 +955,33 @@
     renderOutputs();
     renderProgress();
     renderErrors();
+    renderCharts();
   }
 
   function unmountPanel() {
     if (!state.mounted) return;
+    const leaving = state.motion
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (state.extras) {
-      state.extras.remove();
+      const ex = state.extras;
       state.extras = null;
+      if (leaving) {
+        ex.classList.add("cdlapp-leaving");
+        setTimeout(() => ex.remove(), 180);
+      } else {
+        ex.remove();
+      }
     }
     document.body.classList.remove("cdlapp-active");
     if (state.panel && state.panel.parentNode) {
-      state.panel.parentNode.removeChild(state.panel);
+      const p = state.panel;
+      state.panel = null;
+      if (leaving) {
+        p.classList.add("cdlapp-leaving");
+        setTimeout(() => { if (p.parentNode) p.remove(); }, 180);
+      } else {
+        p.parentNode.removeChild(p);
+      }
     }
     state.panel = null;
     state.mounted = false;
@@ -1093,7 +1129,9 @@
     cp.title = t("out_copy");
     cp.addEventListener("click", () => {
       navigator.clipboard.writeText(o.text || "").then(() => {
-        cp.replaceChildren(iconEl("check"));
+        const ok = iconEl("check");
+        ok.classList.add("cdlapp-pop"); // feedback pop (motion switch gated)
+        cp.replaceChildren(ok);
         cp.title = t("out_copied");
         setTimeout(() => {
           cp.replaceChildren(iconEl("copy"));
@@ -1130,36 +1168,80 @@
     const label = state.panel.querySelector(".cdlapp-total-label");
     const bar = state.panel.querySelector(".cdlapp-total-bar");
     if (!rowsEl) return;
-    rowsEl.textContent = "";
     const run = state.activePrompt ? state.runs.get(state.activePrompt) : null;
     if (!run || run.order.length === 0) {
+      rowsEl.textContent = "";
       if (label) label.textContent = t("prog_idle");
       if (bar) bar.style.width = "0%";
       return;
     }
+    // INCREMENTAL row update (batch 17 fix, user callout: "every progress
+    // tick replays the entrance animation on all rows - too glitchy"):
+    // the server pushes progress on EVERY optimizer step, so rebuilding the
+    // rows would replay each row's slide-in every time.  Existing rows are
+    // UPDATED in place (no animation); only genuinely new rows are created
+    // and thus animate once.  Rows keyed via dataset.nodeKey.
+    const existing = new Map();
+    Array.from(rowsEl.children).forEach((child) => {
+      if (child.dataset && child.dataset.nodeKey) existing.set(child.dataset.nodeKey, child);
+      else child.remove(); // stray DOM (e.g. after a Vue re-render)
+    });
+    const alive = new Set();
     let done = 0;
     run.order.forEach((key) => {
       const r = run.nodes.get(key);
       if (r.state === "done" || r.state === "cached") done++;
-      const row = el("div", "cdlapp-prog-row cdlapp-st-" + r.state);
-      const name = el("span", "cdlapp-prog-name", r.title);
-      name.title = r.title;
-      const pct = el("span", "cdlapp-prog-pct",
-        r.state === "done" || r.state === "cached" ? "✓" :
-        r.state === "error" ? "✗" : (r.percent !== null ? r.percent + "%" : "…"));
-      const mini = el("div", "cdlapp-prog-mini");
-      const fill = el("div", "cdlapp-prog-fill");
+      alive.add(key);
+      let row = existing.get(key);
+      if (!row) {
+        row = el("div", "cdlapp-prog-row");
+        row.dataset.nodeKey = key;
+        row.appendChild(el("span", "cdlapp-prog-name"));
+        const mini = el("div", "cdlapp-prog-mini");
+        mini.appendChild(el("div", "cdlapp-prog-fill"));
+        row.appendChild(mini);
+        row.appendChild(el("span", "cdlapp-prog-pct"));
+        rowsEl.appendChild(row);
+      }
+      row.className = "cdlapp-prog-row cdlapp-st-" + r.state;
+      const name = row.children[0];
+      if (name.textContent !== r.title) {
+        name.textContent = r.title;
+        name.title = r.title;
+      }
+      const fill = row.children[1].firstChild;
       fill.style.width = (r.state === "done" || r.state === "cached") ? "100%"
         : (r.percent !== null ? r.percent + "%" : "0%");
-      mini.appendChild(fill);
-      row.appendChild(name);
-      row.appendChild(mini);
-      row.appendChild(pct);
-      rowsEl.appendChild(row);
+      // right column: percent for running rows (the green bar next to it
+      // carries the same value), ETA once the sliding window is long enough
+      const right = row.children[2];
+      let rightText;
+      let eta = null;
+      if (r.state === "done" || r.state === "cached") {
+        rightText = "✓";
+      } else if (r.state === "error") {
+        rightText = "✗";
+      } else if (r.state === "idle") {
+        rightText = "–";
+      } else {
+        rightText = r.percent !== null ? r.percent + "%" : "…";
+        eta = (r.percent !== null && r.percent < 100)
+          ? etaText(r, r.lastValue, r.maxValue) : null;
+      }
+      right.textContent = rightText;
+      if (eta !== null) {
+        right.appendChild(el("span", "cdlapp-prog-eta", " " + eta));
+      }
+    });
+    // drop rows that no longer belong to the active run
+    existing.forEach((row, key) => {
+      if (!alive.has(key)) row.remove();
     });
     const total = Math.max(run.order.length, run.totalNodes || 0);
-    if (label) label.textContent = t("prog_node_fmt", { done: done, total: total });
-    if (bar) bar.style.width = (total ? Math.round(100 * done / total) : 0) + "%";
+    const pct = total ? Math.round(100 * done / total) : 0;
+    if (label) label.textContent = t("prog_node_fmt",
+      { done: done, total: total, pct: pct });
+    if (bar) bar.style.width = pct + "%";
   }
 
   function renderErrors() {
@@ -1187,7 +1269,9 @@
           (e.traceback || []).join("\n"),
         ].join("\n");
         navigator.clipboard.writeText(blob).then(() => {
-          cp.replaceChildren(iconEl("check"));
+          const ok = iconEl("check");
+          ok.classList.add("cdlapp-pop");
+          cp.replaceChildren(ok);
           setTimeout(() => { cp.replaceChildren(iconEl("copy")); }, 1200);
         }).catch(() => { /* clipboard unavailable */ });
       });
@@ -1259,10 +1343,83 @@
     state.runStartedAt = Date.now();
     state.outputs.length = 0;
     state.errors.length = 0;
+    state.charts.clear();
+    // Pre-fill the progress rows with the FULL node list so the user can
+    // see how many nodes are ahead from the very first event (batch 16).
+    prefillNodes(state.activePrompt);
     // status dot: teal while executing (CSS hook)
     if (state.extras) state.extras.classList.add("cdlapp-running");
     renderErrors();
     renderOutputs();
+  }
+
+  // Pre-create one idle progress row per executable node, in execution
+  // order, straight from the litegraph graph (best effort: without it the
+  // event-driven path still works, rows just appear one by one).  Skipped:
+  // muted / bypassed nodes (mode 2 / 4) and the official non-executing
+  // annotation types (chunk rule nodeTypeValidForApp: Note / MarkdownNote
+  // never appear in the execution stream - leaving them in would pin the
+  // total below 100% forever).
+  function prefillNodes(promptId) {
+    const run = runFor(promptId);
+    if (run.order.length) return;
+    try {
+      const app = getApp();
+      const graph = app && app.graph;
+      if (!graph) return;
+      let nodes = null;
+      if (typeof graph.computeExecutionOrder === "function") {
+        const ordered = graph.computeExecutionOrder(false, null);
+        nodes = Array.isArray(ordered) ? ordered
+          : (ordered && ordered.nodes) || null;
+      }
+      if (!nodes && Array.isArray(graph._nodes)) nodes = graph._nodes;
+      if (!nodes) return;
+      nodes.forEach((n) => {
+        if (!n || n.id === undefined || n.id === null) return;
+        if (n.mode === 2 || n.mode === 4) return; // muted / bypassed
+        if (n.type === "Note" || n.type === "MarkdownNote") return;
+        const key = String(n.id);
+        if (run.nodes.has(key)) return;
+        run.nodes.set(key, {
+          title: n.title || n.type || key,
+          state: "idle", percent: null,
+        });
+        run.order.push(key);
+      });
+    } catch (e) { /* best effort */ }
+  }
+
+  // Speed / ETA estimation (batch 16, user request): progress events carry
+  // raw value/max; keep a tiny sliding window of (time, value) samples per
+  // running row and derive the rate from its ends - O(1) per event, no
+  // timers, no extrapolation beyond the observed window.
+  function noteProgressSample(row, value) {
+    if (value === null || value === undefined || isNaN(value)) return;
+    const s = row.samples || (row.samples = []);
+    s.push({ t: Date.now(), v: value });
+    if (s.length > 6) s.shift();
+  }
+
+  function rateOf(row) {
+    const s = row.samples;
+    if (!s || s.length < 2) return null;
+    const a = s[0], b = s[s.length - 1];
+    const dt = (b.t - a.t) / 1000;
+    if (dt < 0.4) return null; // window too young to be meaningful
+    const rate = (b.v - a.v) / dt;
+    return rate > 0 ? rate : null;
+  }
+
+  function etaText(row, value, max) {
+    const rate = rateOf(row);
+    if (!rate || max === null || value === null || value === undefined) {
+      return null;
+    }
+    const remain = max - value;
+    if (remain <= 0) return null;
+    const sec = Math.max(1, Math.round(remain / rate));
+    return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
   }
 
   function endRun() {
@@ -1323,6 +1480,39 @@
     if (!d) return;
     state.activePrompt = d.prompt_id || state.activePrompt || "default";
     beginRunIfNew();
+    // Payload shape (chunk-verified 2026-10-31 against the official
+    // comfy_execution/progress.py sender):
+    //   { prompt_id, nodes: { <node_id>: { value, max, state, node_id,
+    //     display_node_id, parent_node_id, real_node_id } } }
+    // - a DICT of per-node states (server sends the FULL non-pending set on
+    //   every tick).  The old flat single-node shape is kept as a fallback.
+    if (d.nodes && typeof d.nodes === "object"
+        && !Array.isArray(d.nodes)) {
+      const run = state.runs.get(state.activePrompt);
+      Object.keys(d.nodes).forEach((nid) => {
+        const n = d.nodes[nid] || {};
+        const nodeId = n.display_node_id || n.node_id || nid;
+        const value = n.value === undefined ? null : Number(n.value);
+        const max = n.max === undefined ? null : Number(n.max);
+        const pct = max ? Math.round(100 * value / max) : null;
+        // NodeState enum (progress.py): pending | running | finished | error
+        const st = n.state === "error" ? "error"
+          : n.state === "finished" ? "done" : "running";
+        markNode(state.activePrompt, nodeId, {
+          percent: pct,
+          state: st,
+        });
+        const row = run && run.nodes.get(String(nodeId));
+        if (row && st === "running") {
+          row.lastValue = value;
+          row.maxValue = max;
+          noteProgressSample(row, value);
+        }
+      });
+      renderProgress();
+      return;
+    }
+    // legacy flat fallback (single node fields at the top level)
     const nodeId = d.display_node_id || d.node_id;
     if (nodeId === undefined || nodeId === null) return;
     const pct = d.max ? Math.round(100 * Number(d.value) / Number(d.max)) : null;
@@ -1330,6 +1520,14 @@
       percent: pct,
       state: d.state === "error" ? "error" : "running",
     });
+    // raw value for the sliding-window speed estimate (batch 16)
+    const run = state.runs.get(state.activePrompt);
+    const row = run && run.nodes.get(String(nodeId));
+    if (row) {
+      row.lastValue = d.value === undefined ? null : Number(d.value);
+      row.maxValue = d.max === undefined ? null : Number(d.max);
+      noteProgressSample(row, row.lastValue);
+    }
     renderProgress();
   }
 
@@ -1374,6 +1572,230 @@
     endRun();
     renderErrors();
     renderProgress();
+  }
+
+  // ------------------------------------------------ live charts (batch 18)
+  // The backend previewer pushes structured loss series / text snapshots as
+  // the "cdl_preview_data" event (comfy/loss_preview.py).  This module draws
+  // them as theme-aware interactive SVG charts in the previews pane - the
+  // bitmap preview frame stays only as the node-graph fallback.
+
+  function onPreviewData(ev) {
+    const d = ev && ev.detail;
+    if (!d || !d.node_id) return;
+    if (!state.runActive) beginRunIfNew();
+    state.charts.set(String(d.node_id), d);
+    renderCharts();
+  }
+
+  function svgEl(tag, cls) {
+    const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (cls) n.setAttribute("class", cls);
+    return n;
+  }
+
+  function movingAvg(values, window) {
+    const out = [];
+    let running = 0;
+    for (let i = 0; i < values.length; i++) {
+      running += values[i];
+      if (i >= window) running -= values[i - window];
+      out.push(running / Math.min(i + 1, window));
+    }
+    return out;
+  }
+
+  function fmtNum(v) {
+    const a = Math.abs(v);
+    if (a >= 1000) return v.toFixed(0);
+    if (a >= 1) return v.toFixed(3);
+    return v.toPrecision(3);
+  }
+
+  // Interactive loss-curve SVG: raw series (thin, translucent) + trailing
+  // moving average (accent) + best marker + crosshair readout on hover.
+  // viewBox 240x110 stretched over a ~520x170 card, all theming via CSS
+  // variables.  The card is created ONCE per node (batch 19: the squash fix
+  // is the aspect ratio; the anti-glitch fix is that every push UPDATES the
+  // skeleton in place via card._update - only the polylines' points and the
+  // tick labels change, plus a soft one-shot pulse, never a card rebuild).
+  function buildLossChart(d) {
+    const card = el("div", "cdlapp-chart-card");
+    const head = el("div", "cdlapp-chart-head");
+    const title = el("span", "cdlapp-chart-title");
+    const meta = el("span", "cdlapp-chart-meta");
+    head.appendChild(title);
+    head.appendChild(meta);
+    card.appendChild(head);
+
+    const svg = svgEl("svg", "cdlapp-chart-svg");
+    svg.setAttribute("viewBox", "0 0 240 110");
+    svg.setAttribute("preserveAspectRatio", "none");
+    const W = 240, H = 110, L = 34, R = 8, T = 12, B = 16;
+    const iw = W - L - R, ih = H - T - B;
+    let pts = []; // live points, re-read by the hover handlers on every push
+    let geom = null;
+
+    // hover crosshair (created once, re-uses the latest pts/geom)
+    const cross = svgEl("g", "cdlapp-chart-cross");
+    cross.style.display = "none";
+    const vline = svgEl("line", "cdlapp-chart-crossline");
+    const dot = svgEl("circle", "cdlapp-chart-dot");
+    dot.setAttribute("r", 2.4);
+    const read = svgEl("text", "cdlapp-chart-read");
+    cross.appendChild(vline); cross.appendChild(dot); cross.appendChild(read);
+    svg.addEventListener("mousemove", (e) => {
+      if (!geom || pts.length < 2) return;
+      const rect = svg.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / rect.width * W;
+      const cx = Math.max(L, Math.min(W - R, mx));
+      const idx = Math.round((cx - L) / iw * (pts.length - 1));
+      const p = pts[Math.max(0, Math.min(pts.length - 1, idx))];
+      const px = geom.sx(p[0]), py = geom.sy(p[1]);
+      vline.setAttribute("x1", px); vline.setAttribute("x2", px);
+      vline.setAttribute("y1", T); vline.setAttribute("y2", T + ih);
+      dot.setAttribute("cx", px); dot.setAttribute("cy", py);
+      read.setAttribute("x", Math.min(px + 4, W - R - 60));
+      read.setAttribute("y", Math.max(T + 8, py - 4));
+      read.textContent = "s" + p[0] + " " + fmtNum(p[1]);
+      cross.style.display = "";
+    });
+    svg.addEventListener("mouseleave", () => { cross.style.display = "none"; });
+
+    // in-place redraw of the dynamic layer (everything but the crosshair)
+    function update(d2) {
+      title.textContent = d2.title || "loss";
+      meta.textContent = t("chart_step") + " " + d2.step
+        + (d2.total ? "/" + d2.total : "")
+        + " · " + t("chart_best") + " " + fmtNum(d2.best)
+        + (d2.finished ? " · ✓" : "");
+      pts = (d2.points || []).filter((p) => p && p.length >= 2);
+      Array.from(svg.children).forEach((n) => { if (n !== cross) n.remove(); });
+      if (pts.length < 2) return;
+      const xs = pts.map((p) => p[0]);
+      const ys = pts.map((p) => p[1]);
+      let lo = Math.min.apply(null, ys);
+      let hi = Math.max.apply(null, ys);
+      // the historical best can sit below the visible series - include it so
+      // the dashed best marker is always drawable
+      if (typeof d2.best === "number" && isFinite(d2.best)) {
+        lo = Math.min(lo, d2.best);
+        hi = Math.max(hi, d2.best);
+      }
+      if (hi <= lo) hi = lo + 1;
+      const x0 = xs[0], x1 = xs[xs.length - 1];
+      const sx = (x) => L + iw * (x - x0) / Math.max(1e-9, x1 - x0);
+      const sy = (y) => T + ih * (1 - (y - lo) / (hi - lo));
+      geom = { sx: sx, sy: sy };
+      const line = (arr, cls) => {
+        const pl = svgEl("polyline", cls);
+        pl.setAttribute("points", arr.map((p) =>
+          sx(p[0]).toFixed(1) + "," + sy(p[1]).toFixed(1)).join(" "));
+        svg.appendChild(pl);
+      };
+      for (let f = 0; f <= 2; f++) {
+        const y = T + ih * f / 2;
+        const gl = svgEl("line", "cdlapp-chart-grid");
+        gl.setAttribute("x1", L); gl.setAttribute("x2", W - R);
+        gl.setAttribute("y1", y); gl.setAttribute("y2", y);
+        svg.appendChild(gl);
+        const val = hi - (hi - lo) * f / 2;
+        const tx = svgEl("text", "cdlapp-chart-tick");
+        tx.setAttribute("x", L - 3); tx.setAttribute("y", y + 3);
+        tx.setAttribute("text-anchor", "end");
+        tx.textContent = fmtNum(val);
+        svg.appendChild(tx);
+      }
+      const xl = svgEl("text", "cdlapp-chart-tick");
+      xl.setAttribute("x", L); xl.setAttribute("y", H - 3);
+      xl.textContent = String(x0);
+      svg.appendChild(xl);
+      const xr = svgEl("text", "cdlapp-chart-tick");
+      xr.setAttribute("x", W - R); xr.setAttribute("y", H - 3);
+      xr.setAttribute("text-anchor", "end");
+      xr.textContent = String(x1);
+      svg.appendChild(xr);
+      const by = sy(d2.best);
+      if (by >= T && by <= T + ih) {
+        const bl = svgEl("line", "cdlapp-chart-best");
+        bl.setAttribute("x1", L); bl.setAttribute("x2", W - R);
+        bl.setAttribute("y1", by); bl.setAttribute("y2", by);
+        svg.appendChild(bl);
+      }
+      line(pts, "cdlapp-chart-raw");
+      const smooth = movingAvg(pts.map((p) => p[1]), 8);
+      if (pts.length >= 8) {
+        line(pts.map((p, i) => [p[0], smooth[i]]), "cdlapp-chart-smooth");
+      }
+      svg.appendChild(cross); // crosshair always paints on top
+    }
+    card._update = update;
+    update(d);
+    card.appendChild(svg);
+    return card;
+  }
+
+  function buildTextCard(d) {
+    const card = el("div", "cdlapp-chart-card cdlapp-chart-text");
+    const head = el("div", "cdlapp-chart-head");
+    const title = el("span", "cdlapp-chart-title");
+    head.appendChild(title);
+    card.appendChild(head);
+    const body = el("pre", "cdlapp-chart-body");
+    card.appendChild(body);
+    card._update = function (d2) {
+      title.textContent = d2.title || "generated";
+      body.textContent = (d2.lines || []).join("\n");
+      body.scrollTop = body.scrollHeight;
+    };
+    card._update(d);
+    return card;
+  }
+
+  // One-shot soft glow on data arrival (batch 19, user request): marks the
+  // frame as fresh without any hard rebuild.  Gated by the motion switch
+  // and prefers-reduced-motion, ~0 cost (one CSS animation).
+  function pulseChart(card) {
+    if (!state.motion) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    card.classList.remove("cdlapp-chart-pulse");
+    void card.offsetWidth; // restart the one-shot animation
+    card.classList.add("cdlapp-chart-pulse");
+  }
+
+  function renderCharts() {
+    const host = state.extras
+      ? state.extras.querySelector(".cdlapp-chart-host")
+      : (state.panel
+        ? state.panel.querySelector(".cdlapp-chart-host")
+        : null);
+    if (!host) return;
+    const empty = state.charts.size === 0;
+    host.style.display = empty ? "none" : "";
+    // incremental reuse keyed by node id - a live chart must NOT replay its
+    // entrance animation on every push (same discipline as renderProgress)
+    const existing = new Map();
+    Array.from(host.children).forEach((child) => {
+      if (child.dataset && child.dataset.chartKey) {
+        existing.set(child.dataset.chartKey, child);
+      } else child.remove();
+    });
+    const alive = new Set();
+    state.charts.forEach((d, key) => {
+      alive.add(key);
+      let card = existing.get(key);
+      if (!card) {
+        card = d.type === "text" ? buildTextCard(d) : buildLossChart(d);
+        card.dataset.chartKey = key;
+        host.appendChild(card);
+      } else {
+        // batch 19: in-place data update + one-shot pulse - the entrance
+        // animation only ever plays on genuinely new cards
+        if (typeof card._update === "function") card._update(d);
+        pulseChart(card);
+      }
+    });
+    existing.forEach((card, key) => { if (!alive.has(key)) card.remove(); });
   }
 
   function collectOutputs(d) {
@@ -1427,6 +1849,8 @@
       [E.executionSuccess]: onExecutionSuccess,
       [E.executionInterrupted]: onExecutionInterrupted,
       [E.executionError]: onExecutionError,
+      // structured live-preview pushes from comfy/loss_preview.py (batch 18)
+      cdl_preview_data: onPreviewData,
     };
     Object.keys(state.handlers).forEach((name) => {
       api.addEventListener(name, state.handlers[name]);
@@ -1456,8 +1880,10 @@
         const v = s.get("Comfy.Locale");
         if (typeof v === "string" && v) state.locale = v.split("-")[0];
         state.enabled = s.get(SETTING_ENABLED) !== false;
+        state.motion = s.get(SETTING_MOTION) !== false;
       }
     } catch (e) { /* defaults */ }
+    applyMotion(state.motion);
     if (state.locale !== "zh") state.locale = "en";
 
     probeCapabilities();
@@ -1477,6 +1903,14 @@
       unmountBuilderBack();
       stopPolling();
     }
+  }
+
+  // Global motion switch (batch 16): the CSS gate is body.cdlapp-motion-off
+  // (animations are ON by default); prefers-reduced-motion is honoured
+  // unconditionally in the stylesheet.
+  function applyMotion(on) {
+    state.motion = on !== false;
+    document.body.classList.toggle("cdlapp-motion-off", !state.motion);
   }
 
   const start = (force) => {
@@ -1502,6 +1936,14 @@
         type: "boolean",
         defaultValue: true,
         onChange: (newVal) => { applyEnabled(newVal !== false); },
+      }, {
+        id: SETTING_MOTION,
+        name: t("setting_motion"),
+        tooltip: t("setting_motion_tooltip"),
+        category: ["ComfyDL", "App"],
+        type: "boolean",
+        defaultValue: true,
+        onChange: (newVal) => { applyMotion(newVal !== false); },
       }],
       commands: [],
     });

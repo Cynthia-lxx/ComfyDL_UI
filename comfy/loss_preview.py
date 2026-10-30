@@ -47,7 +47,20 @@ PREVIEW_MAX_SIZE = 512
 
 # A preview-bearing update bypasses the ProgressBar's 100 ms throttle (it is
 # always sent immediately), so the drawing itself has to be rate-limited.
-MIN_RENDER_INTERVAL = 0.5
+# Batch 18 (vector previews): the bitmap frame is now only the NODE-GRAPH
+# fallback (the app panel draws the same curve as a vector SVG from the
+# structured "cdl_preview_data" event, ~10^4x cheaper - see bench in
+# 2026-10-31 notes), so the bitmap cadence drops to 2 s and the canvas
+# shrinks; convergence trends stay perfectly readable at that frame rate.
+MIN_RENDER_INTERVAL = 2.0
+BITMAP_DPI = 80
+BITMAP_FIGSIZE = (3.2, 2.4)
+
+# Structured-data channel (batch 18): how often the loss series is pushed
+# to the frontend as JSON, and how many points a push carries at most
+# (uniform decimation; the frontend re-samples to its own pixel width).
+DATA_PUSH_INTERVAL = 1.0
+DATA_MAX_POINTS = 256
 
 
 def _to_image_bytes(image: Image.Image) -> tuple[str, Image.Image, int] | None:
@@ -106,6 +119,7 @@ class LossCurvePreviewer:
         self.max_points = int(max_points)
         self._values: list[float] = []
         self._last_render = 0.0
+        self._last_push = 0.0
 
     # -- data collection ----------------------------------------------------
 
@@ -113,6 +127,7 @@ class LossCurvePreviewer:
         """Forget everything recorded so far (start of a new run)."""
         self._values.clear()
         self._last_render = 0.0
+        self._last_push = 0.0
 
     def record(
         self, loss: float, force: bool = False
@@ -124,6 +139,11 @@ class LossCurvePreviewer:
         renders, so the last pushed frame is the complete curve; a throttled
         step returns ``None``, and the caller still reports through plain
         ``update`` - one progress call per step either way.
+
+        Batch 18: every record also (throttled to DATA_PUSH_INTERVAL) pushes
+        the structured loss series to the frontend as the
+        ``cdl_preview_data`` event, from which the app panel draws a vector
+        SVG chart - the bitmap frame stays only as the node-graph fallback.
         """
         try:
             self._values.append(float(loss))
@@ -131,8 +151,11 @@ class LossCurvePreviewer:
                 del self._values[: len(self._values) - self.max_points]
         except (TypeError, ValueError):
             return None
+        now = time.perf_counter()
+        if force or now - self._last_push >= DATA_PUSH_INTERVAL:
+            self._last_push = now
+            push_loss_series(self.title, self._values, force=force)
         if not force:
-            now = time.perf_counter()
             if now - self._last_render < self.min_interval:
                 return None
         self._last_render = time.perf_counter()
@@ -165,7 +188,8 @@ class LossCurvePreviewer:
         import matplotlib.figure
 
         values = self._values
-        figure = matplotlib.figure.Figure(figsize=(4.0, 3.0), dpi=100)
+        figure = matplotlib.figure.Figure(
+            figsize=BITMAP_FIGSIZE, dpi=BITMAP_DPI)
         axis = figure.add_subplot(1, 1, 1)
         steps = range(1, len(values) + 1)
         axis.plot(steps, values, color="#1f77b4", linewidth=1.2, label="loss")
@@ -236,6 +260,114 @@ class LossCurvePreviewer:
         return image
 
 
+# -- structured-data channel (batch 18) -------------------------------------
+#
+# The app panel's Live charts section draws the same curve as a compact,
+# theme-aware, interactive SVG directly from these JSON pushes.  Bench
+# (2026-10-31, penv): a bitmap frame costs ~82 ms (matplotlib render) plus
+# ~2 ms (server JPEG re-encode) => ~17% of one core per previewing node at
+# the old 2 fps cadence; a decimated JSON push costs 0.13 ms => 0.013%.
+# The event name is "cdl_preview_data"; failures are swallowed (a preview
+# must never break a training run).
+
+EVENT_PREVIEW_DATA = "cdl_preview_data"
+
+
+def _resolve_node_id() -> str | None:
+    """Best-effort id of the currently executing node (execution context)."""
+    try:
+        from comfy_execution.utils import get_executing_context
+
+        ctx = get_executing_context()
+        return str(getattr(ctx, "node_id", "")) or None
+    except Exception:  # noqa: BLE001 - reporting must never raise
+        return None
+
+
+def push_loss_series(
+    title: str,
+    values: Sequence[float],
+    total: int | None = None,
+    force: bool = False,
+) -> None:
+    """Push the loss series to the frontend as a structured event.
+
+    In:   title - curve title (the previewer's name); values - the per-step
+          loss list recorded so far (uniformly decimated to
+          DATA_MAX_POINTS); total - expected step count when known;
+          force - True on the final step (marks the series as complete).
+    Out:  a ``cdl_preview_data`` websocket event:
+          ``{type: "loss", node_id, title, step, total, best,
+             points: [[step, loss], ...], finished}``.
+          Broadcast to every connected client; silently skipped when the
+          server is unreachable (e.g. unit tests, offline rendering).
+    """
+    try:
+        if not values:
+            return
+        from server import PromptServer
+
+        server = PromptServer.instance
+        if server is None:
+            return
+        # Uniform decimation that always KEEPS the first and the last step
+        # (a plain slice would drop the freshly-recorded tail).
+        count = len(values)
+        if count <= DATA_MAX_POINTS:
+            points = [[i + 1, round(float(v), 6)] for i, v in enumerate(values)]
+        else:
+            stride = count / (DATA_MAX_POINTS - 1)
+            indices = [int(i * stride) for i in range(DATA_MAX_POINTS - 1)]
+            indices.append(count - 1)
+            points = [[i + 1, round(float(values[i]), 6)] for i in indices]
+        payload = {
+            "type": "loss",
+            "node_id": _resolve_node_id() or "0",
+            "title": str(title),
+            "step": len(values),
+            "total": int(total) if total else None,
+            "best": round(min(float(v) for v in values), 6),
+            "points": points,
+            "finished": bool(force),
+        }
+        server.send_sync(EVENT_PREVIEW_DATA, payload)
+    except Exception:  # noqa: BLE001 - a preview must never raise
+        pass
+
+
+def push_text_snapshot(
+    text: str,
+    title: str = "generated",
+    max_chars: int = 600,
+) -> None:
+    """Push the generated-so-far text as a structured event (batch 18).
+
+    In:   text - the accumulated text; title - card header; max_chars -
+          trailing window kept (mirrors :func:`render_text_snapshot`).
+    Out:  a ``cdl_preview_data`` event:
+          ``{type: "text", node_id, title, lines: [...], finished: false}``
+          - the app panel renders it as a live text card instead of the
+          bitmap snapshot.
+    """
+    try:
+        from server import PromptServer
+
+        server = PromptServer.instance
+        if server is None:
+            return
+        body = str(text)[-int(max_chars):] if text else ""
+        payload = {
+            "type": "text",
+            "node_id": _resolve_node_id() or "0",
+            "title": str(title),
+            "lines": _wrap(body, width=52)[-14:],
+            "finished": False,
+        }
+        server.send_sync(EVENT_PREVIEW_DATA, payload)
+    except Exception:  # noqa: BLE001 - a preview must never raise
+        pass
+
+
 def _moving_average(values: Sequence[float], window: int) -> list[float]:
     """Trailing moving average aligned with the input (right-anchored)."""
     result: list[float] = []
@@ -268,6 +400,7 @@ def render_text_snapshot(
     """
     try:
         body = str(text)[-int(max_chars):] if text else ""
+        push_text_snapshot(body, title=title)
         wrapped = _wrap(body, width=46)
         line_count = max(1, len(wrapped))
         line_height = 16
