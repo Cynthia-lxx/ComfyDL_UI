@@ -219,10 +219,17 @@ ABOUT_BEGIN = "/*ComfyDL_UI:about:begin*/"
 ABOUT_END = "/*ComfyDL_UI:about:end*/"
 
 # The startup ("Load Default Workflow") graph: instead of the upstream
-# SD text-to-image demo, open our *Tabular Regression: Production* example,
+# SD text-to-image demo, open our *Classification from Scratch* example,
 # fetched live from the template overlay channel (/templates/<name>.json) so
 # the served workflow always matches the shipped template.
-DEFAULT_WORKFLOW_TEMPLATE = "tabular_regression_production"
+#
+# Template choice (2026-10-30): classification_from_scratch is fully
+# self-contained (CdlClassificationDataGen produces the data internally -
+# no external CSV file), trains in seconds and renders a confusion-matrix
+# heatmap, which makes it the best-looking out-of-the-box startup demo.
+# Patches bake the URL in, so both workflow patches carry a generational
+# upgrade that rewrites a previously baked URL to the current constant.
+DEFAULT_WORKFLOW_TEMPLATE = "classification_from_scratch"
 DEFAULT_WORKFLOW_MARK = "/*ComfyDL_UI:default-workflow*/"
 
 # --- zh locale baking (2026-10-28) -------------------------------------------
@@ -385,21 +392,52 @@ def _object_end(text: str, brace: int) -> int:
     raise ValueError("unbalanced object literal")
 
 
+def _upgrade_baked_template_url(text: str) -> tuple[str, bool]:
+    """Rewrite a previously baked startup template URL to the current one.
+
+    Both workflow patches are marker-idempotent, so changing
+    ``DEFAULT_WORKFLOW_TEMPLATE`` would otherwise never reach a frontend that
+    was already baked with the old name. The baked calls always look like
+    ``fetch(`/templates/<name>.json`,{cache:`no-store`})`` - the official
+    ``index_logo`` fetch goes through ``fileURL()`` and does not match this
+    shape, so the pattern is unambiguous.
+    """
+    match = re.search(r"fetch\(`/templates/([\w-]+)\.json`", text)
+    if match and match.group(1) != DEFAULT_WORKFLOW_TEMPLATE:
+        replaced = (
+            text[: match.start()]
+            + f"fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`"
+            + text[match.end() :]
+        )
+        return replaced, True
+    return text, False
+
+
 def _patch_default_workflow(assets: Path) -> bool:
-    """Open the Tabular Regression: Production template on startup.
+    """Open the Classification from Scratch template on startup.
 
     Upstream's ``loadDefaultWorkflow`` loads a graph built in-bundle from the
     SD text-to-image demo. We redirect it to fetch our
-    ``tabular_regression_production`` example through the template overlay
+    ``classification_from_scratch`` example through the template overlay
     channel (``/templates/<name>.json``) instead, so the served workflow is
     always the shipped one; any failure falls back to the upstream graph.
+    A frontend already baked with a previous template name is upgraded in
+    place (see ``_upgrade_baked_template_url``).
 
-    Returns ``True`` when the asset was rewritten, ``False`` when the marker was
-    already there.
+    Returns ``True`` when the asset was rewritten, ``False`` when the marker
+    was already there and the URL was current.
     """
     path = _locate(assets, "settingStore-*.js", "loadDefaultWorkflow=async()=>{")
     text = _text(path)
     if DEFAULT_WORKFLOW_MARK in text:
+        text, upgraded = _upgrade_baked_template_url(text)
+        if upgraded:
+            _write(path, text)
+            logging.info(
+                f"{TAG} default workflow template upgraded -> "
+                f"/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json in {path.name}"
+            )
+            return True
         logging.debug(f"{TAG} default workflow already applied")
         return False
 
@@ -1017,13 +1055,23 @@ def _patch_startup_workflow(assets: Path) -> bool:
     separately). This rewrite sends that bare call through the
     ``/templates/<name>.json`` overlay channel, falling back to the upstream
     graph on any failure. Loud failure on signature drift, like the other
-    workflow patches.
+    workflow patches. A frontend already baked with a previous template name
+    is upgraded in place (see ``_upgrade_baked_template_url``).
 
-    Returns ``True`` when the chunk was rewritten.
+    Returns ``True`` when the chunk was rewritten, ``False`` when the marker
+    was already there and the URL was current.
     """
     path = _locate(assets, "GraphView-*.js", "resolveStartupOutcome")
     text = _text(path)
     if STARTUP_WORKFLOW_MARK in text:
+        text, upgraded = _upgrade_baked_template_url(text)
+        if upgraded:
+            _write(path, text)
+            logging.info(
+                f"{TAG} startup workflow template upgraded -> "
+                f"/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json in {path.name}"
+            )
+            return True
         logging.debug(f"{TAG} startup workflow already applied")
         return False
 

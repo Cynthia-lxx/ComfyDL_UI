@@ -30,6 +30,7 @@ from app.frontend_patch import (  # noqa: E402
     STARTUP_WORKFLOW_MARK,
     _patch_default_workflow,
     _patch_startup_workflow,
+    _upgrade_baked_template_url,
     apply_frontend_patches,
 )
 
@@ -78,6 +79,16 @@ def main() -> int:
             check("real frontend: startup redirects to the ComfyDL template",
                   f"templates/{DEFAULT_WORKFLOW_TEMPLATE}.json" in gsrc
                   and "TutorialCompleted" in gsrc)
+        # Generational upgrade (2026-10-30): a frontend baked with a previous
+        # template name must not keep the stale URL anywhere.
+        stale = [
+            p.name
+            for p in sorted(assets.glob("settingStore-*.js"))
+            + sorted(assets.glob("GraphView-*.js"))
+            if "templates/tabular_regression_production.json"
+            in p.read_text(encoding="utf-8")
+        ]
+        check("real frontend: no stale baked template name", stale == [], str(stale))
         # Idempotency: a second apply must report nothing new.
         before = sorted(
             (p.name, p.stat().st_mtime) for p in assets.glob("settingStore-*.js")
@@ -149,6 +160,51 @@ def main() -> int:
             check("startup: drifted signature raises", False, "no ValueError")
         except ValueError:
             check("startup: drifted signature raises", True)
+
+        # --- generational upgrade helper ------------------------------------ #
+        current_url = f"fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`"
+        stale_body = "a" + "fetch(`/templates/some_old_template.json`,{cache:`no-store`})" + "b"
+        upgraded, changed = _upgrade_baked_template_url(stale_body)
+        check("upgrade: stale URL rewritten", changed and current_url in upgraded)
+        check("upgrade: surrounding text kept",
+              upgraded.startswith("a" + current_url) and upgraded.endswith("b"))
+        unchanged, changed2 = _upgrade_baked_template_url(current_url + ",{cache:`no-store`})")
+        check("upgrade: no-op when current", changed2 is False and unchanged == current_url + ",{cache:`no-store`})")
+        official = "fetch(K.fileURL(`/templates/index_logo.json`))"
+        official_text, changed3 = _upgrade_baked_template_url(official)
+        check("upgrade: official fileURL fetch untouched",
+              changed3 is False and official_text == official)
+        # End-to-end on the patched chunks: pre-bake both targets with the old
+        # name, the patch functions must upgrade in place and return True.
+        assets5 = sandbox / "assets5"
+        assets5.mkdir()
+        store5 = assets5 / "settingStore-TEST.js"
+        store5.write_text(
+            "loadDefaultWorkflow=async()=>{try{const _cdlRes=await "
+            "fetch(`/templates/some_old_template.json`,{cache:`no-store`});"
+            "if(_cdlRes.ok){await Gx.loadGraphData(await _cdlRes.json());return}}"
+            "catch(_cdlErr){}await Gx.loadGraphData(Gy)}"
+            f"{DEFAULT_WORKFLOW_MARK}}}",
+            encoding="utf-8",
+        )
+        check("upgrade e2e: default workflow upgraded",
+              _patch_default_workflow(assets5) is True
+              and current_url in store5.read_text(encoding="utf-8"))
+        check("upgrade e2e: then idempotent", _patch_default_workflow(assets5) is False)
+        gv5 = assets5 / "GraphView-TEST.js"
+        gv5.write_text(
+            "resolveStartupOutcome=async()=>n.get(`Comfy.TutorialCompleted`)"
+            "?(await (async()=>{try{const _cdlRes=await "
+            "fetch(`/templates/some_old_template.json`,{cache:`no-store`});"
+            "if(_cdlRes.ok){await X.loadGraphData(await _cdlRes.json());return}}"
+            "catch(_cdlErr){}})(),`restored`)"
+            f"{STARTUP_WORKFLOW_MARK}:(await ir().loadBlankWorkflow())",
+            encoding="utf-8",
+        )
+        check("upgrade e2e: startup workflow upgraded",
+              _patch_startup_workflow(assets5) is True
+              and current_url in gv5.read_text(encoding="utf-8"))
+        check("upgrade e2e: then idempotent", _patch_startup_workflow(assets5) is False)
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
 
