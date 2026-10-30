@@ -1,0 +1,552 @@
+/**
+ * ComfyDL App Panel styles (cdlapp.css).
+ *
+ * Theme contract: colors/backgrounds/borders come from the official ComfyUI
+ * CSS variables where available (--comfy-menu-bg, --fg-color, --border-color,
+ * --input-bg-color, --comfy-topbar-height) so official theme switches
+ * propagate automatically; teal (#1ABC9C) is the ComfyDL accent.  z-index
+ * lives inside the measured safe band (2001-9999; official splash = 9999,
+ * primevue tooltip = 2000).
+ *
+ * Native dock (app mode with app selections): body.cdlapp-active CSS
+ * re-positions the OFFICIAL `.arrange-panel` (the input widget panel the
+ * frontend builds for app-mode workflows) to cover the FULL remaining width
+ * next to the side tool bar - the whole App screen becomes one CDLApp UI
+ * with PLANNED ZONES (not a vertical stack): LEFT = the official params
+ * column + Run; RIGHT = the CDL dashboard where previews are the hero tile,
+ * the outputs list is a tall column, progress sits under previews and errors
+ * run as a full-width strip - every tile scrolls inside its own box, so
+ * nothing is cramped vertically or fat horizontally.  Our sections
+ * (#cdl-app-extras) are appended INSIDE that official panel as a plain
+ * sibling, so they inherit its fonts, colors and padding and look native by
+ * construction.
+ *
+ * Legacy fallback (workflow without app selections): the old overlay panel
+ * is kept, but its left edge starts right of the side tool bar
+ * (var(--cdl-dock-left), measured by cdlapp.js) so the rail stays visible.
+ *
+ * DOM discipline: only transform/opacity/background transitions, 200ms ease;
+ * no layout-thrashing animations (motion.js rules).
+ */
+
+/* ----------------------------------------------------- native dock (v2) */
+/* The whole App screen becomes one CDLApp UI: the official input panel is
+   re-positioned by CSS to cover the FULL remaining width (rail -> right
+   edge), so no dead empty center is left over.  Scoped under
+   body.cdlapp-active (set only while our extras are mounted in app mode) so
+   graph mode and builder sub-steps are untouched. */
+body.cdlapp-active .comfyui-body .arrange-panel {
+  position: fixed;
+  left: var(--cdl-dock-left, 59px);
+  right: 0; /* full bleed: inputs + outputs share the whole screen */
+  top: var(--comfy-topbar-height, 2.5rem);
+  bottom: 0;
+  width: auto;
+  z-index: 2100; /* OFFICIAL_SURFACE.zIndex.panel */
+  overflow-y: auto;
+  background: var(--comfy-menu-bg, #1e1e1e); /* opaque cover over the center view */
+}
+
+/* Zoned layout (no all-vertical cramming, no wasted width): the official
+   body column becomes a two-column grid - LEFT = official params + Run
+   (narrow column), RIGHT = the CDL dashboard.  Explicit placement for every
+   child so official DOM order changes cannot scramble the zones. */
+/* The official h-12 header (workflow title bar) is a flex sibling of the
+   body column - without flex:none the body's content squeezed it down to
+   ~18px ("cramped title bar" user callout). */
+body.cdlapp-active .comfyui-body .arrange-panel > div > section {
+  flex: none;
+}
+body.cdlapp-active .comfyui-body .arrange-panel > div > div {
+  display: grid;
+  /* col 2 is the 9px splitter gutter the user can drag (see .cdlapp-splitter) */
+  grid-template-columns: var(--cdl-params-w, 340px) 9px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto; /* inputs grow, Run stays natural */
+  column-gap: 0; /* the splitter gutter IS the gap between the zones */
+  row-gap: 10px;
+  padding-bottom: 14px; /* breathing room above the screen bottom edge */
+  width: 100%;
+  max-width: none;
+  /* the official column ships h-full (height:100%), which ignores the
+     h-12 header above it and overflows the fixed panel by ~16px - flex
+     sizing respects the header and keeps everything inside the screen */
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+body.cdlapp-active .comfyui-body .arrange-panel > div > div > section:nth-of-type(1) {
+  grid-column: 1;
+  grid-row: 1; /* official inputs scroll area */
+}
+body.cdlapp-active .comfyui-body .arrange-panel > div > div > section:nth-of-type(2) {
+  grid-column: 1;
+  grid-row: 2; /* official Run block */
+}
+body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
+  grid-column: 3;
+  grid-row: 1 / 3; /* full-height right zone */
+  min-height: 0;
+}
+
+/* CDL sections ride inside the official panel.  No shell of their own:
+   transparent background + teal section titles carry the accent.  The right
+   zone is a PLANNED grid, not a stack: previews as the hero tile on the
+   left, the long outputs list as its own tall column on the right, progress
+   under previews, errors as a full-width strip at the bottom.  Every tile
+   scrolls inside its own box. */
+#cdl-app-extras {
+  display: grid;
+  /* col 2 is the draggable 9px gutter between the preview and outputs zones */
+  grid-template-columns: var(--cdl-prev-w, 55%) 9px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 0.85fr) auto;
+  grid-template-areas:
+    "head head head"
+    "prev sp  out"
+    "prog sp  out"
+    "err  err err";
+  gap: 12px; /* adjacent borders never touch */
+  padding-top: 12px; /* gap below the official header border */
+  padding-bottom: 2px;
+  min-height: 0;
+}
+#cdl-app-extras .cdlapp-head { grid-area: head; }
+#cdl-app-extras .cdlapp-sec-previews { grid-area: prev; }
+#cdl-app-extras .cdlapp-sec-outputs { grid-area: out; }
+#cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
+#cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
+#cdl-app-extras .cdlapp-section {
+  background: transparent;
+  border-color: var(--border-color, #333333);
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden; /* tiles scroll inside, the screen never grows */
+}
+#cdl-app-extras .cdlapp-out-list,
+#cdl-app-extras .cdlapp-err-list,
+#cdl-app-extras .cdlapp-prog-rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* narrow screens: collapse to the vertical fallback */
+@media (max-width: 1100px) {
+  .cdlapp-splitter { display: none; } /* stacked fallback: nothing to drag */
+  body.cdlapp-active .comfyui-body .arrange-panel > div > div {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  #cdl-app-extras {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.6fr) auto;
+    grid-template-areas:
+      "head"
+      "prev"
+      "out"
+      "prog"
+      "err";
+  }
+}
+
+/* --------------------------------------------- draggable zone splitters */
+/* Gutter tracks between the zones (see the grid templates above): drag to
+   resize.  A thin divider line is always visible; it lights up teal on
+   hover/drag.  The 9px gutter track IS the boundary, so the divider sits
+   exactly between the two borders it separates. */
+.cdlapp-splitter {
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+  min-width: 0;
+}
+.cdlapp-splitter::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: 1px;
+  background: var(--border-color, #333333);
+  transition: background 0.2s ease;
+}
+.cdlapp-splitter:hover::after,
+.cdlapp-splitter.cdlapp-dragging::after {
+  background: #1abc9c;
+}
+body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
+  grid-column: 2; /* the params/dashboard gutter */
+  grid-row: 1 / 3;
+}
+#cdl-app-extras > .cdlapp-splitter {
+  grid-area: sp; /* the previews/outputs gutter */
+}
+
+/* ------------------------------------------------------ preview grid */
+.cdlapp-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+#cdl-app-extras .cdlapp-preview-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.cdlapp-preview-item {
+  margin: 0;
+  border: 1px solid var(--border-color, #333333);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--input-bg-color, #252525);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.cdlapp-preview-item:hover {
+  border-color: #1abc9c;
+}
+.cdlapp-preview-img {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.35);
+}
+.cdlapp-preview-cap {
+  font-size: 10px;
+  padding: 3px 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--comfy-input-bg, #9e9e9e);
+}
+
+/* ------------------------------------------------------- legacy overlay */
+#cdl-app-panel {
+  position: fixed;
+  left: var(--cdl-dock-left, 59px); /* right of the side tool bar */
+  top: var(--comfy-topbar-height, 2.5rem);
+  bottom: 0;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  overflow-y: auto;
+  background: var(--comfy-menu-bg, #1e1e1e);
+  color: var(--fg-color, #ffffff);
+  border: 1px solid var(--border-color, #333333);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  box-shadow: 4px 0 18px rgba(0, 0, 0, 0.35);
+  z-index: 2100; /* OFFICIAL_SURFACE.zIndex.panel */
+  font-family: inherit;
+  font-size: 12px;
+  transition: width 0.2s ease, padding 0.2s ease;
+}
+#cdl-app-panel.cdlapp-collapsed {
+  width: 44px;
+  padding: 6px 4px;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- header */
+.cdlapp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+  padding-left: 4px; /* keep the title clear of the panel border seam */
+}
+.cdlapp-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-color, #ffffff);
+}
+/* The status dot: gray when idle, teal while a run is executing
+   (class toggled by beginRunIfNew/endRun on the extras element). */
+.cdlapp-title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--muted-foreground, #8a8a8a);
+  transition: background 0.2s ease;
+}
+.cdlapp-running .cdlapp-title::before {
+  background: #1abc9c; /* ComfyDL teal = run executing */
+}
+.cdlapp-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------- buttons */
+/* Live-verified 2026-10-30: the official button recipe classes are SCOPED
+   (data-v attribute selectors) in the frontend bundle, so injected DOM
+   cannot borrow them directly - but every value they resolve to is a global
+   :root CSS variable.  The rules below reproduce the official look from
+   those variables (transparent surface, muted text, 1px --border-default
+   rim, hover = --secondary-background-hover + brighter text, Inter 500,
+   8px radius, 0.1s cubic-bezier), so official theme switches propagate.
+   All wrapped in :where() = zero specificity, nothing can conflict. */
+:where(.cdlapp-btn) {
+  appearance: none;
+  background: transparent;
+  color: var(--muted-foreground, #8a8a8a);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default, #494a50);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+:where(.cdlapp-btn:hover) {
+  background: var(--secondary-background-hover, #313235);
+  border-color: var(--interface-stroke, #494a50);
+  color: var(--base-foreground, #ffffff);
+}
+:where(.cdlapp-nav .cdlapp-btn) {
+  min-height: 40px; /* official Run-button height (h-10) */
+  padding: 8px 18px;
+}
+:where(.cdlapp-btn-icon) {
+  width: 32px; /* official header icon size (size-8) */
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px; /* overrides the nav 40px row for the collapse button */
+  padding: 0;
+  font-size: 14px;
+}
+:where(.cdlapp-btn-disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+:where(.cdlapp-btn-disabled:hover) {
+  background: transparent;
+  border-color: var(--border-default, #494a50);
+  color: var(--muted-foreground, #8a8a8a);
+}
+
+/* collapsed rail (legacy panel only) */
+.cdlapp-rail {
+  display: none;
+  appearance: none;
+  border: 1px solid var(--border-color, #333333);
+  background: var(--input-bg-color, #252525);
+  color: #1abc9c;
+  font-size: 14px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.cdlapp-collapsed .cdlapp-head,
+.cdlapp-collapsed .cdlapp-section {
+  display: none;
+}
+.cdlapp-collapsed .cdlapp-rail {
+  display: block;
+}
+
+/* ------------------------------------- builder "Back to App" floating btn */
+/* Mounted only while the official builder wizard is active (it has no
+   return-to-app entry of its own - exitBuilder hardcodes to the graph).
+   Bottom-right corner, inside the measured z band; inherits the official
+   button recipe classes, so only the positioning is ours. */
+#cdl-builder-back {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2100; /* OFFICIAL_SURFACE.zIndex.panel */
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  background: var(--comfy-menu-bg, #1e1e1e);
+}
+#cdl-builder-back:hover {
+  background: var(--secondary-background-hover, #313235);
+}
+
+/* -------------------------------------------------------------- sections */
+.cdlapp-section {
+  border: 1px solid var(--border-color, #333333);
+  border-radius: 8px;
+  padding: 10px 12px; /* content keeps a breathing gap from the border */
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 6px;
+}
+.cdlapp-sec-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-color, #ffffff); /* neutral: no green text */
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.cdlapp-empty {
+  color: var(--comfy-input-bg, #9e9e9e);
+  opacity: 0.8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------- outputs section */
+.cdlapp-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.cdlapp-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.cdlapp-item-icon {
+  flex: none;
+  color: var(--muted-foreground, #8a8a8a);
+}
+.cdlapp-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cdlapp-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.cdlapp-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit; /* official UI font - no fallback monospace */
+  font-size: 12px;
+}
+.cdlapp-item-size {
+  flex: none;
+  color: var(--comfy-input-bg, #9e9e9e);
+  font-size: 10px;
+}
+
+/* ------------------------------------------------------ progress section */
+.cdlapp-total {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--input-bg-color, #252525);
+  border: 1px solid var(--border-color, #333333);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.cdlapp-total-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #16a085, #1abc9c);
+  transition: width 0.3s ease;
+}
+.cdlapp-total-label {
+  font-size: 11px;
+  color: var(--comfy-input-bg, #9e9e9e);
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.cdlapp-prog-row {
+  display: grid;
+  grid-template-columns: 1fr 56px 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.cdlapp-prog-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.cdlapp-prog-mini {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--input-bg-color, #252525);
+  overflow: hidden;
+}
+.cdlapp-prog-fill {
+  height: 100%;
+  width: 0%;
+  background: #1abc9c;
+  transition: width 0.3s ease;
+}
+.cdlapp-st-done .cdlapp-prog-fill { background: #4caf50; }
+.cdlapp-st-cached .cdlapp-prog-fill { background: #6b7280; }
+.cdlapp-st-error .cdlapp-prog-fill { background: #e5484d; }
+.cdlapp-prog-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--comfy-input-bg, #9e9e9e);
+}
+.cdlapp-st-error .cdlapp-prog-pct { color: #e5484d; }
+.cdlapp-st-done .cdlapp-prog-pct { color: #4caf50; }
+
+/* -------------------------------------------------------- errors section */
+.cdlapp-err-card {
+  border: 1px solid rgba(229, 72, 77, 0.55);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: rgba(229, 72, 77, 0.08);
+}
+.cdlapp-err-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.cdlapp-err-node {
+  font-weight: 600;
+  font-size: 12px;
+  color: #e5484d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdlapp-err-msg {
+  font-size: 11px;
+  margin-top: 4px;
+  color: var(--fg-color, #ffffff);
+  word-break: break-word;
+}
+.cdlapp-err-toggle {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #f5a623;
+  cursor: pointer;
+  user-select: none;
+}
+.cdlapp-err-tb {
+  margin-top: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  font-family: var(--mono-font-family, ui-monospace, monospace);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow: auto;
+  max-height: 180px;
+  white-space: pre;
+}

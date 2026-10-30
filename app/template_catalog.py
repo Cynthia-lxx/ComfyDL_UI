@@ -212,6 +212,26 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-10-28",
             "openSource": True,
         },
+        {
+            "name": "formula_playground_app",
+            "title": "Formula Playground: App Mode",
+            "description": (
+                "The first ComfyDL workflow that opens as an App by default "
+                "(ComfyUI APP mode, beta): edit the formula, noise, seed, "
+                "steps and learning rate in the App input panel, press Run "
+                "and watch the training-loss curve render as the App output. "
+                "Switch to the node graph any time to see the machinery."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "jpg",
+            "tags": ["app mode", "regression", "playground", "formula"],
+            "date": "2026-10-30",
+            "openSource": True,
+            # Frontend contract (settingStore chunk): isAppTemplate(e) tests
+            # e.isApp === true - it drives both the card's App/Node Graph
+            # badge and the Apps vs Node-Graph filter in the template browser.
+            "isApp": True,
+        },
     ],
 }
 
@@ -252,6 +272,11 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "图内生成数据的生产级分类管线：数据集预览、一盒式 Classification Train（分层切分、标准化、"
             "Adam、早停、实时 loss 预览），预测送入混淆矩阵渲染热图。把生成器换成 CSV / XLSX / DB "
             "读取节点即可跑你自己的数据。"
+        ),
+        "formula_playground_app": (
+            "首个默认以 App 模式打开的 ComfyDL 工作流（ComfyUI APP mode，Beta）：在 App 输入面板里改"
+            "公式、噪声、种子、步数与学习率，按 Run 即可在 App 输出区看到训练 loss 曲线；随时切回节点图"
+            "查看内部结构。"
         ),
     },
 }

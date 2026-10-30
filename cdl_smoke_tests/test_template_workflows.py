@@ -128,6 +128,7 @@ def main() -> int:
         "regression_model_reuse",
         "classification_from_scratch",
         "tabular_classification_production",
+        "formula_playground_app",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -224,6 +225,26 @@ def main() -> int:
           f"eval {float(cm_acc_e):.4f} vs held-out {float(accuracy):.4f}")
     check("E: renderer produced IMAGE", out[7][0].dim() == 4)
     check("E: preview text written", isinstance(out[3][0], str) and "x0" in out[3][0])
+
+    # --- Template F: formula_playground_app (App-mode-first) ------------------ #
+    # The graph itself is a plain regression pipeline; the app-mode bits live
+    # in extra (linearMode / linearData) and are asserted structurally here.
+    wf_f = json.loads(
+        (workflows_dir / "formula_playground_app.json").read_text(encoding="utf-8-sig"))
+    extra_f = wf_f.get("extra") or {}
+    lin_f = extra_f.get("linearData") or {}
+    check("F: app-mode contract in extra",
+          extra_f.get("linearMode") is True
+          and isinstance(lin_f.get("inputs"), list) and len(lin_f["inputs"]) == 5
+          and lin_f.get("outputs") == [4])
+    out = _run_workflow(workflows_dir / "formula_playground_app.json")
+    _, mae_f, rmse_f, _, hist_f = out[2]
+    check("F: loss curve fell >5x on sin(2x)+0.5x",
+          float(hist_f[-1]) < float(hist_f[0]) / 5,
+          f"{float(hist_f[0]):.4f} -> {float(hist_f[-1]):.4f}")
+    check("F: hidden-32 MLP beats the linear floor", float(rmse_f) < 0.35,
+          f"rmse={float(rmse_f):.4f} mae={float(mae_f):.4f}")
+    check("F: plot produced IMAGE", out[3][0].dim() == 4)
 
     return _report()
 

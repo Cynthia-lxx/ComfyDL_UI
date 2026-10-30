@@ -279,6 +279,12 @@ class PromptServer():
         for route in crashsite_routes.routes:
             if isinstance(route, web.RouteDef):
                 routes.route(route.method, route.path)(route.handler, **route.kwargs)
+        # ComfyDL App Panel artifacts (output-dir listing / downloads):
+        # same merge idiom, same /api twin treatment.
+        from app import cdlapp_routes
+        for route in cdlapp_routes.routes:
+            if isinstance(route, web.RouteDef):
+                routes.route(route.method, route.path)(route.handler, **route.kwargs)
         self.last_node_id = None
         self.last_prompt_id = None
         self.client_id = None
@@ -1333,6 +1339,12 @@ class PromptServer():
         )
         if os.path.isdir(motion_assets):
             self.app.add_routes([web.static('/comfydl/motion', motion_assets)])
+
+        cdlapp_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "cdlapp_assets"
+        )
+        if os.path.isdir(cdlapp_assets):
+            self.app.add_routes([web.static('/comfydl/cdlapp', cdlapp_assets)])
 
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True

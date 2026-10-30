@@ -349,9 +349,22 @@
   // before any setting is registered" - an uncaught error that aborts the
   // bootstrap chain and leaves the whole UI blank. Wait for the store's
   // isReady signal first (see profiler.js for the full note).
-  function settingsStoreReady(app) {
-    const s = app.extensionManager && app.extensionManager.setting;
-    return !!s && s.isReady === true;
+  function settingsStoreReady(_app) {
+    // Live-verified 2026-10-30: the workspace-store `setting` field is NOT
+    // the pinia settings store (it has no isReady at all - the old check
+    // made every session time out).  The real store hangs off the Vue app's
+    // pinia instance and is created during the store bootstrap that precedes
+    // the Vue mount, so this passes as soon as the app view exists.
+    try {
+      const root = document.getElementById("vue-app");
+      const vueApp = root && root.__vue_app__;
+      const pinia = vueApp && vueApp.config &&
+        vueApp.config.globalProperties.$pinia;
+      const st = pinia && pinia._s && pinia._s.get("setting");
+      return !!st && st.isReady === true;
+    } catch (e) {
+      return false;
+    }
   }
 
   // Shared easing - identical to the homepage (--cdl-ease).

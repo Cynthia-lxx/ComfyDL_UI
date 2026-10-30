@@ -129,6 +129,7 @@ check(
         "regression_model_reuse",
         "classification_from_scratch",
         "tabular_classification_production",
+        "formula_playground_app",
     },
     str(sorted(comfydl_names)),
 )
@@ -136,6 +137,15 @@ check(
     "T3c2 curated: names follow the official schema pattern (no spaces)",
     all(re.fullmatch(r"[a-zA-Z0-9._-]+", t["name"]) for t in curated[0]["templates"]),
     "official schema requires ^[a-zA-Z0-9._-]+$",
+)
+# Frontend contract (settingStore chunk): isAppTemplate(e) = e.isApp === true
+# drives the App/Node-Graph card badge and the template browser's filter.
+app_flags = {t["name"]: t.get("isApp") is True for t in curated[0]["templates"]}
+check(
+    "T3c3 curated: isApp flag exactly on the app-mode template",
+    app_flags.get("formula_playground_app") is True
+    and sum(1 for v in app_flags.values() if v) == 1,
+    str(sorted(n for n, v in app_flags.items() if v)),
 )
 other_titles = [c.get("title") for c in curated[1:]]
 # 2026-10-05: the diffusion rehydration registered KSampler / VAE / CLIP /

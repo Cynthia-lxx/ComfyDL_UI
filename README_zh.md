@@ -121,6 +121,31 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
   <img src="assets/loss_map_focus.png" alt="训练节点下方的实时 loss map 预览卡，同时展示原始与平滑损失曲线" width="520" />
 </p>
 
+### CDL App Panel——为深度学习重造的 App 模式
+
+官方 Beta App 模式（工作流 → App）是为图片输出设计的；而深度学习跑出来的是张量、模型、
+文字和文件。ComfyDL_UI 把整个 App 画面重造成一个**分区规划的原生 CDLApp UI**——
+不做全垂直堆叠，也不浪费横向空间：
+
+- **分区布局**——官方输入 params（真 Vue widget + Run 按钮）停靠为左侧窄列；CDL
+  仪表盘占据其余空间：预览为主视觉区（左上）、输出长列表独占右侧高列、进度居左下、
+  错误横贯底部——每个区块在各自盒内滚动。分区边界可拖拽调整（尺寸持久化），
+  既不遮挡也不浪费。
+- **输出优先**——输出目录内的文件一键下载（CSV / JSON / txt / `.pt` / PNG……），
+  文本输出可复制，预览复用既有低算力渲染件。输出从此与输入平权。
+- **内联预览**——图像输出在主视觉区渲染为可点击的缩略图网格（官方 `/view` 通道，
+  最新优先），单击查看原图。
+- **详细进度**——逐节点进度列表（节点名 / 百分比 / running-done-cached-error）加总进度条，
+  纯消费官方 WebSocket 事件。
+- **死的明白**——失败节点渲染为错误卡：节点标题、异常消息与完整可折叠 traceback，
+  一键复制。
+- **导航入口**——面板顶栏可跳回节点图，或直达官方 builder 的输入/输出选择步骤。
+
+窄于 1100px 时分区自动折叠为纵向回退布局。停靠面板仅在 App 模式激活时挂载，退出即
+干净卸载；一个设置（*设置 > ComfyDL > App*）总控。设计说明与"官方演进隔离"策略见
+[`docs/cdlapp-mode.md`](docs/cdlapp-mode.md)。试用入口：
+**Templates → ComfyDL Examples → Formula Playground: App Mode**。
+
 ### 界面动效——品牌加载屏、分阶段入场与点击涟漪
 
 移植自 homepage 分叉：官方波浪 SVG 加载屏被替换为品牌启动屏（动画 logo GIF、带流动

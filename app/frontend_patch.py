@@ -62,6 +62,15 @@ CRASHSITE_LOADER_TAG = (
 )
 CRASHSITE_LOADER_MARK = "<!--ComfyDL_UI:crashsite-loader-->"
 
+# The CDL App Panel: companion overlay for the official beta App mode.  Same
+# loader pattern; the panel mounts itself only while app-mode coach anchors
+# are present, so the tag is inert everywhere else.
+CDLAPP_LOADER_TAG = (
+    '<!--ComfyDL_UI:cdlapp-loader-->'
+    '<script type="module" src="/comfydl/cdlapp/cdlapp.js"></script>'
+)
+CDLAPP_LOADER_MARK = "<!--ComfyDL_UI:cdlapp-loader-->"
+
 # The Motion module (staged entrance + ripple): a loader script before </body>
 # plus the entrance pre-hide CSS in the <head>. The CSS must ship in the head
 # (not be injected by motion.js at runtime) so it is already in the CSSOM when
@@ -275,6 +284,11 @@ I18N_SETTINGS_KEYS = {
         "name": "界面动效（入场编排 + 点击涟漪）",
         "tooltip": "分阶段入场动画与点击涟漪反馈。改动即时生效；入场动画每次刷新只播放一次。",
     },
+    "ComfyDL_AppPanel_Enabled": {
+        "name": "启用 ComfyDL App 面板",
+        "tooltip": "在官方 App 模式（Beta）内显示 ComfyDL 伴侣面板：输出收集与下载、逐节点进度、"
+                   "错误详情与节点图/builder 快捷入口。关闭时不注入任何 DOM。",
+    },
 }
 
 #: settingsCategories deep-merged into the zh main chunk (Settings group names).
@@ -283,6 +297,7 @@ I18N_SETTINGS_CATEGORIES_ZH = {
     "CrashSite": "事故现场",
     "Profiling": "性能分析",
     "Motion": "动效",
+    "App": "App",
 }
 
 
@@ -330,6 +345,13 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("crashsite loader")
     except Exception as exc:
         logging.warning(f"{TAG} crashsite loader not applied: {exc}")
+
+    # The CDL App Panel loader: same channel.
+    try:
+        if _patch_cdlapp_loader(Path(web_root)):
+            applied.append("cdlapp loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} cdlapp loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -895,6 +917,28 @@ def _patch_crashsite_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", CRASHSITE_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} crashsite panel loader injected into {path.name}")
+    return True
+
+
+def _patch_cdlapp_loader(web_root: Path) -> bool:
+    """Inject the CDL App Panel's module loader into ``index.html``.
+
+    Same pattern as :func:`_patch_crashsite_loader`: the panel's JS/CSS are
+    repository assets served by ``server.py`` from ``/comfydl/cdlapp/``, and
+    this patch only adds the one ``<script>`` tag before ``</body>``.  The
+    panel keeps its own ``ComfyDL.AppPanel.Enabled`` setting; the tag itself is
+    inert outside the official App mode.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if CDLAPP_LOADER_MARK in text:
+        logging.debug(f"{TAG} cdlapp loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", CDLAPP_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} cdlapp panel loader injected into {path.name}")
     return True
 
 

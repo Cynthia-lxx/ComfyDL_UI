@@ -164,6 +164,41 @@ divergence is visible at a glance, without opening anything:
   <img src="assets/loss_map_focus.png" alt="Live loss map preview card under a training node, showing the raw and smoothed loss curves" width="520" />
 </p>
 
+### CDL App Panel — the App mode, rebuilt for deep learning
+
+The official beta App mode (workflow → app) is designed for image outputs; DL
+runs produce tensors, models, text and files. ComfyDL_UI rebuilds the whole
+App screen as one native CDLApp UI with planned zones — no dead empty space,
+no vertical cramming:
+
+- **Zoned layout** — the official params column (real Vue widgets + Run
+  button) docks as a narrow left column; the CDL dashboard takes the rest:
+  previews as the hero tile, the outputs list as a tall column, progress and
+  errors filling the remaining quadrants — every tile scrolls inside its own
+  box. The zone boundaries are draggable (sizes persist), so nothing is
+  covered and nothing is wasted.
+- **Outputs first** — files from the output directory with one-click downloads
+  (CSV / JSON / txt / `.pt` / PNG...), text outputs as copyable entries, and
+  low-cost previews from the existing renderers. Outputs carry equal weight
+  with inputs.
+- **Inline previews** — image outputs render as a clickable thumbnail grid in
+  the hero tile (official `/view` channel, newest first); one click opens the
+  full image.
+- **Detailed progress** — a per-node progress list (title / percent /
+  running-done-cached-error) plus a total bar, driven purely by the official
+  WebSocket events.
+- **Errors that make sense** — failed nodes render as cards with the node
+  title, the exception message and the full collapsible traceback, one click
+  to copy.
+- **Navigation** — jump back to the node graph, or straight into the official
+  builder at the Inputs/Outputs step, from the panel header.
+
+The dock mounts only while App mode is active and releases cleanly on exit;
+one setting (*Settings > ComfyDL > App*) governs it. Design notes and the
+official-evolution containment strategy:
+[`docs/cdlapp-mode.md`](docs/cdlapp-mode.md). Try it with **Templates →
+ComfyDL Examples → Formula Playground: App Mode**.
+
 ### UI motion — branded splash, staged entrance & click ripple
 
 Ported from the homepage fork: the official wave-SVG splash is replaced by the
