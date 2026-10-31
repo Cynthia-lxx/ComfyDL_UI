@@ -213,7 +213,9 @@ if GGUF_OK:
         check("T5c loader returns arch + metadata",
               extra["arch_str"] == "flux"
               and extra["metadata"].get("general.name") == "cdl-sp4-fixture")
-        w = sd["model.diffusion_model.blocks.0.weight"]
+        check("T5c2 loader strips the model.diffusion_model. prefix",
+              set(sd) == {"blocks.0.weight", "blocks.0.bias"}, str(sorted(sd)))
+        w = sd["blocks.0.weight"]
         check("T5d weight is a GGMLTensor with qtype + logical shape",
               isinstance(w, qf.GGMLTensor) and w.tensor_type == qf.QTYPE_Q8_0
               and tuple(w.tensor_shape) == (4, 32))
@@ -221,7 +223,7 @@ if GGUF_OK:
               torch.allclose(
                   qf.dequantize_tensor(w, dtype=torch.float32).flatten(),
                   expected8))
-        b = sd["model.diffusion_model.blocks.0.bias"]
+        b = sd["blocks.0.bias"]
         check("T5f fp16 tensor passes through as a plain view",
               tuple(b.shape) == (8,)
               and torch.allclose(qf.dequantize_tensor(b).float(),
@@ -243,7 +245,7 @@ if GGUF_OK:
         check("T5j inspector render: TOTAL + savings footer present",
               "TOTAL" in text and "saved" in text)
         check("T5k inspector render carries both layers",
-              text.count("model.diffusion_model") == 2)
+              text.count("blocks.0.") == 2)
 
         # Release the mmapped tensors BEFORE the TemporaryDirectory context
         # exits - GGMLTensors hold the .gguf mmap open, and Windows refuses
