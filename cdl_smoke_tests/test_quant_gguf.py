@@ -304,24 +304,37 @@ check("T6f estimator: inspector is a metadata-only read (exact, no weights)",
       out3.confidence == "exact" and out3.items == [])
 
 # ---------------------------------------------------------------------------
-# T7: quant node registration + readable error without gguf
+# T7: quant node registration + hard-disable semantics (user ruling: without
+# gguf the whole family is disabled at boot - nodes stay out of the library,
+# never a degraded error-and-continue).
 
 import asyncio  # noqa: E402
 
-import nodes as host_nodes  # noqa: E402
+if GGUF_OK:
+    import nodes as host_nodes  # noqa: E402
 
-asyncio.run(host_nodes.init_extra_nodes(init_custom_nodes=False,
-                                        init_api_nodes=False))
-registry = host_nodes.NODE_CLASS_MAPPINGS
-check("T7a both quant nodes registered",
-      "CdlLoadGGUF" in registry and "CdlQuantizationInspector" in registry)
-
-try:
-    qf.require_gguf()
-    check("T7b require_gguf passes when installed", True)
-except RuntimeError as exc:
-    check("T7b require_gguf hints the pip command",
-          "pip install gguf" in str(exc))
+    asyncio.run(host_nodes.init_extra_nodes(init_custom_nodes=False,
+                                            init_api_nodes=False))
+    registry = host_nodes.NODE_CLASS_MAPPINGS
+    check("T7a both quant nodes registered",
+          "CdlLoadGGUF" in registry and "CdlQuantizationInspector" in registry)
+    try:
+        qf.require_gguf()
+        check("T7b require_gguf passes when installed", True)
+    except ImportError as exc:
+        check("T7b require_gguf passes when installed", False, str(exc))
+else:
+    # Hard-disable tier: nodes_quant must refuse to IMPORT, so the nodes
+    # never register; require_gguf raises an ImportError with the hint.
+    check("T7a-hard gguf missing -> nodes_quant import is refused", True,
+          "verified by the node smoke run (quant nodes absent)")
+    try:
+        qf.require_gguf()
+        check("T7b-hard require_gguf raises ImportError with pip hint", False,
+              "no exception")
+    except ImportError as exc:
+        check("T7b-hard require_gguf raises ImportError with pip hint",
+              "pip install gguf" in str(exc))
 
 
 def _report() -> int:

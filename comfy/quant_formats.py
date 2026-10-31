@@ -142,13 +142,21 @@ def is_quantized(tensor) -> bool:
 
 
 def require_gguf():
-    """Return the ``gguf`` module or raise a readable install hint."""
+    """Return the ``gguf`` module or raise a readable install hint.
+
+    Raises ImportError (not RuntimeError) on purpose: callers that import
+    this at module level turn the missing package into a boot-time
+    hard-disable - nodes.py logs the reason and the whole node family stays
+    out of the library (user ruling 2026-10-31: no degraded
+    error-and-continue paths for the quant family).
+    """
     try:
         import gguf  # noqa: F401
     except ImportError as exc:
-        raise RuntimeError(
-            "The GGUF nodes need the 'gguf' package - install it with "
-            "`pip install gguf>=0.13.0,<0.14` (see requirements.txt)."
+        raise ImportError(
+            "The GGUF quantization family is hard-disabled: install "
+            "`pip install gguf>=0.13.0,<0.14` (see requirements.txt) and "
+            "restart."
         ) from exc
     import gguf
     return gguf

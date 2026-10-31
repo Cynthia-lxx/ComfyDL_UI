@@ -34,6 +34,13 @@ import folder_paths
 
 from comfy import quant_formats as qf
 
+# Boot-time hard gate (user ruling 2026-10-31): the quantization family is
+# either fully available or fully disabled - never a degraded
+# error-and-continue.  Without the gguf package this import raises, nodes.py
+# logs the reason and the nodes stay out of the library entirely (same
+# contract as nodes_generation without torchsde).
+qf.require_gguf()
+
 CATEGORY = "model/perf"
 
 _DEQUANT_DTYPE_OPTIONS = ["default", "target", "float32", "float16", "bfloat16"]
@@ -81,7 +88,8 @@ class CdlLoadGGUF(io.ComfyNode):
           patch_dtype (COMBO, default ``default``) - dtype used to apply
           LoRA patches on top of the dequantized weight.
     Out:  MODEL - the quantized model wrapped in a quant-aware ModelPatcher.
-    Caveats: needs the ``gguf`` package (pip install gguf>=0.13.0,<0.14).
+    Caveats: hard-disabled at boot without the ``gguf`` package (the node
+          stays out of the library; install gguf>=0.13.0,<0.14 and restart).
           Image-model architectures only (SD1/SDXL/SD3/Flux/...; text-encoder
           GGUFs are out of scope for this loader).  Combining GGUF with
           ``CdlCompileModel`` (torch.compile) is untested - GGMLTensor is a
@@ -165,7 +173,8 @@ class CdlQuantizationInspector(io.ComfyNode):
           scope: GGUF files; safetensors inspect stays a backlog item).
     Out:  STRING - the human-readable ledger.
     Caveats: read-only metadata inspection; the file is never loaded as
-          weights.  Needs the ``gguf`` package for .gguf files.
+          weights.  Hard-disabled at boot without the ``gguf`` package
+          (install gguf>=0.13.0,<0.14 and restart).
     """
 
     @classmethod
