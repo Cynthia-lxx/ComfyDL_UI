@@ -863,8 +863,9 @@ def _gguf_orig_shape(reader, tensor_name):
     field = reader.get_field(field_key)
     if field is None:
         return None
-    if len(field.types) != 2 or field.types[0] != 9 or field.types[1] != 4:
-        # expected ARRAY(9) of INT32(4)
+    if len(field.types) != 2 or field.types[0] != 9 \
+            or field.types[1] not in (4, 10):
+        # expected ARRAY(9) of INT32(4) or INT64(10) - writers differ
         raise TypeError(f"Bad original shape metadata for {field_key}: {field.types}")
     return torch.Size(tuple(int(field.parts[part_idx][0]) for part_idx in field.data))
 
