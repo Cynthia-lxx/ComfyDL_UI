@@ -542,6 +542,63 @@ def read_detail(run_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def mark_best(run_id: str) -> bool:
+    """Flag a finished run as its scan batch's best, after the fact.
+
+    The winner of a grid scan is only known once the *last* combination has
+    finished, but the ``best`` column lives on every row - so the scanner
+    calls this for the winner when the scan completes.  Updates the detail
+    JSON (atomic rewrite) and the matching index row (full rewrite, same
+    tmp+replace pattern as :func:`prune`).  Returns ``False`` when the run
+    is unknown (e.g. the switch was off and there is nothing to flag).
+    """
+    detail = read_detail(run_id)
+    if detail is None:
+        return False
+    t0 = time.perf_counter()
+    detail["best"] = True
+    path = default_root() / f"{Path(run_id).name}.json"
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{run_id}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(detail, fh, indent=2, default=str)
+            os.replace(tmp_name, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+    except OSError as exc:
+        _logger.warning("%s cannot flag best on %s: %s", LOG_TAG, run_id, exc)
+        return False
+    with _lock:
+        rows = read_index()
+        changed = False
+        for row in rows:
+            if row.get("run_id") == run_id and str(row.get("best")) != "1":
+                row["best"] = 1
+                changed = True
+        if changed:
+            index = default_root() / "runs.csv"
+            try:
+                fd, tmp_name = tempfile.mkstemp(
+                    dir=str(default_root()), prefix=".runs.", suffix=".tmp")
+                with os.fdopen(fd, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.DictWriter(
+                        fh, fieldnames=INDEX_COLUMNS, extrasaction="ignore")
+                    writer.writeheader()
+                    writer.writerows(rows)
+                os.replace(tmp_name, index)
+            except OSError as exc:
+                _logger.warning("%s cannot update runs.csv best flag: %s",
+                                LOG_TAG, exc)
+    switch_registry.record_self_overhead(SWITCH_ID, time.perf_counter() - t0)
+    return True
+
+
 def _detail_files() -> int:
     try:
         return sum(

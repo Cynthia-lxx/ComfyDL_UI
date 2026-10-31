@@ -77,7 +77,7 @@ def _bootstrap(sandbox: Path) -> None:
     cannot litter the repository.  Everything is deleted again afterwards.
     """
     warnings.simplefilter("ignore")  # keep the report readable (matplotlib etc.)
-    for sub in ("input", "output", "temp"):
+    for sub in ("input", "output", "temp", "user"):
         (sandbox / sub).mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(REPO_ROOT))
     os.chdir(sandbox)
@@ -88,6 +88,10 @@ def _bootstrap(sandbox: Path) -> None:
         "--input-directory", str(sandbox / "input"),
         "--output-directory", str(sandbox / "output"),
         "--temp-directory", str(sandbox / "temp"),
+        # P3 Craft 2: the experiment bench writes its runs ledger under the
+        # user directory - point that at the sandbox too, so node smoke runs
+        # never pollute the real user/ (ledger, checkpoints, comfyui.db).
+        "--user-directory", str(sandbox / "user"),
     ]
 
 

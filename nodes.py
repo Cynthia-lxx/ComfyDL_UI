@@ -715,6 +715,10 @@ async def init_builtin_extra_nodes():
         # correction, backed by comfy/vram_manager.py. Hard-disabled on
         # CPU-only machines (module raises at import by design).
         "nodes_vram.py",
+        # Experiment bench (P3 Craft 2, M-C; ADR-D10): JSON param_grid sweep
+        # over the shared training core, runs ledger integration, backed by
+        # comfy/training_core.py + comfy/runs_ledger.py.
+        "nodes_experiment.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",

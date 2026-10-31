@@ -62,8 +62,19 @@ from typing_extensions import override
 import comfy.utils
 import folder_paths
 from comfy import loss_preview
+from comfy import training_core as tc
 from comfy import training_metrics as tm
 from comfy import training_protocol as tp
+from comfy.training_core import (
+    DEFAULT_HIDDEN,
+    LOSS_OPTIONS,
+    NAME_PREVIEW,
+    STEPS_WARN_THRESHOLD,
+    _flatten_features,
+    _loss_mode,
+    _parse_sizes,
+    _warn,
+)
 from comfy_api.latest import ComfyExtension, io
 
 CATEGORY = "Network & Layers/Training"
@@ -71,63 +82,12 @@ CATEGORY = "Network & Layers/Training"
 #: How a freshly dropped ``Learnable Parameters`` node initialises its tensor.
 INIT_OPTIONS: tuple[str, ...] = ("normal", "zeros", "ones", "xavier_uniform", "kaiming_uniform")
 
-#: Loss functions the trainer can minimize (shared with the Loss / Evaluate
-#: nodes; see ``comfy.training_metrics``). ``cross_entropy`` and ``perplexity``
-#: expect class targets (indices or one-hot), the others regression targets.
-LOSS_OPTIONS: tuple[str, ...] = tm.LOSS_OPTIONS
-
 #: Default of the ``shape`` widget, and the value a typo falls back to.
 DEFAULT_SHAPE = "2,3"
-
-#: Default of the ``hidden`` widget, and the value a typo falls back to.
-DEFAULT_HIDDEN = "8"
 
 #: Default output folder prefix of ``Save Parameters``; ``Load Parameters``
 #: defaults to the first file that a save with this prefix produces.
 DEFAULT_FILE_PREFIX = "comfydl/parameters"
-
-#: Above this many iterations the trainer warns: the loop is Python, and a user
-#: asking for a million steps has almost certainly typed one zero too many.
-STEPS_WARN_THRESHOLD = 20000
-
-#: Longest run of names printed in one log line before it is cut short.
-NAME_PREVIEW = 8
-
-
-def _warn(message: str) -> None:
-    """Print a short, non-fatal warning (ComfyUI surfaces stdout to the user)."""
-    print(f"[Network & Layers] {message}")
-
-
-def _parse_sizes(text: str) -> tuple[int, ...] | None:
-    """Parse ``"8"`` or ``"16,8"`` into a tuple of positive ints.
-
-    Accepts comma, semicolon, whitespace and full-width separators so that a
-    value typed on a Chinese IME (``"16，8"``) still works.
-
-    Args:
-        text: The raw widget value.
-
-    Returns:
-        The parsed widths with every non-positive entry dropped, or ``None``
-        when the string is empty or holds a non-integer entry; callers fall back
-        to their documented default so that a typo cannot break a workflow.
-    """
-    if text is None:
-        return None
-    normalized = str(text).replace("，", ",").replace("；", ",").replace(";", ",")
-    parts = [part for part in re.split(r"[,\s]+", normalized) if part]
-    if not parts:
-        return None
-    sizes: list[int] = []
-    for part in parts:
-        try:
-            value = int(part)
-        except ValueError:
-            return None
-        if value > 0:
-            sizes.append(value)
-    return tuple(sizes)
 
 
 def _text(value, fallback: str) -> str:
@@ -165,198 +125,6 @@ def _init_tensor(sizes: tuple[int, ...], mode: str) -> torch.Tensor:
     elif mode != "normal":
         _warn(f"init '{mode}' is unknown; using 'normal' instead.")
     return torch.randn(sizes, dtype=torch.float32)
-
-
-def _loss_mode(value: str) -> str:
-    """Return a valid loss name, falling back to ``mse`` with a warning."""
-    text = "" if value is None else str(value).strip().lower()
-    if text in LOSS_OPTIONS:
-        return text
-    _warn(f"loss '{value}' is unknown; using 'mse' (one of {', '.join(LOSS_OPTIONS)}).")
-    return "mse"
-
-
-def _hidden_sizes(value: str) -> tuple[int, ...]:
-    """Read the ``hidden`` widget into the widths of the hidden layers.
-
-    Args:
-        value: The raw widget value; empty means "no hidden layer", i.e. a single
-            dense layer from the features straight to the outputs.
-
-    Returns:
-        The hidden widths, without the input / output layer. Text that cannot be
-        read falls back to the default ``8``, and non-positive entries are
-        dropped, both with a warning, so a typo cannot break a workflow.
-    """
-    text = "" if value is None else str(value).strip()
-    if not text:
-        return ()
-    sizes = _parse_sizes(text)
-    if sizes is None:
-        _warn(
-            f"hidden '{value}' could not be read as layer widths; using "
-            f"'{DEFAULT_HIDDEN}' instead."
-        )
-        sizes = _parse_sizes(DEFAULT_HIDDEN) or (8,)
-    return tuple(sizes)
-
-
-@dataclasses.dataclass(frozen=True)
-class _TrainingData:
-    """The flattened ``(x, y)`` pair a trainer consumes.
-
-    What: turns the two tensors that arrive on the ``x`` / ``y`` slots into the
-          ``(samples, features)`` / ``(samples, targets)`` form the loop needs,
-          and rejects the combinations that cannot be trained at all. The rules
-          are the ones the layer nodes already use - the *last* dimension is the
-          feature dimension - so a trainer can sit behind exactly the same nodes
-          as a ``Linear`` layer.
-    In:   the raw ``x`` / ``y`` tensors plus the selected loss name.
-    Out: ``inputs`` (float32, ``(N, features)``), ``targets`` (float32
-         ``(N, outputs)`` for a regression loss, int64 ``(N,)`` class indices for
-         ``cross_entropy``), the feature / output counts, the sample count and
-         the loss name.
-    """
-
-    inputs: torch.Tensor
-    targets: torch.Tensor
-    features: int
-    outputs: int
-    samples: int
-    loss: str
-
-    @property
-    def classification(self) -> bool:
-        """True when the targets are class indices rather than values."""
-        return self.loss == "cross_entropy"
-
-    @classmethod
-    def from_inputs(cls, x: torch.Tensor, y: torch.Tensor, loss: str) -> "_TrainingData":
-        """Flatten and validate ``x`` / ``y``; see the class docstring.
-
-        Raises:
-            TypeError: when a slot did not receive a tensor.
-            ValueError: when the pair cannot be trained - empty tensors, a
-                different number of samples in ``x`` and ``y``, or class targets
-                that are negative or not integral.
-        """
-        if not isinstance(x, torch.Tensor) or not isinstance(y, torch.Tensor):
-            raise TypeError(
-                "[Network & Layers] Training Loop needs a tensor on both the 'x' "
-                f"and the 'y' slot; got {type(x).__name__} and {type(y).__name__}."
-            )
-        mode = _loss_mode(loss)
-        inputs = _flatten_features(x)
-        samples, features = (int(inputs.shape[0]), int(inputs.shape[1]))
-        if samples == 0 or features == 0:
-            raise ValueError(
-                f"[Network & Layers] Training Loop got an empty input of shape "
-                f"{tuple(x.shape)}; 'x' must hold at least one sample and one feature."
-            )
-        if mode == "cross_entropy":
-            targets, outputs = _class_targets(y, samples)
-        else:
-            targets = _flatten_features(y).to(dtype=torch.float32)
-            if int(targets.shape[0]) != samples:
-                raise ValueError(
-                    f"[Network & Layers] Training Loop needs as many targets as "
-                    f"inputs, but 'x' holds {samples} sample(s) and 'y' holds "
-                    f"{int(targets.shape[0])}."
-                )
-            outputs = int(targets.shape[1])
-        inputs = inputs.to(dtype=torch.float32)
-        return cls(
-            inputs=inputs,
-            targets=targets.to(device=inputs.device),
-            features=features,
-            outputs=outputs,
-            samples=samples,
-            loss=mode,
-        )
-
-
-def _flatten_features(tensor: torch.Tensor) -> torch.Tensor:
-    """Flatten every dimension but the last one: ``(..., features)`` -> ``(N, features)``.
-
-    A 1-D tensor is read as a single feature column, matching the way
-    ``torch.nn.Linear`` treats a bare vector.
-    """
-    if tensor.dim() == 0:
-        raise ValueError(
-            "[Network & Layers] Training Loop got a scalar; a sample needs at least "
-            "one feature dimension."
-        )
-    if tensor.dim() == 1:
-        return tensor.reshape(-1, 1)
-    return tensor.reshape(-1, tensor.shape[-1])
-
-
-def _class_targets(y: torch.Tensor, samples: int) -> tuple[torch.Tensor, int]:
-    """Read ``y`` as classification targets and return ``(indices, classes)``.
-
-    Accepts the two spellings PyTorch's ``cross_entropy`` understands: class
-    indices, or a 2-D one-hot / probability tensor whose last dimension is the
-    class count. A scalar target is rejected - it cannot be matched with ``x``.
-    """
-    if y.dim() >= 2 and y.shape[-1] > 1 and y.is_floating_point():
-        probabilities = y.reshape(-1, y.shape[-1])
-        if int(probabilities.shape[0]) != samples:
-            raise ValueError(
-                f"[Network & Layers] Training Loop got {samples} input sample(s) but "
-                f"{int(probabilities.shape[0])} one-hot target(s)."
-            )
-        return probabilities.argmax(dim=-1).to(dtype=torch.long), int(probabilities.shape[1])
-    indices = y.reshape(-1)
-    if int(indices.shape[0]) != samples:
-        raise ValueError(
-            f"[Network & Layers] Training Loop got {samples} input sample(s) but "
-            f"{int(indices.shape[0])} class target(s)."
-        )
-    if indices.is_floating_point():
-        rounded = indices.round()
-        if not bool(torch.equal(indices.detach().cpu(), rounded.detach().cpu())):
-            raise ValueError(
-                "[Network & Layers] with loss='cross_entropy' the targets on 'y' must "
-                "be class indices (integers), or a 2-D one-hot / probability tensor; "
-                "float targets are only accepted when they are integral."
-            )
-        indices = rounded
-    indices = indices.to(dtype=torch.long)
-    smallest = int(indices.min())
-    if smallest < 0:
-        raise ValueError(
-            f"[Network & Layers] with loss='cross_entropy' class indices must be >= 0, "
-            f"but 'y' holds {smallest}."
-        )
-    return indices, int(indices.max()) + 1
-
-
-def _loss_value(mode: str, prediction: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    """Apply the selected loss function to a batch.
-
-    Delegates to :func:`comfy.training_metrics.compute_loss`, the single
-    implementation shared with the ``Loss`` and ``Evaluate`` nodes, so the
-    trainer's numbers can never drift from the standalone node's.
-    """
-    return tm.compute_loss(mode, prediction, targets)
-
-
-def _summarize_warm_start(
-    loaded: list[str], missing: list[str], skipped: list[str]
-) -> str:
-    """One-line report of a warm start, so nothing is dropped silently."""
-    parts = [f"warm start: {len(loaded)} parameter(s) loaded"]
-    if missing:
-        parts.append(
-            f"left at their fresh values: "
-            f"{tp.parameter_names({name: None for name in missing}, NAME_PREVIEW)}"
-        )
-    if skipped:
-        shown = "; ".join(skipped[:NAME_PREVIEW])
-        if len(skipped) > NAME_PREVIEW:
-            shown += f"; ... (+{len(skipped) - NAME_PREVIEW} more)"
-        parts.append(f"ignored: {shown}")
-    return " | ".join(parts)
 
 
 def _resolve_parameter_path(path_text: str) -> str:
@@ -998,78 +766,19 @@ class TrainingLoop(io.ComfyNode):
         early_stop_patience: int = 0,
         early_stop_min_delta: float = 1e-4,
     ) -> io.NodeOutput:
-        data = _TrainingData.from_inputs(x, y, loss)
-        widths = (data.features,) + _hidden_sizes(hidden) + (data.outputs,)
-
-        if not isinstance(optimizer, tp.OptimizerConfig):
-            _warn(
-                "the 'optimizer' slot did not receive an Optimizer node; using the "
-                "default AdamW settings."
-            )
-            optimizer = tp.optimizer_config()
-        if scheduler is not None and not isinstance(scheduler, tp.SchedulerConfig):
-            _warn(
-                "the 'scheduler' slot did not receive an LR Scheduler node; "
-                "keeping the learning rate constant."
-            )
-            scheduler = None
-
         iterations = max(1, int(steps))
         if iterations > STEPS_WARN_THRESHOLD:
             _warn(
                 f"{iterations} steps were requested; the loop is plain Python and "
                 "shares the machine with the rest of the graph."
             )
-        per_step = int(batch_size)
-        if per_step <= 0 or per_step >= data.samples:
-            if per_step > data.samples:
-                _warn(
-                    f"batch_size {per_step} is larger than the {data.samples} "
-                    "sample(s); using the whole dataset every step."
-                )
-            per_step = 0
+        optimizer, scheduler = tc.resolve_optimizer_scheduler(optimizer, scheduler)
 
-        device = data.inputs.device
-        shuffler = torch.Generator(device="cpu")
-        shuffler.manual_seed(int(seed))
-        notes: list[str] = []
-        history: list[torch.Tensor] = []
+        from comfy.train_checkpoint import (
+            current_node_id as ckpt_node_id, run_key as ckpt_run_key)
 
-        # Everything below runs outside ComfyUI's inference_mode: an inference
-        # tensor cannot take part in a backward pass, and the parameters built
-        # here have to stay ordinary (grad carrying) tensors.
-        with torch.inference_mode(False):
-            model = tp.build_mlp(widths, activation, seed=seed, device=device)
-            if params is not None:
-                loaded, missing, skipped = tp.load_into_module(
-                    model, tp.as_parameter_dict(params)
-                )
-                notes.append(_summarize_warm_start(loaded, missing, skipped))
-            trainer = tp.build_optimizer(optimizer, model.parameters())
-            # Optional LR schedule, built against the real step count so a
-            # follow-the-trainer horizon (t_max 0 / OneCycleLR) is exact.
-            lr_schedule = None
-            if scheduler is not None:
-                lr_schedule, schedule_needs_metric = tp.build_scheduler(
-                    scheduler, trainer, iterations
-                )
-            # Optional early stopping on the smoothed loss; the tracker owns no
-            # tensors, the snapshot / rollback below do.
-            stopper = tp.EarlyStopTracker(early_stop_patience, early_stop_min_delta)
-            best_state: dict[str, torch.Tensor] | None = None
-            best_length = 0
-            stopped_at: int | None = None
-
-            # Breakpoint continuation (crash site M3): a resumed run (same
-            # prompt_id) restores the interrupted training state; a fresh Run
-            # has a new prompt_id, the stale checkpoint is discarded.
-            from comfy.model_management import InterruptProcessingException
-            from comfy.train_checkpoint import (
-                current_node_id as ckpt_node_id, discard as ckpt_discard,
-                load as ckpt_load, run_key as ckpt_run_key,
-                save as ckpt_save)
-
-            ckpt_run = ckpt_run_key({
+        def _ckpt_key(data):
+            return ckpt_run_key({
                 "node": "TrainingLoop",
                 "node_id": ckpt_node_id(),
                 "widgets": [hidden, activation, loss, steps, batch_size,
@@ -1078,113 +787,33 @@ class TrainingLoop(io.ComfyNode):
                 "scheduler": scheduler,
                 "x": data.inputs, "y": data.targets,
             })
-            start_step = 0
-            saved = ckpt_load(ckpt_run)
-            if saved is not None:
-                try:
-                    model.load_state_dict(saved["model"])
-                    trainer.load_state_dict(saved["optimizer"])
-                    if lr_schedule is not None and saved.get("scheduler"):
-                        lr_schedule.load_state_dict(saved["scheduler"])
-                    history = list(saved["history"])
-                    stopper.best = saved["stopper_best"]
-                    stopper.best_step = int(saved["stopper_best_step"])
-                    stopper._window = list(saved["stopper_window"])
-                    stopper._since_best = int(saved["stopper_since_best"])
-                    best_state = saved["best_state"]
-                    best_length = int(saved["best_length"])
-                    stopped_at = saved["stopped_at"]
-                    shuffler.set_state(saved["shuffler"])
-                    torch.set_rng_state(saved["torch_rng"])
-                    start_step = int(saved["step"]) + 1
-                except Exception:  # corrupt payload: train fresh
-                    start_step = 0
-            # Live progress: one update per optimizer step.  The ProgressBar hook
-            # binds itself to the executing node (see comfy_execution.utils) and
-            # doubles as the interrupt check, so long runs stay cancellable.
-            # The third update_absolute argument attaches the live loss-curve
-            # preview (rate-limited inside LossCurvePreviewer); a step without
-            # a frame still reports through update(1) below.
-            pbar = comfy.utils.ProgressBar(iterations)
-            curve_previewer = loss_preview.LossCurvePreviewer(title="loss")
-            # The interrupt exception is raised from inside the progress
-            # update (the host's hook) - caught so the exact breakpoint state
-            # is saved before it propagates (crash site M3).
-            step = start_step - 1
-            try:
-                for step in range(start_step, iterations):
-                    if per_step:
-                        order = torch.randperm(data.samples, generator=shuffler)[:per_step].to(device)
-                        inputs = data.inputs.index_select(0, order)
-                        targets = data.targets.index_select(0, order)
-                    else:
-                        inputs, targets = data.inputs, data.targets
-                    step_loss = _loss_value(data.loss, model(inputs), targets)
-                    trainer.zero_grad(set_to_none=True)
-                    step_loss.backward()
-                    if optimizer.grad_clip_norm > 0.0 or optimizer.grad_clip_value > 0.0:
-                        tp.clip_gradients(optimizer, model.parameters())
-                    trainer.step()
-                    if lr_schedule is not None:
-                        if schedule_needs_metric:
-                            lr_schedule.step(float(step_loss.detach()))
-                        else:
-                            lr_schedule.step()
-                    # Detached scalars, stacked into one tensor at the end: the loss
-                    # history must not keep the graph (or the dataset) alive.
-                    history.append(step_loss.detach().reshape(()))
-                    if stopper.update(step, float(step_loss.detach())):
-                        stopped_at = step
-                        break
-                    if stopper.improved:
-                        best_state = tp.snapshot_state(model)
-                        best_length = len(history)
-                    frame = curve_previewer.record(
-                        float(step_loss.detach()), force=(step + 1 == iterations)
-                    )
-                    if frame is not None:
-                        pbar.update_absolute(step + 1, iterations, frame)
-                    else:
-                        pbar.update(1)
-            except InterruptProcessingException:
-                ckpt_save(ckpt_run, {
-                    "step": step,
-                    "model": model.state_dict(),
-                    "optimizer": trainer.state_dict(),
-                    "scheduler": (lr_schedule.state_dict()
-                                  if lr_schedule is not None else None),
-                    "history": history,
-                    "stopper_best": stopper.best,
-                    "stopper_best_step": stopper.best_step,
-                    "stopper_window": list(stopper._window),
-                    "stopper_since_best": stopper._since_best,
-                    "best_state": best_state,
-                    "best_length": best_length,
-                    "stopped_at": stopped_at,
-                    "shuffler": shuffler.get_state(),
-                    "torch_rng": torch.get_rng_state(),
-                })
-                raise
-            if stopped_at is not None and best_state is not None:
-                # Roll back to the best point and cut the history there, so the
-                # outputs are what "the best model of this run" means.
-                tp.restore_state(model, best_state)
-                del history[best_length:]
-                _warn(
-                    f"Training Loop: early stop at step {stopped_at + 1} - "
-                    f"{stopper.describe_stop()}"
-                )
-            trainer.zero_grad(set_to_none=True)
-            for parameter in model.parameters():
-                parameter.grad = None
-            # The run finished (naturally or via early stop) - no continuation
-            # is wanted anymore, so the breakpoint file goes away (M3).
-            ckpt_discard(ckpt_run)
-            curve = torch.stack(history)
-            with torch.no_grad():
-                predictions = model(data.inputs).detach()
 
-        summary = ", ".join(str(width) for width in widths)
+        # Live progress: one update per optimizer step.  The ProgressBar hook
+        # binds itself to the executing node (see comfy_execution.utils) and
+        # doubles as the interrupt check, so long runs stay cancellable.
+        # The third update_absolute argument attaches the live loss-curve
+        # preview (rate-limited inside LossCurvePreviewer); a step without
+        # a frame still reports through update(1) below.
+        pbar = comfy.utils.ProgressBar(iterations)
+        curve_previewer = loss_preview.LossCurvePreviewer(title="loss")
+
+        def _progress(step, value):
+            frame = curve_previewer.record(value, force=(step + 1 == iterations))
+            if frame is not None:
+                pbar.update_absolute(step + 1, iterations, frame)
+            else:
+                pbar.update(1)
+
+        result = tc.TrainingSession(
+            x=x, y=y, loss=loss, hidden=hidden, activation=activation,
+            optimizer=optimizer, scheduler=scheduler, params=params,
+            steps=steps, batch_size=batch_size, seed=seed,
+            early_stop_patience=early_stop_patience,
+            early_stop_min_delta=early_stop_min_delta,
+            ckpt_key_fn=_ckpt_key, progress=_progress,
+        ).run()
+
+        notes = list(result.notes)
         if scheduler is not None:
             notes.append(f"lr schedule: {scheduler.describe()}")
         if early_stop_patience > 0:
@@ -1192,17 +821,21 @@ class TrainingLoop(io.ComfyNode):
                 f"early stop: patience {early_stop_patience}, "
                 f"min_delta {early_stop_min_delta:g}"
             )
-        if stopped_at is not None:
-            notes.append(f"stopped at step {stopped_at + 1} of {iterations}")
+        if result.stopped_at is not None:
+            notes.append(f"stopped at step {result.stopped_at + 1} of {result.iterations}")
+        data = result.data
+        summary = ", ".join(str(width) for width in result.widths)
         print(
-            f"[Network & Layers] Training Loop: {model.depth} dense layer(s) [{summary}], "
+            f"[Network & Layers] Training Loop: {result.model.depth} dense layer(s) [{summary}], "
             f"{data.samples} sample(s) x {data.features} feature(s) -> {data.outputs} "
             f"output(s), loss {data.loss}, {iterations} step(s), "
-            f"{per_step or data.samples} sample(s) per step, {optimizer.describe()}, "
-            f"loss {float(history[0]):.6g} -> {float(curve[-1]):.6g}"
+            f"{result.per_step or data.samples} sample(s) per step, {optimizer.describe()}, "
+            f"loss {float(result.history[0]):.6g} -> {float(result.history[-1]):.6g}"
             + (f" | {' | '.join(notes)}" if notes else "")
         )
-        return io.NodeOutput(tp.module_parameters(model), curve[-1], curve, predictions)
+        return io.NodeOutput(
+            tp.module_parameters(result.model), result.history[-1], result.history,
+            result.predictions)
 
 
 class TrainingSaveParameters(io.ComfyNode):

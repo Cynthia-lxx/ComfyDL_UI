@@ -663,6 +663,56 @@ def _estimate_training_loop(ctx: EstimationCtx) -> NodeEstimate:
     return estimate
 
 
+# Grid Search Train (comfy_extras/nodes_experiment.py)
+# --------------------------------------------------------------------------- #
+def _grid_combo_count(grid_text: str) -> tuple[int, bool]:
+    """``(combinations, exact)`` for a param_grid JSON (pure stdlib parse)."""
+    import json as _json
+
+    try:
+        grid = _json.loads(grid_text)
+    except ValueError:
+        return 2, False  # unreadable grid: assume the default's 2x2, approx
+    if not isinstance(grid, dict) or not grid:
+        return 2, False
+    count = 1
+    for values in grid.values():
+        if not isinstance(values, list) or not values:
+            return 2, False
+        count *= len(values)
+    return max(1, count), True
+
+
+@register("CdlGridSearchTrain")
+def _estimate_grid_search(ctx: EstimationCtx) -> NodeEstimate:
+    """N combinations x one TrainingLoop session each (same core, N times).
+
+    The per-combination estimate reuses :func:`_estimate_training_loop`
+    wholesale; grid overrides of ``steps``/``hidden`` are ignored (the
+    combination set is combinatorial, the estimator keeps the base widget
+    values) - reflected in ``confidence="approx"`` when a grid exists.
+    """
+    inner = _estimate_training_loop(ctx)
+    combos, exact = _grid_combo_count(
+        ctx.str_widget("param_grid", '{"hidden": ["8", "16,8"], "lr": [0.01, 0.003]}'))
+    inner.items = [
+        dataclasses.replace(
+            item, bytes=item.bytes * combos,
+            single_bytes=(item.single_bytes * combos
+                          if item.single_bytes is not None else None))
+        for item in inner.items
+    ]
+    inner.flops_items = [
+        dataclasses.replace(item, flops=item.flops * combos)
+        for item in inner.flops_items
+    ]
+    if inner.basis is not None:
+        inner.basis["params"]["combos"] = combos
+    if not exact:
+        inner.confidence = "approx"
+    return inner
+
+
 # --------------------------------------------------------------------------- #
 # Shared helpers for the M3 family estimators.
 # --------------------------------------------------------------------------- #
