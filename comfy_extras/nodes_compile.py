@@ -71,8 +71,11 @@ class CdlCompileModel(io.ComfyNode):
           across resolutions; sometimes slower kernels).
     Out:  MODEL - the clone with the compiled forward attached.
     Caveats: compiled regions are opaque to the profiling run-meter (they
-          bypass TorchDispatchMode) - node-level timing still applies.  If
-          compilation fails, the error surfaces on the node like any other;
+          bypass TorchDispatchMode) - node-level timing still applies.  The
+          ``inductor`` backend needs Triton, which stock Windows PyTorch does
+          not ship: there the node raises ``TritonMissing`` on first run -
+          switch to ``cudagraphs``/``aot_eager`` (or install triton-windows).
+          If compilation fails, the error surfaces on the node like any other;
           disable the node (or the ``comfydl.compile`` switch) to bypass.
     """
 
@@ -90,7 +93,9 @@ class CdlCompileModel(io.ComfyNode):
                 io.Model.Input("model", tooltip="MODEL whose diffusion_model "
                                "forward gets compiled."),
                 io.Combo.Input("backend", options=_BACKENDS, default="inductor",
-                               tooltip="torch.compile backend."),
+                               tooltip="torch.compile backend. inductor needs "
+                                       "Triton (absent on stock Windows - use "
+                                       "cudagraphs/aot_eager there)."),
                 io.Combo.Input("mode", options=list(_MODES), default="default",
                                tooltip="Compilation mode (default = no mode)."),
                 io.Boolean.Input("fullgraph", default=False,
