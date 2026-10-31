@@ -38,6 +38,7 @@ from typing_extensions import override
 import torch
 
 import comfy.utils
+from comfy import loss_preview
 from comfy import runs_ledger as rl
 from comfy import training_core as tc
 from comfy import training_protocol as tp
@@ -91,6 +92,13 @@ def expand_param_grid(param_grid: str) -> list[dict]:
         dict(zip(keys, values))
         for values in itertools.product(*(grid[key] for key in keys))
     ]
+
+
+def _combo_label(index: int, combo: dict) -> str:
+    """Compact legend label for one combination, e.g. ``#1 hidden=16,8, lr=0.01``."""
+    params = ", ".join(f"{key}={combo[key]}" for key in sorted(combo))
+    label = f"#{index} {params}"
+    return label if len(label) <= 48 else label[:45] + "..."
 
 
 def _effective_base_settings(
@@ -302,6 +310,7 @@ class CdlGridSearchTrain(io.ComfyNode):
 
         experiment = str(experiment_name).strip() or "gridsearch"
         rows: list[dict] = []          # in-memory scan table for the summary
+        series: list[dict] = []        # live comparison-view series (Craft 3)
         best_score: float | None = None
         best_index: int | None = None
         best_result: tc.SessionResult | None = None
@@ -390,6 +399,24 @@ class CdlGridSearchTrain(io.ComfyNode):
                 best_result = result
                 best_combo = combo
             scan_pbar.update(1)
+            # Live comparison view (Craft 3): after every combination, push
+            # the full series list so far - the App Panel overlays one curve
+            # per combination and highlights the running best.
+            series.append({
+                "label": _combo_label(index, combo),
+                "points": [[i, float(v)]
+                           for i, v in enumerate(result.history.tolist())],
+                "best": False,
+            })
+            for si, entry in enumerate(series):
+                entry["best"] = (si == best_index)
+            loss_preview.push_runs_snapshot(
+                title=experiment,
+                series=series,
+                direction=direction,
+                best_index=best_index,
+                finished=(index == len(combos) - 1),
+            )
 
         if best_index is not None:
             rl.mark_best(rows[best_index]["run_id"])

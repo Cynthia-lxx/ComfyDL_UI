@@ -98,11 +98,13 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
   display: grid;
   /* col 2 is the draggable 9px gutter between the preview and outputs zones */
   grid-template-columns: var(--cdl-prev-w, 55%) 9px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 0.85fr) auto;
+  /* P3 Craft 3: runs section takes a bottom-left tile under progress */
+  grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 0.6fr) minmax(0, 0.55fr) auto;
   grid-template-areas:
     "head head head"
     "prev sp  out"
     "prog sp  out"
+    "runs sp  out"
     "err  err err";
   gap: 12px; /* adjacent borders never touch */
   padding-top: 12px; /* gap below the official header border */
@@ -116,6 +118,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
 }
 #cdl-app-extras .cdlapp-sec-outputs { grid-area: out; }
 #cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
+#cdl-app-extras .cdlapp-sec-runs { grid-area: runs; }
 #cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
 #cdl-app-extras .cdlapp-section {
   background: transparent;
@@ -166,12 +169,13 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
   }
   #cdl-app-extras {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.6fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.6fr) minmax(0, 0.6fr) auto;
     grid-template-areas:
       "head"
       "prev"
       "out"
       "prog"
+      "runs"
       "err";
   }
 }
@@ -714,6 +718,116 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
 }
 body.cdlapp-motion-off .cdlapp-chart-pulse {
   animation: none !important;
+}
+
+/* ---- runs comparison chart (P3 Craft 3) --------------------------------
+   One polyline per grid combination; colors cycle through six vars via the
+   data-i attribute (kept in sync between the SVG lines and legend chips in
+   buildRunsChart). The winner gets a thicker stroke; hovering a legend row
+   dims every other curve. Reduced-motion exempt: the entrance pulse is the
+   only animation here, and the cdlapp-chart-pulse gate already covers it. */
+.cdlapp-runs-line {
+  fill: none;
+  stroke-width: 1.4;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+.cdlapp-runs-line[data-i="0"] { stroke: #4f9cf9; }
+.cdlapp-runs-line[data-i="1"] { stroke: #2fd08c; }
+.cdlapp-runs-line[data-i="2"] { stroke: #f7a94b; }
+.cdlapp-runs-line[data-i="3"] { stroke: #e05f7e; }
+.cdlapp-runs-line[data-i="4"] { stroke: #9d7bf5; }
+.cdlapp-runs-line[data-i="5"] { stroke: #3fc9d8; }
+.cdlapp-runs-line.cdlapp-runs-best {
+  stroke-width: 2.6;
+  opacity: 1;
+}
+.cdlapp-runs-line.cdlapp-runs-dim { opacity: 0.12; }
+.cdlapp-runs-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px 2px;
+  max-height: 88px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.cdlapp-runs-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted-fg, #aaaaaa);
+  cursor: default;
+}
+.cdlapp-runs-legend-row.cdlapp-runs-best-row {
+  color: var(--fg-color, #ffffff);
+  font-weight: 600;
+}
+.cdlapp-runs-chip {
+  flex: none;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.cdlapp-runs-chip[data-i="0"] { background: #4f9cf9; }
+.cdlapp-runs-chip[data-i="1"] { background: #2fd08c; }
+.cdlapp-runs-chip[data-i="2"] { background: #f7a94b; }
+.cdlapp-runs-chip[data-i="3"] { background: #e05f7e; }
+.cdlapp-runs-chip[data-i="4"] { background: #9d7bf5; }
+.cdlapp-runs-chip[data-i="5"] { background: #3fc9d8; }
+.cdlapp-runs-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+.cdlapp-runs-final {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.cdlapp-sec-runs .cdlapp-runs-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px;
+}
+.cdlapp-runs-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color, #333333);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--fg-color, #ffffff);
+  font-size: 11px;
+}
+.cdlapp-runs-item:hover {
+  border-color: rgba(26, 188, 156, 0.55);
+  background: rgba(26, 188, 156, 0.08);
+}
+.cdlapp-runs-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdlapp-runs-info {
+  color: var(--muted-fg, #aaaaaa);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdlapp-sec-runs .cdlapp-runs-chart-host .cdlapp-chart-card {
+  margin-bottom: 6px;
 }
 .cdlapp-chart-head {
   display: flex;

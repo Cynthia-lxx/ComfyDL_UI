@@ -163,6 +163,11 @@
       chart_idle: "Live vector charts appear here while a training / generation node streams data.",
       chart_best: "best",
       chart_step: "step",
+      runs_title: "Experiment runs",
+      runs_idle: "Run a Grid Search Train scan - the combination curves overlay here while it runs.",
+      runs_empty: "No runs recorded yet - run a scan first.",
+      runs_best_fmt: "best: {label} ({value})",
+      runs_runs_fmt: "{count} runs",
       prev_open: "Open full size",
       splitter_hint: "Drag to resize the zones",
       locate_inputs: "Show the input widgets' nodes on the graph",
@@ -202,6 +207,11 @@
       chart_idle: "训练 / 生成节点上报实时数据时，矢量图表会出现在这里。",
       chart_best: "best",
       chart_step: "step",
+      runs_title: "实验记录",
+      runs_idle: "运行一次 Grid Search Train 扫描——各组合的曲线会在运行中叠加到这里。",
+      runs_empty: "还没有运行记录——先跑一次扫描。",
+      runs_best_fmt: "最优：{label}（{value}）",
+      runs_runs_fmt: "{count} 条记录",
       prev_open: "查看原图",
       splitter_hint: "拖动调整分区大小",
       locate_inputs: "在节点图中定位输入所在的节点",
@@ -265,6 +275,7 @@
     outputs: [], // {kind:'image'|'text', name, url?, text?}
     artifacts: [], // {name, path, size, mtime}
     charts: new Map(), // node_id -> live cdl_preview_data payload (batch 18)
+    runsIndex: [], // runs ledger csv rows (P3 Craft 3, /comfydl/runs)
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -819,6 +830,16 @@
     secPrev.appendChild(el("div", "cdlapp-preview-grid"));
     secPrev.appendChild(el("div", "cdlapp-empty", t("prev_empty")));
     extras.appendChild(secPrev);
+
+    // experiment runs section (P3 Craft 3): the ledger history list - pick
+    // an experiment to overlay its scans' curves; live scans ride the
+    // previews chart host above via the "runs" preview type
+    const secRuns = el("div", "cdlapp-section cdlapp-sec-runs");
+    secRuns.appendChild(el("div", "cdlapp-sec-title", t("runs_title")));
+    secRuns.appendChild(el("div", "cdlapp-runs-chart-host"));
+    secRuns.appendChild(el("div", "cdlapp-runs-list"));
+    secRuns.appendChild(el("div", "cdlapp-empty", t("runs_empty")));
+    extras.appendChild(secRuns);
 
     // progress section
     extras.appendChild(buildProgressSection());
@@ -1587,6 +1608,7 @@
     endRun();
     renderProgress();
     refreshArtifacts();
+    refreshRuns();
     // "prompt finished" moment glow (batch 20, user request)
     flashPanel("cdlapp-flash-done");
   }
@@ -1928,6 +1950,178 @@
     return card;
   }
 
+  // Runs comparison chart (P3 Craft 3): one polyline per grid combination,
+  // the winner thicker + a horizontal best marker, a legend carrying every
+  // combination's final value.  Same card discipline as buildLossChart:
+  // the skeleton is created ONCE and pushes update polylines in place
+  // (per-series animatePoints tween); the polyline layer only rebuilds when
+  // the series count changes (combinations arrive one by one mid-scan).
+  // No crosshair - a multi-series hover readout gets noisy fast; hovering a
+  // legend row dims the other curves instead.  Series colors cycle through
+  // six CSS vars (data-i), consistent between polylines and legend chips.
+  function buildRunsChart(d) {
+    const card = el("div", "cdlapp-chart-card");
+    const head = el("div", "cdlapp-chart-head");
+    const title = el("span", "cdlapp-chart-title");
+    const meta = el("span", "cdlapp-chart-meta");
+    head.appendChild(title);
+    head.appendChild(meta);
+    card.appendChild(head);
+
+    const wrap = el("div", "cdlapp-chart-wrap");
+    const svg = svgEl("svg", "cdlapp-chart-svg");
+    svg.setAttribute("viewBox", "0 0 240 110");
+    svg.setAttribute("preserveAspectRatio", "none");
+    const W = 240, H = 110, L = 34, R = 8, T = 12, B = 16;
+    const iw = W - L - R, ih = H - T - B;
+    let series = [];
+    let bestIndex = -1;
+
+    const gGrid = svgEl("g", "cdlapp-chart-gridlayer");
+    const lineLayer = svgEl("g", "cdlapp-runs-lines");
+    const bestLine = svgEl("line", "cdlapp-chart-best");
+    bestLine.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(gGrid);
+    svg.appendChild(lineLayer);
+    svg.appendChild(bestLine);
+
+    const overlay = el("div", "cdlapp-chart-overlay");
+    const yLabels = [0, 1, 2].map(() => {
+      const s = el("span", "cdlapp-chart-ylab");
+      overlay.appendChild(s);
+      return s;
+    });
+    const xlab0 = el("span", "cdlapp-chart-xlab cdlapp-chart-xlab0");
+    const xlab1 = el("span", "cdlapp-chart-xlab cdlapp-chart-xlab1");
+    overlay.appendChild(xlab0);
+    overlay.appendChild(xlab1);
+    wrap.appendChild(svg);
+    wrap.appendChild(overlay);
+
+    // legend: chip + label + final value per series; hover a row to isolate
+    // its curve (dim the others) - the cheap multi-series hover alternative
+    const legend = el("div", "cdlapp-runs-legend");
+    function bindIsolate(row, i) {
+      row.addEventListener("mouseenter", () => {
+        Array.prototype.forEach.call(lineLayer.children, (pl) => {
+          pl.classList.toggle("cdlapp-runs-dim", pl.dataset.i !== String(i));
+        });
+      });
+      row.addEventListener("mouseleave", () => {
+        Array.prototype.forEach.call(lineLayer.children, (pl) => {
+          pl.classList.remove("cdlapp-runs-dim");
+        });
+      });
+    }
+
+    function update(d2) {
+      title.textContent = d2.title || "runs";
+      series = (d2.series || []).filter(
+        (s) => s && Array.isArray(s.points) && s.points.length);
+      bestIndex = typeof d2.best_index === "number" && d2.best_index >= 0
+        ? d2.best_index
+        : series.findIndex((s) => s.best);
+      // shared domain across every series (one scan, one scale)
+      let lo = Infinity, hi = -Infinity, maxSteps = 1;
+      series.forEach((s) => {
+        s.points.forEach((p) => {
+          if (!p || p.length < 2) return;
+          const v = Number(p[1]);
+          if (!isFinite(v)) return;
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+          const x = Number(p[0]);
+          if (x > maxSteps) maxSteps = x;
+        });
+      });
+      gGrid.textContent = "";
+      if (!series.length) {
+        bestLine.style.display = "none";
+        yLabels.forEach((s) => { s.textContent = ""; });
+        xlab0.textContent = "";
+        xlab1.textContent = "";
+        legend.textContent = "";
+        lineLayer.textContent = "";
+        return;
+      }
+      if (!isFinite(lo)) { lo = 0; hi = 1; }
+      if (hi <= lo) hi = lo + 1;
+      const sx = (x) => L + iw * Number(x) / Math.max(1, maxSteps);
+      const sy = (y) => T + ih * (1 - (Number(y) - lo) / (hi - lo));
+      for (let f = 0; f <= 2; f++) {
+        const y = T + ih * f / 2;
+        const gl = svgEl("line", "cdlapp-chart-grid");
+        gl.setAttribute("vector-effect", "non-scaling-stroke");
+        gl.setAttribute("x1", L); gl.setAttribute("x2", W - R);
+        gl.setAttribute("y1", y); gl.setAttribute("y2", y);
+        gGrid.appendChild(gl);
+        yLabels[f].textContent = fmtNum(hi - (hi - lo) * f / 2);
+        yLabels[f].style.top = (y / H * 100) + "%";
+      }
+      xlab0.textContent = "0";
+      xlab1.textContent = String(maxSteps);
+      // polyline layer: append/remove to match the series count, then tween
+      while (lineLayer.children.length > series.length) {
+        lineLayer.lastChild.remove();
+      }
+      series.forEach((s, i) => {
+        let pl = lineLayer.children[i];
+        if (!pl) {
+          pl = svgEl("polyline", "cdlapp-runs-line");
+          pl.setAttribute("vector-effect", "non-scaling-stroke");
+          lineLayer.appendChild(pl);
+        }
+        pl.dataset.i = String(i % 6);
+        pl.classList.toggle("cdlapp-runs-best", i === bestIndex);
+        animatePoints(pl, s.points.filter((p) => p && p.length >= 2)
+          .map((p) => sx(p[0]).toFixed(1) + "," + sy(p[1]).toFixed(1))
+          .join(" "));
+      });
+      // horizontal best marker at the winner's final value
+      const bestSeries = bestIndex >= 0 ? series[bestIndex] : null;
+      if (bestSeries) {
+        const last = bestSeries.points[bestSeries.points.length - 1];
+        const by = sy(last[1]);
+        bestLine.style.display = "";
+        bestLine.setAttribute("x1", L); bestLine.setAttribute("x2", W - R);
+        bestLine.setAttribute("y1", by); bestLine.setAttribute("y2", by);
+      } else {
+        bestLine.style.display = "none";
+      }
+      meta.textContent = series.length
+        + (bestSeries
+          ? " · " + t("runs_best_fmt")
+            .replace("{label}", bestSeries.label)
+            .replace("{value}",
+              fmtNum(typeof bestSeries.final === "number"
+                ? bestSeries.final : Number(bestSeries.points[
+                  bestSeries.points.length - 1][1])))
+          : "")
+        + (d2.finished ? " · ✓" : "");
+      // legend rebuild (small n: combinations, not steps)
+      legend.textContent = "";
+      series.forEach((s, i) => {
+        const row = el("div", "cdlapp-runs-legend-row"
+          + (i === bestIndex ? " cdlapp-runs-best-row" : ""));
+        row.dataset.i = String(i % 6);
+        const chip = el("span", "cdlapp-runs-chip");
+        chip.dataset.i = String(i % 6);
+        row.appendChild(chip);
+        row.appendChild(el("span", "cdlapp-runs-label", s.label));
+        row.appendChild(el("span", "cdlapp-runs-final",
+          typeof s.final === "number" ? fmtNum(s.final)
+            : fmtNum(Number(s.points[s.points.length - 1][1]))));
+        bindIsolate(row, i);
+        legend.appendChild(row);
+      });
+    }
+    card._update = update;
+    update(d);
+    card.appendChild(wrap);
+    card.appendChild(legend);
+    return card;
+  }
+
   // One-shot soft glow on data arrival (batch 19, user request): marks the
   // frame as fresh without any hard rebuild.  Gated by the motion switch
   // and prefers-reduced-motion, ~0 cost (one CSS animation).
@@ -1974,7 +2168,8 @@
       alive.add(key);
       let card = existing.get(key);
       if (!card) {
-        card = d.type === "text" ? buildTextCard(d) : buildLossChart(d);
+        card = d.type === "runs" ? buildRunsChart(d)
+          : d.type === "text" ? buildTextCard(d) : buildLossChart(d);
         card.dataset.chartKey = key;
         host.appendChild(card);
       } else {
@@ -2021,6 +2216,87 @@
       state.artifacts = Array.isArray(data.artifacts) ? data.artifacts : [];
       renderOutputs();
     } catch (e) { /* artifacts route optional (P2) */ }
+  }
+
+  // Runs ledger history (P3 Craft 3): the /comfydl/runs index grouped by
+  // experiment; clicking an experiment overlays its runs' per-step histories
+  // (detail JSONs) as a runs comparison chart inside the runs section.
+  async function refreshRuns() {
+    try {
+      const api = getApi();
+      const resp = api && api.fetchApi
+        ? await api.fetchApi("/comfydl/runs?limit=200")
+        : await fetch("/comfydl/runs?limit=200");
+      if (!resp || !resp.ok) return;
+      const data = await resp.json();
+      state.runsIndex = Array.isArray(data.runs) ? data.runs : [];
+      renderRunsHistory();
+    } catch (e) { /* runs route optional (P3) */ }
+  }
+
+  function renderRunsHistory() {
+    const host = state.extras
+      ? state.extras.querySelector(".cdlapp-runs-list")
+      : (state.panel ? state.panel.querySelector(".cdlapp-runs-list") : null);
+    if (!host) return;
+    host.textContent = "";
+    const groups = new Map();
+    state.runsIndex.forEach((row) => {
+      if (!row || !row.run_id) return;
+      const name = String(row.experiment || "experiment");
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(row);
+    });
+    if (!groups.size) return;
+    groups.forEach((rows, name) => {
+      const best = rows.find((r) => Number(r.best) === 1)
+        || rows[rows.length - 1];
+      const item = el("button", "cdlapp-runs-item");
+      item.appendChild(el("span", "cdlapp-runs-name", name));
+      item.appendChild(el("span", "cdlapp-runs-info",
+        t("runs_runs_fmt").replace("{count}", String(rows.length))
+        + (best && best.params_json
+          ? " · " + String(best.params_json).slice(0, 48) : "")));
+      item.addEventListener("click", () => loadRunCurves(name, rows));
+      host.appendChild(item);
+    });
+  }
+
+  async function loadRunCurves(name, rows) {
+    const take = rows.slice(-12); // bound the overlay: newest 12 runs
+    const series = [];
+    const direction = take.length ? take[0].direction : "min";
+    for (const row of take) {
+      try {
+        const api = getApi();
+        const resp = api && api.fetchApi
+          ? await api.fetchApi("/comfydl/runs/detail?run_id="
+            + encodeURIComponent(row.run_id))
+          : await fetch("/comfydl/runs/detail?run_id="
+            + encodeURIComponent(row.run_id));
+        if (!resp || !resp.ok) continue;
+        const detail = await resp.json();
+        series.push({
+          label: String(row.params_json || row.run_id),
+          points: (detail.metrics_history || []).map(
+            (p) => [Number(p[0]), Number(p[1])]),
+          best: Number(row.best) === 1,
+        });
+      } catch (e) { /* skip unreadable runs */ }
+    }
+    if (!series.length) return;
+    const host = state.extras
+      ? state.extras.querySelector(".cdlapp-runs-chart-host")
+      : (state.panel ? state.panel.querySelector(".cdlapp-runs-chart-host") : null);
+    if (!host) return;
+    host.textContent = "";
+    const card = buildRunsChart({
+      type: "runs", node_id: "runs:" + name, title: name,
+      direction: direction, finished: true,
+      best_index: series.findIndex((s) => s.best),
+      series: series,
+    });
+    host.appendChild(card);
   }
 
   function attachEvents() {

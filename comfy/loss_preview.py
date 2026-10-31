@@ -335,6 +335,63 @@ def push_loss_series(
         pass
 
 
+def push_runs_snapshot(
+    title: str,
+    series: Sequence[dict],
+    direction: str = "min",
+    best_index: int | None = None,
+    finished: bool = False,
+) -> None:
+    """Push a multi-series runs snapshot as a structured event (P3 Craft 3).
+
+    In:   title - the experiment name (the comparison view's card key);
+          series - ``[{label, points: [[step, value], ...], best: bool}]``,
+          one entry per finished grid combination; direction - min/max
+          (which end of the metric is "better"); best_index - index into
+          ``series`` of the winner; finished - True on the final push.
+    Out:  a ``cdl_preview_data`` websocket event:
+          ``{type: "runs", node_id, title, direction, best_index, finished,
+             series: [{label, points, best, final}]}``.
+          The App Panel's comparison chart overlays one polyline per series
+          and highlights the ``best`` one.  Broadcast to every connected
+          client; silently skipped when the server is unreachable (a
+          preview must never break a scan).
+    """
+    try:
+        from server import PromptServer
+
+        server = PromptServer.instance
+        if server is None:
+            return
+        prepared = []
+        for entry in series:
+            points = entry.get("points") or []
+            if len(points) > DATA_MAX_POINTS:
+                stride = len(points) / (DATA_MAX_POINTS - 1)
+                indices = [int(i * stride) for i in range(DATA_MAX_POINTS - 1)]
+                indices.append(len(points) - 1)
+                points = [points[i] for i in indices]
+            values = [float(p[1]) for p in points if len(p) >= 2]
+            prepared.append({
+                "label": str(entry.get("label", "?")),
+                "points": [[int(p[0]), round(float(p[1]), 6)] for p in points],
+                "best": bool(entry.get("best", False)),
+                "final": round(values[-1], 6) if values else None,
+            })
+        payload = {
+            "type": "runs",
+            "node_id": _resolve_node_id() or str(title),
+            "title": str(title),
+            "direction": str(direction),
+            "best_index": int(best_index) if best_index is not None else None,
+            "finished": bool(finished),
+            "series": prepared,
+        }
+        server.send_sync(EVENT_PREVIEW_DATA, payload)
+    except Exception:  # noqa: BLE001 - a preview must never raise
+        pass
+
+
 def push_text_snapshot(
     text: str,
     title: str = "generated",

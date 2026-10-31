@@ -293,6 +293,13 @@ class PromptServer():
         for route in spine_routes.routes:
             if isinstance(route, web.RouteDef):
                 routes.route(route.method, route.path)(route.handler, **route.kwargs)
+        # ComfyDL runs ledger (P3 Craft 3, M-C): read-only index + detail
+        # for the experiment-bench comparison view. Same merge idiom, same
+        # /api twin treatment.
+        from app import runs_routes
+        for route in runs_routes.routes:
+            if isinstance(route, web.RouteDef):
+                routes.route(route.method, route.path)(route.handler, **route.kwargs)
         self.last_node_id = None
         self.last_prompt_id = None
         self.client_id = None
