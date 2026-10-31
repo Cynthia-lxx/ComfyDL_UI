@@ -199,7 +199,10 @@ if GGUF_OK:
         writer.write_tensors_to_file()
         writer.close()
 
-    with tempfile.TemporaryDirectory(prefix="cdl_gguf_") as tmp:
+    # ignore_cleanup_errors: GGMLTensors hold the .gguf mmap through
+    # torch's storage layer, so Windows may refuse to unlink right away.
+    with tempfile.TemporaryDirectory(prefix="cdl_gguf_",
+                                     ignore_cleanup_errors=True) as tmp:
         fixture = Path(tmp) / "tiny-Q8_0.gguf"
         _write_fixture(fixture)
         check("T5b fixture written and small",
