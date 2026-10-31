@@ -193,13 +193,13 @@ if GGUF_OK:
                                      torch.arange(-16, 16, dtype=torch.int8)).numpy(),
                           raw_dtype=gguf.GGMLQuantizationType.Q8_0)
         writer.add_array("comfy.gguf.orig_shape.model.diffusion_model.blocks.0.weight",
-                         np.array([4, 32], dtype=np.int32))
+                         [np.int32(4), np.int32(32)])
         # an fp16 bias-ish tensor
         writer.add_tensor("model.diffusion_model.blocks.0.bias",
                           torch.arange(8, dtype=torch.float16).numpy(),
                           raw_dtype=gguf.GGMLQuantizationType.F16)
         writer.add_array("comfy.gguf.orig_shape.model.diffusion_model.blocks.0.bias",
-                         np.array([8], dtype=np.int32))
+                         [np.int32(8)])
         writer.write_header_to_file()
         writer.write_kv_data_to_file()
         writer.write_tensors_to_file()
