@@ -51,6 +51,11 @@ sentencepiece
 # [dehydratable] k_diffusion SDE samplers only.
 torchsde
 
+# --- Quantized model loading (SP-4, M-B) --------------------------------------
+# [dehydratable] CdlLoadGGUF / CdlQuantizationInspector only. The nodes raise
+# a readable hint if this is missing; everything else keeps working.
+gguf>=0.13.0,<0.14
+
 # --- 3D nodes ----------------------------------------------------------------
 # [dehydratable] 3D nodes only.
 PyOpenGL>=3.1.8

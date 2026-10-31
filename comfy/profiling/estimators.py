@@ -2448,6 +2448,49 @@ def _estimate_unet_loader(ctx: EstimationCtx) -> NodeEstimate:
     )
 
 
+@register("CdlLoadGGUF")
+def _estimate_gguf_loader(ctx: EstimationCtx) -> NodeEstimate:
+    """GGUF loader (ADR-D3 hard binding): the file bytes ARE the quantized
+    bytes - per-element rates come from ``comfy.quant_formats.GGML_QTYPE_SIZES``
+    (e.g. Q4_K_M: 0.5625 B/weight = 4.5 bits), never an fp16 assumption.
+
+    The verdict treats the whole file as resident (mmap blocks); the
+    per-layer dequant workspace (one layer at fp16) rides on top as a
+    documented approx margin, matching ``GGMLLayer._save_to_state_dict``.
+    """
+    name = ctx.str_widget("unet_name", "")
+    file_bytes = _model_file_size("unet_gguf", name)
+    estimate = _weights_estimate(
+        file_bytes,
+        name,
+        "unet_gguf",
+        "quantized diffusion weights (GGUF file bytes)",
+    )
+    if file_bytes is not None:  # only a found file reaches here as a real estimate
+        estimate.reason = (
+            "GGUF blocks are mmapped and resident; add one layer's fp16 "
+            "dequant workspace on top (largest single layer, roughly "
+            "100-500 MB for SDXL-class UNets)")
+        estimate.basis["params"]["byte_rate_table"] = (
+            "comfy.quant_formats.GGML_QTYPE_SIZES")
+    return estimate
+
+
+@register("CdlQuantizationInspector")
+def _estimate_quant_inspector(ctx: EstimationCtx) -> NodeEstimate:
+    """Metadata-only read: no weights are materialized into memory."""
+    estimate = NodeEstimate(
+        basis={"key": "quant_inspect", "params": {"name": ctx.str_widget("model_path", "")}}
+    )
+    estimate.outputs = [Unknown("scalar")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "metadata parsing - no matmul in this node"
+    estimate.confidence = "exact"
+    estimate.reason = "reads file headers only; weights are never loaded"
+    return estimate
+
+
 @register("VAELoader")
 def _estimate_vae_loader(ctx: EstimationCtx) -> NodeEstimate:
     """VAE only."""

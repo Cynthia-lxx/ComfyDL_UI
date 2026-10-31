@@ -708,6 +708,9 @@ async def init_builtin_extra_nodes():
         # wrapper, backed by comfy/attention_select.py and comfy/compile_manager.py.
         "nodes_attention_select.py",
         "nodes_compile.py",
+        # Quantization family (SP-4, M-B; ADR-D3): GGUF lazy-dequant loader +
+        # quantization inspector, backed by comfy/quant_formats.py.
+        "nodes_quant.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",
