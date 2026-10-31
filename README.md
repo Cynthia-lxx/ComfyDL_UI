@@ -40,7 +40,8 @@ Language models tell the same story:
 ## Features
 
 `ComfyDL_UI`'s headline capabilities each get their own section below — the visual editor, the
-built-in node pack, live progress, full profiling, and the Crash Site save & resume net. The
+built-in node pack, live progress, full profiling, the Crash Site save & resume net, and the
+rebuilt App mode with its monitoring dashboard. The
 everyday basics:
 
 - Efficient local execution with asynchronous queueing and partial graph re-execution (only
@@ -177,6 +178,20 @@ no vertical cramming:
   errors filling the remaining quadrants — every tile scrolls inside its own
   box. The zone boundaries are draggable (sizes persist), so nothing is
   covered and nothing is wasted.
+- **Live charts in the dashboard** — structured previews pushed by the
+  backend previewer (`cdl_preview_data`) render as theme-aware SVG cards:
+  loss series draw the raw curve plus a trailing moving average with eased
+  in-place movement (550 ms ease-out) and a hover crosshair that reads out
+  the exact step value, while text streams in AI-chat style with a
+  per-character fade-in. Nothing is a bitmap, so every card stays crisp at
+  any size.
+- **Resize, don't distort** — every preview card is user-resizable
+  (native drag handle); the curve strokes never change weight and the text
+  overlay keeps its aspect ratio at any card size, and overflowing cards
+  scroll instead of clipping.
+- **Run control** — the progress header carries a Stop button wired to the
+  official interrupt API (visible only while a run is active), and the whole
+  panel lights up at the "got prompt" and "prompt finished" moments.
 - **Outputs first** — files from the output directory with one-click downloads
   (CSV / JSON / txt / `.pt` / PNG...), text outputs as copyable entries, and
   low-cost previews from the existing renderers. Outputs carry equal weight
@@ -186,7 +201,8 @@ no vertical cramming:
   full image.
 - **Detailed progress** — a per-node progress list (title / percent /
   running-done-cached-error) plus a total bar, driven purely by the official
-  WebSocket events.
+  WebSocket events — the full node list is pre-filled from the very first
+  event so you can see how much work is ahead.
 - **Errors that make sense** — failed nodes render as cards with the node
   title, the exception message and the full collapsible traceback, one click
   to copy.
@@ -194,7 +210,8 @@ no vertical cramming:
   builder at the Inputs/Outputs step, from the panel header.
 
 The dock mounts only while App mode is active and releases cleanly on exit;
-one setting (*Settings > ComfyDL > App*) governs it. Design notes and the
+one setting (*Settings > ComfyDL > App*) governs it, with the usual
+`prefers-reduced-motion` exemption for every animation. Design notes and the
 official-evolution containment strategy:
 [`docs/cdlapp-mode.md`](docs/cdlapp-mode.md). Try it with **Templates →
 ComfyDL Examples → Formula Playground: App Mode**.
