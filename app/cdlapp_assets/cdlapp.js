@@ -168,6 +168,7 @@
       runs_empty: "No runs recorded yet - run a scan first.",
       runs_best_fmt: "best: {label} ({value})",
       runs_runs_fmt: "{count} runs",
+      runs_hint: "Click to overlay its curves - click again to collapse.",
       prev_open: "Open full size",
       splitter_hint: "Drag to resize the zones",
       locate_inputs: "Show the input widgets' nodes on the graph",
@@ -212,6 +213,7 @@
       runs_empty: "还没有运行记录——先跑一次扫描。",
       runs_best_fmt: "最优：{label}（{value}）",
       runs_runs_fmt: "{count} 条记录",
+      runs_hint: "点击叠加该实验的曲线——再次点击收起。",
       prev_open: "查看原图",
       splitter_hint: "拖动调整分区大小",
       locate_inputs: "在节点图中定位输入所在的节点",
@@ -276,6 +278,7 @@
     artifacts: [], // {name, path, size, mtime}
     charts: new Map(), // node_id -> live cdl_preview_data payload (batch 18)
     runsIndex: [], // runs ledger csv rows (P3 Craft 3, /comfydl/runs)
+    runsChartName: null, // experiment whose curves currently overlay
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -495,6 +498,16 @@
       for (const d of drawers) {
         if (d.closest(OFFICIAL_SURFACE.layout.graphCanvasContainer)) continue;
         if (d.offsetWidth > 0) return true;
+      }
+      // 2026-11-01 user callout: the Help tab (and any sidebar tab that opens
+      // a .side-bar-panel instead of the .comfy-vue-side-bar-container) slid
+      // UNDER the full-bleed dock.  A mounted content container inside the
+      // side-bar-panel means a tab panel is open - yield to it too.
+      const sidePanel = document.querySelector(
+        ".side-bar-panel .sidebar-content-container");
+      if (sidePanel && sidePanel.offsetWidth > 0
+          && !sidePanel.closest(OFFICIAL_SURFACE.layout.graphCanvasContainer)) {
+        return true;
       }
     } catch (e) { /* drawer probe optional */ }
     return false;
@@ -1025,6 +1038,32 @@
     return s;
   }
 
+  // Horizontal twin of makeSplitter: drags report clientY (row heights).
+  function makeHSplitter(onDrag) {
+    const s = el("div", "cdlapp-splitter cdlapp-splitter-h");
+    s.title = t("splitter_hint");
+    s.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try {
+        s.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* synthetic pointer (tests / automation) - plain listeners still work */
+      }
+      s.classList.add("cdlapp-dragging");
+      const move = (ev) => onDrag(ev.clientY);
+      const up = () => {
+        s.classList.remove("cdlapp-dragging");
+        s.removeEventListener("pointermove", move);
+        s.removeEventListener("pointerup", up);
+        s.removeEventListener("pointercancel", up);
+      };
+      s.addEventListener("pointermove", move);
+      s.addEventListener("pointerup", up);
+      s.addEventListener("pointercancel", up);
+    });
+    return s;
+  }
+
   function mountSplitters() {
     if (!state.extras || !document.getElementById(OFFICIAL_SURFACE.layout.extrasId)) {
       return;
@@ -1061,6 +1100,66 @@
         localStorage.setItem(SPLIT_PREV_KEY, v);
       }));
     }
+    // gutters 3+4 (2026-11-01 user callout: horizontal boundaries were not
+    // draggable): previews <-> progress, progress <-> runs rows.  They share
+    // one persisted {h1,h2} fr pair; see dragRowBoundary for the math.
+    if (!state.extras.querySelector(":scope > .cdlapp-splitter-h")) {
+      applyRowVars(loadRowVars());
+      const hsp1 = makeHSplitter((y) => dragRowBoundary("h1", y));
+      hsp1.style.gridArea = "hsp1";
+      state.extras.appendChild(hsp1);
+      const hsp2 = makeHSplitter((y) => dragRowBoundary("h2", y));
+      hsp2.style.gridArea = "hsp2";
+      state.extras.appendChild(hsp2);
+    }
+  }
+
+  // Horizontal row split ({h1,h2} fr pair).  Row frs: h1 (previews),
+  // h2 (progress), 0.55 fixed (runs) share the fixed left-column height, so
+  // the fr unit is S/(h1+h2+0.55) where S = current px sum of the three
+  // rows - constant while dragging (the extras height does not change).
+  // Solving desired px -> fr: h = desired * (othersFrSum) / (S - desired).
+  const ROWS_KEY = "ComfyDL.AppPanel.RowsH";
+  const ROW_DEFAULTS = { h1: 1.15, h2: 0.6 };
+  function loadRowVars() {
+    try {
+      const v = JSON.parse(localStorage.getItem(ROWS_KEY) || "{}");
+      return {
+        h1: typeof v.h1 === "number" ? v.h1 : ROW_DEFAULTS.h1,
+        h2: typeof v.h2 === "number" ? v.h2 : ROW_DEFAULTS.h2,
+      };
+    } catch (e) { return { ...ROW_DEFAULTS }; }
+  }
+  function applyRowVars(v) {
+    if (!state.extras) return;
+    // MUST carry the fr unit: minmax(0, var(--cdl-h1, 1.15fr)) substitutes
+    // the raw value, and a unitless number makes the whole declaration
+    // invalid at computed-value time (every row silently degrades to auto -
+    // live-caught 2026-11-01, the two 9px gutters collapsed to 0px).
+    state.extras.style.setProperty("--cdl-h1", v.h1.toFixed(3) + "fr");
+    state.extras.style.setProperty("--cdl-h2", v.h2.toFixed(3) + "fr");
+  }
+  function dragRowBoundary(which, y) {
+    const ex = state.extras;
+    if (!ex) return;
+    const prev = ex.querySelector(".cdlapp-sec-previews");
+    const prog = ex.querySelector(".cdlapp-sec-progress");
+    const runs = ex.querySelector(".cdlapp-sec-runs");
+    if (!prev || !prog || !runs) return;
+    const S = prev.getBoundingClientRect().height
+      + prog.getBoundingClientRect().height
+      + runs.getBoundingClientRect().height;
+    if (S < 80) return;
+    const topRef = (which === "h1" ? prev : prog).getBoundingClientRect().top;
+    const desired = Math.min(S - 70, Math.max(30, y - topRef));
+    const others = which === "h1"
+      ? (loadRowVars().h2 + 0.55)
+      : (loadRowVars().h1 + 0.55);
+    const v = loadRowVars();
+    v[which] = Math.min(6, Math.max(0.15,
+      desired * others / Math.max(40, S - desired)));
+    try { localStorage.setItem(ROWS_KEY, JSON.stringify(v)); } catch (e) { /* optional */ }
+    applyRowVars(v);
   }
 
   // The exit animation (cdlapp-leaving, 160ms) delays element removal by
@@ -1120,6 +1219,10 @@
     renderProgress();
     renderErrors();
     renderCharts();
+    // Pull the runs ledger history on mount too (2026-11-01: it previously
+    // only refreshed after a run finished, so a freshly opened panel showed
+    // the empty state even when past experiments existed).
+    refreshRuns();
   }
 
   function unmountPanel() {
@@ -2409,9 +2512,40 @@
         t("runs_runs_fmt").replace("{count}", String(rows.length))
         + (best && best.params_json
           ? " · " + String(best.params_json).slice(0, 48) : "")));
-      item.addEventListener("click", () => loadRunCurves(name, rows));
+      // Click = expand (overlay its curves); click again = collapse
+      // (2026-11-01 user callout: there was no way back).  The active state
+      // survives refreshRuns() re-renders via state.runsChartName.
+      item.title = t("runs_hint");
+      if (state.runsChartName === name) {
+        item.classList.add("cdlapp-runs-item-active");
+      }
+      item.addEventListener("click", () => {
+        if (state.runsChartName === name) {
+          clearRunsChart();
+        } else {
+          host.querySelectorAll(".cdlapp-runs-item-active")
+            .forEach((n) => n.classList.remove("cdlapp-runs-item-active"));
+          item.classList.add("cdlapp-runs-item-active");
+          loadRunCurves(name, rows);
+        }
+      });
       host.appendChild(item);
     });
+  }
+
+  // Collapse the runs overlay chart (item 2026-11-01: symmetric expand).
+  function clearRunsChart() {
+    state.runsChartName = null;
+    const host = state.extras
+      ? state.extras.querySelector(".cdlapp-runs-chart-host")
+      : (state.panel ? state.panel.querySelector(".cdlapp-runs-chart-host")
+        : null);
+    if (host) {
+      host.textContent = "";
+      host.style.display = "none";
+    }
+    document.querySelectorAll(".cdlapp-runs-item-active")
+      .forEach((n) => n.classList.remove("cdlapp-runs-item-active"));
   }
 
   async function loadRunCurves(name, rows) {
@@ -2441,6 +2575,8 @@
       ? state.extras.querySelector(".cdlapp-runs-chart-host")
       : (state.panel ? state.panel.querySelector(".cdlapp-runs-chart-host") : null);
     if (!host) return;
+    host.style.display = "";
+    state.runsChartName = name;
     host.textContent = "";
     const card = buildRunsChart({
       type: "runs", node_id: "runs:" + name, title: name,

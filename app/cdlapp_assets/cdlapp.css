@@ -98,12 +98,16 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
   display: grid;
   /* col 2 is the draggable 9px gutter between the preview and outputs zones */
   grid-template-columns: var(--cdl-prev-w, 55%) 9px minmax(0, 1fr);
-  /* P3 Craft 3: runs section takes a bottom-left tile under progress */
-  grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 0.6fr) minmax(0, 0.55fr) auto;
+  /* P3 Craft 3: runs section takes a bottom-left tile under progress.
+     2026-11-01: rows h1/h2 are user-draggable via the horizontal splitters
+     (hsp1/hsp2 gutters) - see dragRowBoundary in cdlapp.js. */
+  grid-template-rows: auto minmax(0, var(--cdl-h1, 1.15fr)) 9px minmax(0, var(--cdl-h2, 0.6fr)) minmax(0, 0.55fr) auto;
   grid-template-areas:
     "head head head"
     "prev sp  out"
+    "hsp1 sp  out"
     "prog sp  out"
+    "hsp2 sp  out"
     "runs sp  out"
     "err  err err";
   gap: 12px; /* adjacent borders never touch */
@@ -135,17 +139,23 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
    must win over that block's overflow: hidden.  Charts keep their user-set
    heights, so the section scrolls as a whole. */
 #cdl-app-extras .cdlapp-sec-previews,
-#cdl-app-panel .cdlapp-sec-previews {
+#cdl-app-panel .cdlapp-sec-previews,
+#cdl-app-extras .cdlapp-sec-runs,
+#cdl-app-panel .cdlapp-sec-runs {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color, #333333) transparent;
 }
 #cdl-app-extras .cdlapp-sec-previews::-webkit-scrollbar,
-#cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar {
+#cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar,
+#cdl-app-extras .cdlapp-sec-runs::-webkit-scrollbar,
+#cdl-app-panel .cdlapp-sec-runs::-webkit-scrollbar {
   width: 8px;
 }
 #cdl-app-extras .cdlapp-sec-previews::-webkit-scrollbar-thumb,
-#cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar-thumb {
+#cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar-thumb,
+#cdl-app-extras .cdlapp-sec-runs::-webkit-scrollbar-thumb,
+#cdl-app-panel .cdlapp-sec-runs::-webkit-scrollbar-thumb {
   background: var(--border-color, #333333);
   border-radius: 4px;
 }
@@ -211,6 +221,19 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
 }
 #cdl-app-extras > .cdlapp-splitter {
   grid-area: sp; /* the previews/outputs gutter */
+}
+/* horizontal splitters (2026-11-01 user callout): row boundaries in the
+   left column only - the outputs tile has no horizontal neighbours. */
+.cdlapp-splitter-h {
+  cursor: row-resize;
+}
+.cdlapp-splitter-h::after {
+  top: 50%;
+  margin-top: -0.5px;
+  left: 4px;
+  right: 4px;
+  width: auto;
+  height: 1px;
 }
 
 /* ------------------------------------------------------ preview grid */
@@ -812,6 +835,11 @@ body.cdlapp-motion-off .cdlapp-chart-pulse {
 .cdlapp-runs-item:hover {
   border-color: rgba(26, 188, 156, 0.55);
   background: rgba(26, 188, 156, 0.08);
+}
+/* expanded experiment (click again to collapse - see renderRunsHistory) */
+.cdlapp-runs-item.cdlapp-runs-item-active {
+  border-color: #1abc9c;
+  background: rgba(26, 188, 156, 0.14);
 }
 .cdlapp-runs-name {
   font-weight: 600;

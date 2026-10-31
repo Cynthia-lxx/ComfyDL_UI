@@ -163,6 +163,13 @@ def main() -> int:
           and "modalOpen=" in js)
     check("A2 legacy overlay: minimap-style default collapsed window",
           "COLLAPSE_KEY" in js and 'saved !== "0") setCollapsed(true);' in js)
+    check("A2 horizontal splitters: row boundaries draggable (2026-11-01)",
+          "function makeHSplitter" in js and "function dragRowBoundary" in js
+          and "ROWS_KEY" in js
+          and "cdlapp-splitter-h" in css and "row-resize" in css
+          and "--cdl-h1" in css and '"hsp1"' in js)
+    check("A2 side-bar tab panels yield (help center was under-docked)",
+          ".side-bar-panel .sidebar-content-container" in js)
     check("A2 builder step jump via the official setMode path",
           "workflowStoreProbe" in js and '"activeWorkflow"' in js
           and "modeField" in js and '"activeMode"' in js
@@ -483,9 +490,16 @@ def main() -> int:
     # later rule won and the previews pane silently clipped again.  The
     # scroll rule must come AFTER that block (source order decides).
     _sec_hidden = css.find("overflow: hidden; /* tiles scroll inside")
-    _prev_scroll = css.find(".cdlapp-sec-previews,\n#cdl-app-panel .cdlapp-sec-previews {")
+    _prev_scroll = css.find("#cdl-app-extras .cdlapp-sec-previews,")
+    _runs_scroll = css.find("#cdl-app-panel .cdlapp-sec-runs {")
     check("A8 scroll rule ordered AFTER .cdlapp-section overflow hidden",
-          _sec_hidden != -1 and _prev_scroll != -1 and _prev_scroll > _sec_hidden)
+          _sec_hidden != -1 and _prev_scroll != -1 and _prev_scroll > _sec_hidden
+          and _runs_scroll > _sec_hidden)
+    check("A8 runs pane scrolls like previews + expand toggle (2026-11-01)",
+          ".cdlapp-sec-runs" in css
+          and "cdlapp-runs-item-active" in css
+          and "clearRunsChart" in js and "runs_hint" in js
+          and "state.runsChartName === name" in js)
     check("A8 Stop (interrupt) button wired to the official api method",
           'interruptMethod: "interrupt"' in js
           and 'square: \'<rect width="18" height="18" x="3" y="3" rx="2"/>\'' in js
