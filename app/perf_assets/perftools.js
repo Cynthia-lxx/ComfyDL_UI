@@ -99,9 +99,29 @@
     }
   }
 
+  // Settings store readiness gate - the exact 2026-10-30 lesson from
+  // motion.js: registerExtension() processes `settings` IMMEDIATELY; if that
+  // happens before the official settings store bootstrap ran, the store's
+  // load() throws "Setting values must be loaded before any setting is
+  // registered" - an uncaught error that aborts the bootstrap chain and
+  // leaves the whole UI blank.  Never register before st.isReady.
+  function settingsStoreReady(_app) {
+    try {
+      const root = document.getElementById("vue-app");
+      const vueApp = root && root.__vue_app__;
+      const pinia = vueApp && vueApp.config &&
+        vueApp.config.globalProperties.$pinia;
+      const st = pinia && pinia._s && pinia._s.get("setting");
+      return !!st && st.isReady === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function boot() {
     const app = getApp();
     if (!app || !app.extensionManager) return false;
+    if (!settingsStoreReady(app)) return false;
 
     // Locale before the settings definitions render (same pattern as
     // motion.js / profiler.js).
@@ -161,11 +181,12 @@
     return true;
   }
 
-  // Retry until the app object exists (this module loads after the frontend
-  // entry, same idiom as the other ComfyDL panels).
+  // Retry until the app object exists AND the settings store is ready (the
+  // store may still be bootstrapping long after window.comfyAPI appears -
+  // that window is exactly where the blank-UI crash lives).
   let tries = 0;
   const timer = setInterval(() => {
     tries += 1;
-    if (boot() || tries > 100) clearInterval(timer);
+    if (boot() || tries > 200) clearInterval(timer);
   }, 100);
 })();
