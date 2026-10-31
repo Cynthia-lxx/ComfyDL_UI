@@ -500,6 +500,26 @@
     return false;
   }
 
+  // Official modal dialogs (templates browser, lightbox, gallery, ...) render
+  // a teleport-to-body scrim at z≈1700-3702 - ABOVE the dock (z 2100, which
+  // is trapped inside the .comfyui-body stacking context).  With the dock
+  // mounted underneath, the scrim eats every click and the dimmed panel
+  // reads as a broken detached layer (2026-11-01 live-reproduced: opening
+  // the Templates browser in app mode did exactly this).  Like drawerOpen,
+  // the dock yields entirely while a viewport-sized modal is open.
+  function modalDialogOpen() {
+    try {
+      const open = document.querySelectorAll('[data-state="open"]');
+      const minW = window.innerWidth * 0.6;
+      const minH = window.innerHeight * 0.6;
+      for (const d of open) {
+        if (getComputedStyle(d).position !== "fixed") continue;
+        if (d.offsetWidth >= minW && d.offsetHeight >= minH) return true;
+      }
+    } catch (e) { /* modal probe optional */ }
+    return false;
+  }
+
   // ------------------------------------------------------ VERBOSE audit ----
   // User-authorized diagnostics (2026-11-01): entering app mode on a
   // non-app workflow showed a dead, visually detached panel.  This audit
@@ -556,8 +576,8 @@
     const payload = {
       reason, mounted: state.mounted, appMode: state.appMode,
       rawMode: rawMode(), overlayCount, extrasCount,
-      arrangePanel: !!col, bodyActive: document.body.classList.contains(
-        "cdlapp-active"),
+      arrangePanel: !!col, modalOpen: modalDialogOpen(),
+      bodyActive: document.body.classList.contains("cdlapp-active"),
       hitAt: hit, intercepted,
     };
     if (problems.length) {
@@ -601,10 +621,11 @@
       // open (live-verified 2026-10-31: the app-mode drawer renders UNDER
       // the fixed full-bleed dock, and the official splitter REMOUNTS on
       // every drawer toggle - so the dock gets out of the way entirely).
-      const dock = isPureAppMode() && !drawerOpen();
+      const dock = isPureAppMode() && !drawerOpen() && !modalDialogOpen();
       if (dock !== state.appMode) {
         console.info(TAG, "poll: dock " + state.appMode + " -> " + dock
-          + " (rawMode=" + rawMode() + " drawerOpen=" + drawerOpen() + ")");
+          + " (rawMode=" + rawMode() + " drawerOpen=" + drawerOpen()
+          + " modalOpen=" + modalDialogOpen() + ")");
         state.appMode = dock;
         if (dock) mountPanel();
         else unmountPanel();
@@ -913,6 +934,7 @@
   function setCollapsed(v) {
     state.collapsed = v;
     if (state.panel) state.panel.classList.toggle("cdlapp-collapsed", v);
+    try { localStorage.setItem(COLLAPSE_KEY, v ? "1" : "0"); } catch (e) { /* optional */ }
   }
 
   // The CDL sections that ride INSIDE the official input panel (native look
@@ -974,6 +996,9 @@
   // the next mount.  Purely cosmetic - no official state is touched.
   const SPLIT_PARAMS_KEY = "ComfyDL.AppPanel.ParamsW";
   const SPLIT_PREV_KEY = "ComfyDL.AppPanel.PrevW";
+  // Legacy overlay collapse preference (unset defaults to collapsed - see
+  // mountPanel: the overlay must present as a small minimap-like window).
+  const COLLAPSE_KEY = "ComfyDL.AppPanel.Collapsed";
 
   function makeSplitter(onDrag) {
     const s = el("div", "cdlapp-splitter");
@@ -1079,9 +1104,16 @@
     } else {
       // legacy fallback: workflow without app selections - overlay panel,
       // offset right of the sidebar rail so nothing is covered.
+      // 2026-11-01 user directive: this floating surface must read as a
+      // SMALL overlay window (minimap-like), not a big detached slab, so it
+      // defaults to the collapsed rail chip unless the user expanded it.
       state.panel = buildPanel();
+      let saved = localStorage.getItem(COLLAPSE_KEY);
+      if (saved !== "0") setCollapsed(true);
+      else setCollapsed(false);
       document.body.appendChild(state.panel);
-      console.log(TAG, "panel mounted (legacy overlay: no app selections)");
+      console.log(TAG, "panel mounted (legacy overlay: no app selections,"
+        + " collapsed=" + state.collapsed + ")");
     }
     state.mounted = true;
     renderOutputs();

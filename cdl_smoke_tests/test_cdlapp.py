@@ -147,7 +147,8 @@ def main() -> int:
     # builder: our dock CSS wrecked its layout).
     check("A2 builder wizard stays pristine (dock only in pure app view)",
           "function isPureAppMode" in js
-          and "const dock = isPureAppMode() && !drawerOpen();" in js
+          and ("const dock = isPureAppMode() && !drawerOpen()"
+               + " && !modalDialogOpen();" in js)
           and "if (dock) mountPanel();" in js
           and "builder wizard" in js
           # the builder keeps viewMode === app but strips the DOM anchors -
@@ -156,6 +157,12 @@ def main() -> int:
           and "layout.comfyBody" in js
           and "layout.rail" in js
           and "the builder strips these from the body" in js)
+    check("A2 modal yield: dock yields while an official modal dialog is open",
+          "function modalDialogOpen" in js
+          and 'querySelectorAll(\'[data-state="open"]\')' in js
+          and "modalOpen=" in js)
+    check("A2 legacy overlay: minimap-style default collapsed window",
+          "COLLAPSE_KEY" in js and 'saved !== "0") setCollapsed(true);' in js)
     check("A2 builder step jump via the official setMode path",
           "workflowStoreProbe" in js and '"activeWorkflow"' in js
           and "modeField" in js and '"activeMode"' in js
