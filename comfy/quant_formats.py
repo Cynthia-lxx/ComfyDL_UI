@@ -863,27 +863,32 @@ def _gguf_orig_shape(reader, tensor_name):
     field = reader.get_field(field_key)
     if field is None:
         return None
-    if len(field.types) != 2 or field.types[0] != 9 \
-            or field.types[1] not in (4, 10):
-        # expected ARRAY(9) of INT32(4) or INT64(10) - writers differ
+    gguf = require_gguf()
+    vt = gguf.GGUFValueType
+    if len(field.types) != 2 or field.types[0] != vt.ARRAY \
+            or field.types[1] not in (vt.INT32, vt.UINT32, vt.INT64, vt.UINT64):
         raise TypeError(f"Bad original shape metadata for {field_key}: {field.types}")
     return torch.Size(tuple(int(field.parts[part_idx][0]) for part_idx in field.data))
 
 
 def _gguf_metadata(reader):
-    """All simple scalar metadata fields, safetensors-style."""
+    """All simple scalar metadata fields, safetensors-style.
+
+    GGUFValueType numeric codes (gguf-py): UINT8=0, INT8=1, UINT16=2,
+    INT16=3, UINT32=4, INT32=5, FLOAT32=6, BOOL=7, STRING=8, ARRAY=9.
+    """
     metadata = {}
     for field_name in reader.fields:
         try:
             field = reader.get_field(field_name)
             if len(field.types) == 1:
-                if field.types[0] == 8:    # STRING
+                if field.types[0] == 8:       # STRING
                     metadata[field_name] = str(field.parts[field.data[-1]], "utf-8")
-                elif field.types[0] == 4:  # INT32
+                elif field.types[0] in (4, 5):  # UINT32 / INT32
                     metadata[field_name] = int(field.parts[field.data[-1]])
-                elif field.types[0] == 7:  # FLOAT32
+                elif field.types[0] == 6:     # FLOAT32
                     metadata[field_name] = float(field.parts[field.data[-1]])
-                elif field.types[0] == 6:  # BOOL
+                elif field.types[0] == 7:     # BOOL
                     metadata[field_name] = bool(field.parts[field.data[-1]])
         except Exception:
             continue
