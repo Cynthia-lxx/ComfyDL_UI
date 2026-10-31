@@ -182,6 +182,8 @@ if GGUF_OK:
 
     # T5b/T5c: fixture round-trip through a real .gguf file
     def _write_fixture(path: Path) -> None:
+        import numpy as np
+
         writer = gguf.GGUFWriter(str(path), arch="flux")
         writer.add_string("general.name", "cdl-sp4-fixture")
         writer.add_uint32("general.version", 1)
@@ -190,10 +192,14 @@ if GGUF_OK:
                           _make_q8_0(4, 0.25,
                                      torch.arange(-16, 16, dtype=torch.int8)).numpy(),
                           raw_dtype=gguf.GGMLQuantizationType.Q8_0)
+        writer.add_array("comfy.gguf.orig_shape.model.diffusion_model.blocks.0.weight",
+                         np.array([4, 32], dtype=np.int32))
         # an fp16 bias-ish tensor
         writer.add_tensor("model.diffusion_model.blocks.0.bias",
                           torch.arange(8, dtype=torch.float16).numpy(),
                           raw_dtype=gguf.GGMLQuantizationType.F16)
+        writer.add_array("comfy.gguf.orig_shape.model.diffusion_model.blocks.0.bias",
+                         np.array([8], dtype=np.int32))
         writer.write_header_to_file()
         writer.write_kv_data_to_file()
         writer.write_tensors_to_file()
