@@ -115,8 +115,10 @@ def default_root() -> Path:
 
         base = Path(folder_paths.get_user_directory())
     except Exception:  # pragma: no cover - headless/test contexts
-        base = Path(tempfile.gettempdir()) / "comfydl"
-    return base / "runs"
+        base = Path(tempfile.gettempdir())
+    # user/comfydl/ is the established group for ComfyDL-owned data
+    # (checkpoints, snapshots live there too) - runs join the group.
+    return base / "comfydl" / "runs"
 
 
 def set_root(path: Union[str, Path, None]) -> None:
