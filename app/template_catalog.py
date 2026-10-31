@@ -74,6 +74,7 @@ _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "language_model_load_and_chat": "language_model_train_and_chat-1.png",
     "regression_model_reuse": "tabular_regression_production-1.png",
     "attention_lab": "language_model_train_and_chat-1.png",
+    "hyperparameter_exploration": "tabular_regression_production-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -250,6 +251,22 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-10-31",
             "openSource": True,
         },
+        {
+            "name": "hyperparameter_exploration",
+            "title": "Hyperparameter Exploration",
+            "description": (
+                "Grid Search Train sweeps a small regression scan (learning "
+                "rate x steps) in one queued run: every combination's loss "
+                "curve overlays live in the App panel, the best-by-minimum "
+                "run is starred, and the whole sweep is written to the runs "
+                "ledger so past experiments can be compared later."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "png",
+            "tags": ["grid search", "hyperparameter", "regression", "training"],
+            "date": "2026-10-31",
+            "openSource": True,
+        },
     ],
 }
 
@@ -301,6 +318,11 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "attention 后端，把最快者挂到 MODEL 分支并输出计时表（结果有缓存，重跑零开销）；"
             "Attention Backend (Manual) 手动钉选一个后端并讲解其原理。需在 models/checkpoints "
             "中放任意一个 checkpoint。"
+        ),
+        "hyperparameter_exploration": (
+            "Grid Search Train 一趟排队扫描小回归的超参数网格（学习率 × 步数）：各组合的 loss 曲线"
+            "在 App 面板实时叠加，最小 loss 的组合被标星，整场扫描写入实验记录账本，"
+            "可与历史实验对比。"
         ),
     },
 }

@@ -500,6 +500,74 @@
     return false;
   }
 
+  // ------------------------------------------------------ VERBOSE audit ----
+  // User-authorized diagnostics (2026-11-01): entering app mode on a
+  // non-app workflow showed a dead, visually detached panel.  This audit
+  // prints a compact DOM summary on every dock-state flip and warns when
+  // the mounted surface looks wrong (detached from the DOM, duplicated,
+  // or click-intercepted by a covering element via elementFromPoint).
+  // Set localStorage["ComfyDL.AppPanel.Debug"] = "1" for a 2s heartbeat.
+  const VERBOSE_FLAG = "ComfyDL.AppPanel.Debug";
+  let auditTick = 0;
+  function verboseEnabled() {
+    try { return localStorage.getItem(VERBOSE_FLAG) === "1"; }
+    catch (e) { return false; }
+  }
+  function describeHit(node) {
+    if (!node) return "null";
+    const parts = [];
+    let n = node;
+    while (n && n !== document.body && parts.length < 4) {
+      const cls = n.classList && n.classList.length
+        ? "." + Array.from(n.classList).slice(0, 2).join(".") : "";
+      parts.unshift((n.id ? "#" + n.id : n.tagName.toLowerCase()) + cls);
+      n = n.parentElement;
+    }
+    return parts.join(" > ") || node.tagName;
+  }
+  function auditAppPanel(reason) {
+    const overlayCount = document.querySelectorAll("#" + PANEL_ID).length;
+    const extrasCount =
+      document.querySelectorAll("#" + OFFICIAL_SURFACE.layout.extrasId).length;
+    const col = extrasColumn();
+    let hit = "n/a";
+    let intercepted = false;
+    if (state.panel && state.panel.isConnected) {
+      const r = state.panel.getBoundingClientRect();
+      const probe = document.elementFromPoint(
+        Math.round(r.left + Math.min(r.width, 280) / 2),
+        Math.round(r.top + 60));
+      hit = describeHit(probe);
+      intercepted = !!probe && !state.panel.contains(probe)
+        && probe !== document.documentElement;
+    } else if (state.mounted) {
+      hit = "MOUNTED-BUT-DETACHED";
+      intercepted = true;
+    }
+    const problems = [];
+    if (overlayCount > 1) problems.push("duplicate overlay panels");
+    if (extrasCount > 1) problems.push("duplicate extras surfaces");
+    if (state.mounted && (!state.panel || !state.panel.isConnected)) {
+      problems.push("mounted panel detached from DOM");
+    }
+    if (state.mounted && intercepted) {
+      problems.push("clicks may be intercepted: " + hit);
+    }
+    const payload = {
+      reason, mounted: state.mounted, appMode: state.appMode,
+      rawMode: rawMode(), overlayCount, extrasCount,
+      arrangePanel: !!col, bodyActive: document.body.classList.contains(
+        "cdlapp-active"),
+      hitAt: hit, intercepted,
+    };
+    if (problems.length) {
+      console.warn(TAG, "AUDIT problems:", problems.join("; "), payload);
+    } else {
+      console.info(TAG, "audit ok:", reason, payload);
+    }
+    return payload;
+  }
+
   let pollTimer = null;
   function startPolling() {
     if (pollTimer) return;
@@ -515,8 +583,12 @@
         probeStores();
       }
       // Re-append the docked sections if a Vue re-render dropped them.
+      // 2026-11-01 fix: the guard must verify OUR element is the one the id
+      // resolves to - a stale leaving surface (same id) previously satisfied
+      // the old presence check and the real extras were never re-appended.
       if (state.extras && state.mounted
-          && !document.getElementById(OFFICIAL_SURFACE.layout.extrasId)) {
+          && document.getElementById(OFFICIAL_SURFACE.layout.extrasId)
+            !== state.extras) {
         const col = extrasColumn();
         if (col) col.appendChild(state.extras);
       }
@@ -536,6 +608,7 @@
         state.appMode = dock;
         if (dock) mountPanel();
         else unmountPanel();
+        auditAppPanel("dock flip -> " + dock);
       } else if (dock && state.mounted && !state.extras && extrasColumn()) {
         // legacy overlay can upgrade to the native dock when app selections
         // appear while already in app mode (the official input panel only
@@ -548,6 +621,15 @@
       const inBuilder = isBuilderMode();
       if (inBuilder && state.workflowStore) mountBuilderBack();
       else unmountBuilderBack();
+      // Persistent detachment is a bug (the re-append above should have
+      // healed it) - audit every tick it persists.  VERBOSE heartbeat:
+      // localStorage["ComfyDL.AppPanel.Debug"] = "1" logs one summary / 2s.
+      auditTick += 1;
+      if (state.mounted && state.panel && !state.panel.isConnected) {
+        auditAppPanel("panel still detached (tick " + auditTick + ")");
+      } else if (verboseEnabled() && auditTick % 5 === 0) {
+        auditAppPanel("heartbeat");
+      }
     }, OFFICIAL_SURFACE.detection.pollMs);
   }
 
@@ -752,6 +834,31 @@
     return nav;
   }
 
+  // Shared live-data sections (previews + experiment runs) used by BOTH the
+  // docked extras and the legacy overlay panel.  2026-11-01 bug: the overlay
+  // shipped without them, so entering app mode on a workflow without app
+  // selections showed no Experiment runs area at all.  All render functions
+  // fall back to state.panel, so the overlay hosts them transparently.
+  function appendLiveDataSections(host) {
+    // previews section (image artifacts / image outputs as thumbnails)
+    const secPrev = el("div", "cdlapp-section cdlapp-sec-previews");
+    secPrev.appendChild(el("div", "cdlapp-sec-title", t("prev_title")));
+    secPrev.appendChild(el("div", "cdlapp-chart-host"));
+    secPrev.appendChild(el("div", "cdlapp-preview-grid"));
+    secPrev.appendChild(el("div", "cdlapp-empty", t("prev_empty")));
+    host.appendChild(secPrev);
+
+    // experiment runs section (P3 Craft 3): the ledger history list - pick
+    // an experiment to overlay its scans' curves; live scans ride the
+    // previews chart host above via the "runs" preview type
+    const secRuns = el("div", "cdlapp-section cdlapp-sec-runs");
+    secRuns.appendChild(el("div", "cdlapp-sec-title", t("runs_title")));
+    secRuns.appendChild(el("div", "cdlapp-runs-chart-host"));
+    secRuns.appendChild(el("div", "cdlapp-runs-list"));
+    secRuns.appendChild(el("div", "cdlapp-empty", t("runs_empty")));
+    host.appendChild(secRuns);
+  }
+
   function buildPanel() {
     const panel = el("div");
     panel.id = PANEL_ID;
@@ -775,6 +882,8 @@
     secOut.appendChild(el("div", "cdlapp-out-list"));
     secOut.appendChild(el("div", "cdlapp-empty", t("out_empty")));
     panel.appendChild(secOut);
+
+    appendLiveDataSections(panel);
 
     // progress section (shared with the dock builder - see buildProgressSection)
     panel.appendChild(buildProgressSection());
@@ -823,23 +932,8 @@
     secOut.appendChild(el("div", "cdlapp-empty", t("out_empty")));
     extras.appendChild(secOut);
 
-    // previews section (image artifacts / image outputs as thumbnails)
-    const secPrev = el("div", "cdlapp-section cdlapp-sec-previews");
-    secPrev.appendChild(el("div", "cdlapp-sec-title", t("prev_title")));
-    secPrev.appendChild(el("div", "cdlapp-chart-host"));
-    secPrev.appendChild(el("div", "cdlapp-preview-grid"));
-    secPrev.appendChild(el("div", "cdlapp-empty", t("prev_empty")));
-    extras.appendChild(secPrev);
-
-    // experiment runs section (P3 Craft 3): the ledger history list - pick
-    // an experiment to overlay its scans' curves; live scans ride the
-    // previews chart host above via the "runs" preview type
-    const secRuns = el("div", "cdlapp-section cdlapp-sec-runs");
-    secRuns.appendChild(el("div", "cdlapp-sec-title", t("runs_title")));
-    secRuns.appendChild(el("div", "cdlapp-runs-chart-host"));
-    secRuns.appendChild(el("div", "cdlapp-runs-list"));
-    secRuns.appendChild(el("div", "cdlapp-empty", t("runs_empty")));
-    extras.appendChild(secRuns);
+    // previews + experiment runs (shared with the legacy overlay panel)
+    appendLiveDataSections(extras);
 
     // progress section
     extras.appendChild(buildProgressSection());
@@ -944,9 +1038,32 @@
     }
   }
 
+  // The exit animation (cdlapp-leaving, 160ms) delays element removal by
+  // 180ms inside unmountPanel.  A rapid dock flip (the builder:inputs
+  // flash-jump sequence seen 2026-11-01) can re-enter app mode within that
+  // window, leaving TWO same-id surfaces in the DOM: getElementById /
+  // querySelector then hit the stale (pointer-events:none) element first,
+  // so re-append guards misfire and user clicks land on a dead layer.
+  // Purge any remnant up front; the timer handle on the node is cleared too.
+  function purgeStaleSurfaces() {
+    ["#" + PANEL_ID, "#" + OFFICIAL_SURFACE.layout.extrasId].forEach((sel) => {
+      document.querySelectorAll(sel).forEach((oldEl) => {
+        if (state.extras && oldEl === state.extras) return;
+        if (state.panel && oldEl === state.panel) return;
+        if (oldEl.__cdlLeaveTimer) {
+          clearTimeout(oldEl.__cdlLeaveTimer);
+          delete oldEl.__cdlLeaveTimer;
+        }
+        oldEl.remove();
+        console.warn(TAG, "purged stale app-panel surface:", sel);
+      });
+    });
+  }
+
   function mountPanel() {
     if (state.mounted || !state.enabled) return;
     if (!state.caps.anchorsSeen) probeCapabilities();
+    purgeStaleSurfaces();
     document.documentElement.style.setProperty(
       "--cdl-dock-left", dockLeft() + "px");
     const col = extrasColumn();
@@ -977,26 +1094,29 @@
     if (!state.mounted) return;
     const leaving = state.motion
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (state.extras) {
-      const ex = state.extras;
-      state.extras = null;
+    // Deferred removal keeps the 160ms fade-out; the timer handle rides on
+    // the node so purgeStaleSurfaces() can cancel it on a fast re-mount.
+    const delayedRemove = (node) => {
       if (leaving) {
-        ex.classList.add("cdlapp-leaving");
-        setTimeout(() => ex.remove(), 180);
+        node.classList.add("cdlapp-leaving");
+        node.__cdlLeaveTimer = setTimeout(() => {
+          delete node.__cdlLeaveTimer;
+          if (node.parentNode) node.remove();
+        }, 180);
       } else {
-        ex.remove();
+        node.remove();
       }
+    };
+    const extrasEl = state.extras;
+    if (extrasEl) {
+      state.extras = null;
+      delayedRemove(extrasEl);
     }
     document.body.classList.remove("cdlapp-active");
-    if (state.panel && state.panel.parentNode) {
-      const p = state.panel;
-      state.panel = null;
-      if (leaving) {
-        p.classList.add("cdlapp-leaving");
-        setTimeout(() => { if (p.parentNode) p.remove(); }, 180);
-      } else {
-        p.parentNode.removeChild(p);
-      }
+    // In the docked path state.panel IS state.extras (already handled above);
+    // only the legacy overlay panel needs its own removal here.
+    if (state.panel && state.panel !== extrasEl && state.panel.parentNode) {
+      delayedRemove(state.panel);
     }
     state.panel = null;
     state.mounted = false;

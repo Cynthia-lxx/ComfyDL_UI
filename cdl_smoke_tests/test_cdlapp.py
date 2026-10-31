@@ -211,7 +211,9 @@ def main() -> int:
     check("A2 dock: extras appended into the official panel column",
           "function extrasColumn" in js
           and "col.appendChild(state.extras)" in js
-          and "ex.remove()" in js)
+          and "delayedRemove(extrasEl)" in js)
+    check("A2 dock: unmount purge guards stale same-id surfaces",
+          "function purgeStaleSurfaces" in js and "__cdlLeaveTimer" in js)
     check("A2 css: dock rule repositions the official input panel",
           "body.cdlapp-active .comfyui-body .arrange-panel" in css
           and "var(--cdl-dock-left" in css and "#cdl-app-extras" in css)

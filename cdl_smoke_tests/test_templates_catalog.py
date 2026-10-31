@@ -131,6 +131,7 @@ check(
         "tabular_classification_production",
         "formula_playground_app",
         "attention_lab",
+        "hyperparameter_exploration",
     },
     str(sorted(comfydl_names)),
 )
