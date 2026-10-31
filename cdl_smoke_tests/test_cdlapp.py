@@ -469,6 +469,14 @@ def main() -> int:
           ".cdlapp-sec-previews" in css and "overflow-y: auto" in css
           and "scrollbar-width: thin" in css
           and "min-height: 160px" in css)
+    # 2026-10-31 regression: the batch 23 rule sat BEFORE the
+    # .cdlapp-section { overflow: hidden } block; equal specificity, so the
+    # later rule won and the previews pane silently clipped again.  The
+    # scroll rule must come AFTER that block (source order decides).
+    _sec_hidden = css.find("overflow: hidden; /* tiles scroll inside")
+    _prev_scroll = css.find(".cdlapp-sec-previews,\n#cdl-app-panel .cdlapp-sec-previews {")
+    check("A8 scroll rule ordered AFTER .cdlapp-section overflow hidden",
+          _sec_hidden != -1 and _prev_scroll != -1 and _prev_scroll > _sec_hidden)
     check("A8 Stop (interrupt) button wired to the official api method",
           'interruptMethod: "interrupt"' in js
           and 'square: \'<rect width="18" height="18" x="3" y="3" rx="2"/>\'' in js

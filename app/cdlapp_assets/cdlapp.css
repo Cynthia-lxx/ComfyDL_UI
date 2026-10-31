@@ -111,9 +111,26 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
 }
 #cdl-app-extras .cdlapp-head { grid-area: head; }
 #cdl-app-extras .cdlapp-sec-previews { grid-area: prev; }
+#cdl-app-extras .cdlapp-preview-grid {
+  min-height: 160px; /* batch 23: floor so charts never starve the grid */
+}
+#cdl-app-extras .cdlapp-sec-outputs { grid-area: out; }
+#cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
+#cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
+#cdl-app-extras .cdlapp-section {
+  background: transparent;
+  border-color: var(--border-color, #333333);
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden; /* tiles scroll inside, the screen never grows */
+}
 /* batch 23 (user): many resizable preview blocks can overflow the pane -
-   scroll instead of clipping.  Charts keep their user-set heights, so the
-   section scrolls as a whole; the thumbnail grid keeps a floor height. */
+   scroll instead of clipping.  MUST stay AFTER the .cdlapp-section rule
+   above: same specificity (id + class), so source order decides, and this
+   must win over that block's overflow: hidden.  Charts keep their user-set
+   heights, so the section scrolls as a whole. */
 #cdl-app-extras .cdlapp-sec-previews,
 #cdl-app-panel .cdlapp-sec-previews {
   overflow-y: auto;
@@ -128,21 +145,6 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
 #cdl-app-panel .cdlapp-sec-previews::-webkit-scrollbar-thumb {
   background: var(--border-color, #333333);
   border-radius: 4px;
-}
-#cdl-app-extras .cdlapp-preview-grid {
-  min-height: 160px;
-}
-#cdl-app-extras .cdlapp-sec-outputs { grid-area: out; }
-#cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
-#cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
-#cdl-app-extras .cdlapp-section {
-  background: transparent;
-  border-color: var(--border-color, #333333);
-  margin-bottom: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden; /* tiles scroll inside, the screen never grows */
 }
 #cdl-app-extras .cdlapp-out-list,
 #cdl-app-extras .cdlapp-err-list,
