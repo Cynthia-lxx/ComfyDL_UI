@@ -241,6 +241,14 @@ if GGUF_OK:
               "TOTAL" in text and "saved" in text)
         check("T5k inspector render carries both layers",
               text.count("model.diffusion_model") == 2)
+
+        # Release the mmapped tensors BEFORE the TemporaryDirectory context
+        # exits - GGMLTensors hold the .gguf mmap open, and Windows refuses
+        # to unlink a mapped file (WinError 32).
+        import gc  # noqa: E402
+
+        del sd, extra, w, b, summary, text, w_entry
+        gc.collect()
 else:
     for name in ("T4 table cross-check", "T5 K-quant reference dequant",
                  "T5b-j gguf fixture round-trip"):
