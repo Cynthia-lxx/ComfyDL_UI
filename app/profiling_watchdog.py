@@ -1,15 +1,19 @@
 """Execution-time resource watchdog of the ComfyDL profiling tools (M2).
 
-A single daemon thread samples, every ``interval_s`` (default 250 ms):
+Dual-track P0 (2026-10-31): the sampling thread is gone - ticks now arrive
+from the shared observation spine (``app/spine``), which samples every tick
+the same facts this module used to sample itself:
 
 * the ComfyUI process's own CPU percent (psutil, *per-core scale*: one
   fully-busy core reads ~100, so ``cpu_count`` busy cores read
   ``100 * cpu_count``) and RSS;
 * the system-wide CPU percent (psutil, normalized 0-100).
 
-Every sample is attributed to the node currently executing by reading
-``server.last_node_id`` - the same anchor the ``executing`` WebSocket event
-maintains - so no extra event plumbing is needed.
+The burst state machine, the JSONL ledger, the snapshot/recent reads and
+the ``node_id`` attribution (reading ``server.last_node_id`` in the tick
+callback - the same anchor the ``executing`` WebSocket event maintains) all
+survive unchanged; only the thread ownership moved, so one shared daemon
+now serves every observer instead of one per feature.
 
 When the process CPU holds at or above ``cpu_threshold`` (per-core scale)
 for ``sustain_s``, a *burst event* opens; it closes (and is appended to
@@ -22,7 +26,7 @@ became unusable" case the watchdog was asked to document.
 Design rules (mirrors the M1 philosophy):
 
 * the watchdog may never break the server: every tick is wrapped, every
-  failure is logged at most once and swallowed, stop() joins the thread;
+  failure is logged at most once and swallowed, stop() detaches cleanly;
 * psutil missing -> the watchdog silently disables itself;
 * the JSONL log is append-only and survives restarts; if it cannot be
   written, events fall back to an in-memory ring buffer and the counter
@@ -78,6 +82,14 @@ def _env_float(name: str, default: float, low: float) -> float:
         return default
 
 
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """Coerce a spine snapshot field (possibly an error dict) to a number."""
+    try:
+        return round(float(value), 1)
+    except (TypeError, ValueError):
+        return default
+
+
 class ProfilingWatchdog:
     """The M2 execution-time watchdog (see the module docstring)."""
 
@@ -111,8 +123,8 @@ class ProfilingWatchdog:
         self._scale_hint_fn = scale_hint_fn
         self._cores = os.cpu_count() or 1
         self._process = psutil.Process() if PSUTIL_OK else None
-        self._thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None  # legacy (W3b reads it)
+        self._running = False
         self._lock = threading.Lock()
         self._latest: Dict[str, Any] = {}
         self._events_written = 0
@@ -125,25 +137,42 @@ class ProfilingWatchdog:
 
     # -- lifecycle ----------------------------------------------------------
     def start(self) -> None:
-        """Start the sampling thread (idempotent; a no-op without psutil)."""
+        """Attach to the observation spine (idempotent; a no-op without
+        psutil).  The spine switch is hot-enabled and its rate lowered to
+        at most this watchdog's interval - the shared thread then ticks
+        :meth:`_on_spine_tick`."""
         if not PSUTIL_OK:
             print("[ComfyDL watchdog] psutil unavailable - execution monitoring disabled")
             return
-        if self._thread is not None and self._thread.is_alive():
+        if self._running:
             return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._run, name="comfydl-profiling-watchdog", daemon=True
-        )
-        self._thread.start()
+        from app.spine import SWITCH_ID as _spine_switch, get_spine
+        from comfy.profiling import switch_registry as _switch_registry
+
+        spine = get_spine()
+        if not _switch_registry.set_enabled(_spine_switch, True):
+            print("[ComfyDL watchdog] spine hard-disabled - cannot attach")
+            return
+        spine.add_listener(self._on_spine_tick)
+        if spine.rate_s <= 0 or spine.rate_s > self._interval:
+            spine.set_rate(self._interval)
+        spine.start()
+        self._running = True
 
     def stop(self, timeout_s: float = 5.0) -> None:
-        """Join the sampling thread; safe to call more than once."""
-        self._stop_event.set()
-        thread = self._thread
-        if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=timeout_s)
-        self._thread = None
+        """Detach from the spine (signature kept for call-site compatibility;
+        ``timeout_s`` is accepted and ignored - there is no thread to join).
+        The shared thread itself is stopped when this was its last listener."""
+        try:
+            from app.spine import get_spine
+
+            spine = get_spine()
+            spine.remove_listener(self._on_spine_tick)
+            if spine.listener_count() == 0:
+                spine.stop()
+        except Exception:  # noqa: BLE001 - stop() must always succeed
+            pass
+        self._running = False
 
     # -- public reads -------------------------------------------------------
     def snapshot(self) -> dict:
@@ -158,7 +187,7 @@ class ProfilingWatchdog:
         latest.update(
             {
                 "available": True,
-                "running": self._thread is not None and self._thread.is_alive(),
+                "running": self._running,
                 "cores": self._cores,
                 "cpu_threshold": self._threshold,
                 "sustain_s": self._sustain,
@@ -197,34 +226,30 @@ class ProfilingWatchdog:
         return events[-limit:]
 
     # -- internals ----------------------------------------------------------
-    def _run(self) -> None:
-        assert self._process is not None
-        try:  # prime both counters: the first cpu_percent() call returns 0
-            self._process.cpu_percent(None)
-            psutil.cpu_percent(None)
-        except Exception:
-            pass
-        while not self._stop_event.wait(self._interval):
-            try:
-                self._tick()
-            except Exception:  # never let a sampling error kill the thread
-                pass
+    def _on_spine_tick(self, snap) -> None:
+        """Spine listener: one observation tick -> one attributed sample.
 
-    def _tick(self) -> None:
-        now = time.monotonic()
-        sample = {
-            "ts_epoch": time.time(),
-            "process_cpu_percent": round(float(self._process.cpu_percent(None)), 1),
-            "system_cpu_percent": round(float(psutil.cpu_percent(None)), 1),
-            "process_rss_mb": round(
-                self._process.memory_info().rss / (1024 * 1024), 1
-            ),
-            "node_id": getattr(self._server, "last_node_id", None),
-            "prompt_id": getattr(self._server, "last_prompt_id", None),
-        }
-        with self._lock:
-            self._latest = sample
-            self._evaluate(now, sample)
+        Field sources mirror the old ``_tick`` exactly: process CPU (per-core
+        scale) and RSS from the spine's ``proc`` section, system CPU from
+        ``cpu.percent``; the node/prompt attribution is still read here, at
+        tick time, from the server attributes the executor maintains.
+        Provider errors degrade to 0.0 rather than raising.
+        """
+        try:
+            now = time.monotonic()
+            sample = {
+                "ts_epoch": snap.ts,
+                "process_cpu_percent": _as_float(snap.proc.get("cpu_percent")),
+                "system_cpu_percent": _as_float(snap.cpu.get("percent")),
+                "process_rss_mb": _as_float(snap.proc.get("rss_mb")),
+                "node_id": getattr(self._server, "last_node_id", None),
+                "prompt_id": getattr(self._server, "last_prompt_id", None),
+            }
+            with self._lock:
+                self._latest = sample
+                self._evaluate(now, sample)
+        except Exception:  # never let a listener error reach the spine thread
+            pass
 
     def _evaluate(self, now: float, sample: Dict[str, Any]) -> None:
         """The pure burst-state machine, isolated so tests can drive it."""

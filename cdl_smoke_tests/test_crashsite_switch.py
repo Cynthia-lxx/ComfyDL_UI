@@ -58,13 +58,13 @@ store.snapshots_root = lambda: _TMP_ROOT
 
 from comfy import crashsite_switch as switch  # noqa: E402
 from comfy_execution import cache_provider as cp  # noqa: E402
+from comfy.profiling import switch_registry as sreg  # noqa: E402
 
 
 def _switch_reset() -> None:
     """Restore pristine switch state between checks."""
-    switch._hard_disabled = False
-    switch._hard_checked = False
-    switch._master_enabled = True
+    sreg._force_state(switch.SWITCH_ID, enabled=True,
+                      hard_disabled=False, hard_checked=True)
 
 
 # ----------------------------------------------------------- T1: CLI flag ----
@@ -90,9 +90,8 @@ def _switch_checks() -> None:
 
     # Hard-disable (as if --cdl-crashsite-disable were on the command line):
     # master is forced off and re-enabling is refused until a "restart".
-    switch._hard_disabled = True
-    switch._hard_checked = True
-    switch._master_enabled = False
+    sreg._force_state(switch.SWITCH_ID, enabled=False,
+                      hard_disabled=True, hard_checked=True)
     check("T2 hard-disabled reads off", switch.is_master_enabled() is False)
     check("T2 re-enable refused while hard-disabled",
           switch.set_master_enabled(True) is False)
@@ -105,14 +104,14 @@ def _switch_checks() -> None:
     try:
         from comfy.profiling import proflog as _prof
 
-        _prof._hard_disabled = True
-        switch._hard_checked = False  # force a re-read of the flags
+        sreg._force_state(_prof.SWITCH_ID, hard_disabled=True, hard_checked=True)
+        sreg._force_state(switch.SWITCH_ID, hard_checked=False)  # force a re-read
         check("T2 profiling hard flag carries over", switch.is_hard_disabled() is True)
         check("T2 carry-over forces master off", switch.is_master_enabled() is False)
     finally:
         from comfy.profiling import proflog as _prof
 
-        _prof._hard_disabled = False
+        sreg._force_state(_prof.SWITCH_ID, hard_disabled=False, hard_checked=True)
     _switch_reset()
 
 
@@ -160,7 +159,7 @@ def _checkpoint_checks() -> None:
               tc.save(key, {"step": 1}) is False)
 
         # Disabled: everything short-circuits BEFORE any work.
-        switch._master_enabled = False
+        sreg._force_state(switch.SWITCH_ID, enabled=False)
         start = time.perf_counter()
         key_off = tc.run_key({"node": "T", "X": X})
         elapsed = time.perf_counter() - start
@@ -245,9 +244,8 @@ def _route_checks() -> None:
                       and provider.is_enabled() is True)
 
                 # Hard-disabled: the POST must refuse to re-enable with 409.
-                switch._hard_disabled = True
-                switch._hard_checked = True
-                switch._master_enabled = False
+                sreg._force_state(switch.SWITCH_ID, enabled=False,
+                                  hard_disabled=True, hard_checked=True)
                 r = await client.post(
                     "/comfydl/crashsite/enabled", json={"enabled": True})
                 check("R7 hard-disabled POST rejected with 409", r.status == 409,

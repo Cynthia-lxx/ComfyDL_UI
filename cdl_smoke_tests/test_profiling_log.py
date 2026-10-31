@@ -129,19 +129,21 @@ def _master_checks() -> None:
         set_master_enabled(True)
 
     # Hard disable refuses re-enable (simulate the CLI flag by flipping the
-    # module internals directly - parse_args cannot run inside a live app).
+    # switch-registry state directly - parse_args cannot run inside a live
+    # app; the registry's test hook replaces the old module-globals patch).
+    from comfy.profiling import switch_registry as _sreg
+
     try:
-        proflog._hard_checked = True
-        proflog._hard_disabled = True
-        proflog._master_enabled = False
+        _sreg._force_state(proflog.SWITCH_ID, enabled=False,
+                           hard_disabled=True, hard_checked=True)
         check("T5f hard disabled reported", is_hard_disabled() is True)
         check("T5g hard refuses enable", set_master_enabled(True) is False
               and is_master_enabled() is False)
         check("T5h meter stays off under hard disable",
               runmeter.meter_from_args() is None)
     finally:
-        proflog._hard_disabled = False
-        proflog._master_enabled = True
+        _sreg._force_state(proflog.SWITCH_ID, enabled=True,
+                           hard_disabled=False, hard_checked=True)
 
     # The /enabled endpoint through a real TestServer.
     try:

@@ -29,52 +29,49 @@ importing ``app``.
 
 from __future__ import annotations
 
-import threading
+from comfy.profiling import switch_registry as _switch_registry
 
-_lock = threading.Lock()
-_hard_disabled = False
-_hard_checked = False
-_master_enabled = True
+#: Registry id of the crash site master switch.
+SWITCH_ID = "comfydl.crashsite"
 
 
-def _check_hard_disabled() -> None:
-    """One-time lazy read of the hard-disable flags (no torch import)."""
-    global _hard_disabled, _hard_checked
-    if _hard_checked:
-        return
-    _hard_checked = True
+def _hard_disable_probe() -> bool:
+    """``--cdl-crashsite-disable`` OR profiling's hard flag (see docstring)."""
     try:
         from comfy import cli_args
 
-        _hard_disabled = bool(
-            getattr(cli_args.args, "cdl_crashsite_disable", False))
+        if bool(getattr(cli_args.args, "cdl_crashsite_disable", False)):
+            return True
     except Exception:  # pragma: no cover - cli_args always exists in-process
-        _hard_disabled = False
-    if not _hard_disabled:
-        # Historical continuity: --cdl-profiling-disable hard-disables the
-        # whole analysis stack AND the crash site's capture with it (server.py
-        # M1 behaviour - see server.py's provider registration block).
-        try:
-            from comfy.profiling.proflog import is_hard_disabled as _prof_off
+        pass
+    # Historical continuity: --cdl-profiling-disable hard-disables the
+    # whole analysis stack AND the crash site's capture with it (server.py
+    # M1 behaviour - see server.py's provider registration block).
+    try:
+        from comfy.profiling.proflog import is_hard_disabled as _prof_off
 
-            _hard_disabled = bool(_prof_off())
-        except Exception:  # noqa: BLE001 - profiling may be absent
-            pass
-    if _hard_disabled:
-        global _master_enabled
-        _master_enabled = False
+        return bool(_prof_off())
+    except Exception:  # noqa: BLE001 - profiling may be absent
+        return False
+
+
+_switch_registry.register_switch(
+    SWITCH_ID,
+    default=True,
+    hot_toggle=True,
+    self_meter=True,
+    hard_disable_check=_hard_disable_probe,
+)
 
 
 def is_hard_disabled() -> bool:
     """True when ``--cdl-crashsite-disable`` (or profiling's hard flag) is set."""
-    _check_hard_disabled()
-    return _hard_disabled
+    return _switch_registry.is_hard_disabled(SWITCH_ID)
 
 
 def is_master_enabled() -> bool:
     """Whether the crash site participates in the run path at all."""
-    _check_hard_disabled()
-    return _master_enabled
+    return _switch_registry.is_enabled(SWITCH_ID)
 
 
 def set_master_enabled(enabled: bool) -> bool:
@@ -83,10 +80,4 @@ def set_master_enabled(enabled: bool) -> bool:
     Refuses to re-enable a hard-disabled process - that needs a restart
     without the hard flag.
     """
-    global _master_enabled
-    _check_hard_disabled()
-    if _hard_disabled:
-        return False
-    with _lock:
-        _master_enabled = bool(enabled)
-    return _master_enabled
+    return _switch_registry.set_enabled(SWITCH_ID, enabled)

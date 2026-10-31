@@ -285,6 +285,14 @@ class PromptServer():
         for route in cdlapp_routes.routes:
             if isinstance(route, web.RouteDef):
                 routes.route(route.method, route.path)(route.handler, **route.kwargs)
+        # ComfyDL observation spine (dual-track P0): one shared sampling
+        # thread + one WS channel for every observer (watchdog today, App
+        # Panel gauges / runs curves in P6). Same merge idiom, same /api
+        # twin treatment.
+        from app.spine import routes as spine_routes
+        for route in spine_routes.routes:
+            if isinstance(route, web.RouteDef):
+                routes.route(route.method, route.path)(route.handler, **route.kwargs)
         self.last_node_id = None
         self.last_prompt_id = None
         self.client_id = None
@@ -336,6 +344,19 @@ class PromptServer():
             from comfy_execution.cache_provider import register_cache_provider
 
             register_cache_provider(self.crashsite_provider)
+
+        # Observation spine wiring (dual-track P0): bind the PromptServer for
+        # WS pushes; the spine switch ships OFF by default - consumers (the
+        # watchdog after its migration, panels) or PATCH /comfydl/spine
+        # start it, so the default run path pays nothing for it.
+        from app.spine import get_spine
+        from app.spine.bus import SWITCH_ID as _spine_switch_id
+        from comfy.profiling import switch_registry as _switch_registry
+
+        self.spine = get_spine()
+        self.spine.attach_server(self)
+        if _switch_registry.is_enabled(_spine_switch_id):
+            self.spine.start()
 
         self.on_prompt_handlers = []
 
