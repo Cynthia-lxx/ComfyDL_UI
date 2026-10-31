@@ -711,6 +711,10 @@ async def init_builtin_extra_nodes():
         # Quantization family (SP-4, M-B; ADR-D3): GGUF lazy-dequant loader +
         # quantization inspector, backed by comfy/quant_formats.py.
         "nodes_quant.py",
+        # VRAM manager (P1c, M-B; ADR-D7): unified purge + external-VRAM
+        # correction, backed by comfy/vram_manager.py. Hard-disabled on
+        # CPU-only machines (module raises at import by design).
+        "nodes_vram.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",

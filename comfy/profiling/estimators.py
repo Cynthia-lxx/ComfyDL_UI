@@ -2491,6 +2491,25 @@ def _estimate_quant_inspector(ctx: EstimationCtx) -> NodeEstimate:
     return estimate
 
 
+@register("CdlPurgeVRAM")
+def _estimate_vram_purge(ctx: EstimationCtx) -> NodeEstimate:
+    """Runtime release action (ADR-D7 ③): a *negative* memory footprint -
+    it can only free memory, never allocate.  Static estimate: zero."""
+    estimate = NodeEstimate(
+        basis={"key": "vram_purge", "params": {
+            "offload_models": bool(ctx.widget("offload_models", False)),
+            "apply_correction": bool(ctx.widget("apply_correction", False)),
+        }}
+    )
+    estimate.outputs = [Unknown("scalar")]
+    estimate.items = []
+    estimate.confidence = "exact"
+    estimate.reason = (
+        "releases memory (gc + cache empty + optional model unload); "
+        "static footprint is zero - the ledger it prints is the real number")
+    return estimate
+
+
 @register("VAELoader")
 def _estimate_vae_loader(ctx: EstimationCtx) -> NodeEstimate:
     """VAE only."""
