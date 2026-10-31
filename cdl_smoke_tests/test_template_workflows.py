@@ -129,6 +129,7 @@ def main() -> int:
         "classification_from_scratch",
         "tabular_classification_production",
         "formula_playground_app",
+        "attention_lab",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -245,6 +246,33 @@ def main() -> int:
     check("F: hidden-32 MLP beats the linear floor", float(rmse_f) < 0.35,
           f"rmse={float(rmse_f):.4f} mae={float(mae_f):.4f}")
     check("F: plot produced IMAGE", out[3][0].dim() == 4)
+
+    # --- Template G: attention_lab (structural only) -------------------------- #
+    # The graph needs a real checkpoint in models/checkpoints to execute, so
+    # only the wiring is asserted here; the node behaviour itself is covered
+    # by test_attention_select.py and the node smoke runner.
+    wf_g = json.loads(
+        (workflows_dir / "attention_lab.json").read_text(encoding="utf-8-sig"))
+    types_g = [n["type"] for n in wf_g["nodes"]]
+    check("G: all five lab nodes present",
+          types_g.count("SaveText") == 2
+          and set(types_g) == {"MarkdownNote", "CheckpointLoaderSimple",
+                               "CdlAttentionOptimizer", "CdlAttentionBackend",
+                               "SaveText"},
+          str(types_g))
+    links_g = {l[0]: (l[1], l[2], l[3], l[4]) for l in wf_g["links"]}
+    node_ids = {n["id"] for n in wf_g["nodes"]}
+    check("G: MODEL chain loader -> optimizer -> backend",
+          links_g[1][:2] == (2, 0) and links_g[1][2:] == (3, 0)
+          and links_g[2][:2] == (3, 0) and links_g[2][2:] == (4, 0),
+          str(links_g))
+    # Both STRING reports must reach a SaveText node (the promised artifacts).
+    string_links = [l for l in wf_g["links"] if l[5] == "STRING"]
+    check("G: both reports wired into SaveText",
+          len(string_links) == 2
+          and all(links_g[l[0]][2] in node_ids for l in string_links)
+          and all(next(n for n in wf_g["nodes"] if n["id"] == links_g[l[0]][2])["type"] == "SaveText"
+                  for l in string_links))
 
     return _report()
 

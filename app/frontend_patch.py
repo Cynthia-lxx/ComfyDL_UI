@@ -62,6 +62,14 @@ CRASHSITE_LOADER_TAG = (
 )
 CRASHSITE_LOADER_MARK = "<!--ComfyDL_UI:crashsite-loader-->"
 
+# The perf-tools settings module (dual-track M-B): registers the
+# attention-select / torch.compile hot toggles in Settings > ComfyDL.
+PERF_LOADER_TAG = (
+    '<!--ComfyDL_UI:perf-loader-->'
+    '<script type="module" src="/comfydl/perf/perftools.js"></script>'
+)
+PERF_LOADER_MARK = "<!--ComfyDL_UI:perf-loader-->"
+
 # The CDL App Panel: companion overlay for the official beta App mode.  Same
 # loader pattern; the panel mounts itself only while app-mode coach anchors
 # are present, so the tag is inert everywhere else.
@@ -260,6 +268,7 @@ DEFAULT_WORKFLOW_MARK = "/*ComfyDL_UI:default-workflow*/"
 I18N_NODEDEFS_MARK = "/*ComfyDL_UI:i18n-nodedefs*/"
 I18N_MAIN_MARK = "/*ComfyDL_UI:i18n-main*/"
 I18N_SETTINGS_MARK = "/*ComfyDL_UI:i18n-settings*/"
+I18N_PERF_MARK = "/*ComfyDL_UI:i18n-perf-cat*/"
 
 #: The ComfyDL settings whose names are translated into the zh settings chunk.
 #: Keys follow the official convention: the setting id with "." -> "_".
@@ -296,6 +305,7 @@ I18N_SETTINGS_CATEGORIES_ZH = {
     "ComfyDL": "ComfyDL 工具包",
     "CrashSite": "事故现场",
     "Profiling": "性能分析",
+    "Perf": "性能开关",
     "Motion": "动效",
     "App": "App",
 }
@@ -325,6 +335,10 @@ def apply_frontend_patches(web_root: str) -> None:
         ("default workflow", _patch_default_workflow),
         ("startup workflow", _patch_startup_workflow),
         ("help menu group", _patch_help_menu),
+        # Incremental i18n: frontends patched before the perf-tools settings
+        # existed still need the new category name (own marker, safe to run
+        # alongside the bulk zh merge).
+        ("perf category i18n", _patch_perf_category_i18n),
     ):
         try:
             if patch(assets):
@@ -352,6 +366,13 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("cdlapp loader")
     except Exception as exc:
         logging.warning(f"{TAG} cdlapp loader not applied: {exc}")
+
+    # The perf-tools loader: same channel.
+    try:
+        if _patch_perf_loader(Path(web_root)):
+            applied.append("perf loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} perf loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -939,6 +960,60 @@ def _patch_cdlapp_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", CDLAPP_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} cdlapp panel loader injected into {path.name}")
+    return True
+
+
+def _patch_perf_loader(web_root: Path) -> bool:
+    """Inject the perf-tools settings module's loader into ``index.html``.
+
+    Same pattern as the other panel loaders: the module is a repository asset
+    served by ``server.py`` from ``/comfydl/perf/``, and this patch only adds
+    the one ``<script type="module">`` tag before ``</body>``.  The module
+    registers the ``ComfyDL.Perf.*`` hot toggles in Settings > ComfyDL.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if PERF_LOADER_MARK in text:
+        logging.debug(f"{TAG} perf loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", PERF_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} perf-tools loader injected into {path.name}")
+    return True
+
+
+def _patch_perf_category_i18n(assets: Path) -> bool:
+    """Add the ``Perf`` settings-category zh name to already-patched frontends.
+
+    The bulk i18n merge (``_patch_i18n``) is guarded by the whole-block marker
+    ``I18N_MAIN_MARK``, so frontends patched before the perf-tools settings
+    existed would never learn the new group name.  This incremental patch has
+    its own idempotency check (``I18N_PERF_MARK``) and appends one extra
+    ``Object.assign`` on the same ``settingsCategories`` object the bulk patch
+    merged into (same ``<default> as default`` variable idiom).
+    """
+    names = _zh_chunk_names(assets)
+    mn = assets / names["main"]
+    text = _text(mn)
+    if I18N_PERF_MARK in text:
+        logging.debug(f"{TAG} perf category i18n already applied")
+        return False
+    m = re.search(r"(\w+) as default", text)
+    if not m:
+        raise ValueError(f"no default export in {mn.name}")
+    dv = m.group(1)
+    insert = (
+        f";(function(){{var sc=({dv}.settingsCategories="
+        f"{dv}.settingsCategories||{{}});{I18N_PERF_MARK}"
+        f"sc.Perf=`性能开关`;}})();"
+    )
+    idx = text.rfind(";export{")
+    if idx < 0:
+        raise ValueError(f"no export statement in {mn.name}")
+    _write(mn, text[:idx] + insert + text[idx:])
+    logging.info(f"{TAG} perf category i18n merged into {mn.name}")
     return True
 
 

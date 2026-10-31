@@ -130,6 +130,7 @@ check(
         "classification_from_scratch",
         "tabular_classification_production",
         "formula_playground_app",
+        "attention_lab",
     },
     str(sorted(comfydl_names)),
 )

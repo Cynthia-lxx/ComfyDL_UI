@@ -83,3 +83,40 @@ async def spine_configure(request: web.Request) -> web.Response:
             spine.stop()
 
     return web.json_response(_state_payload())
+
+
+@routes.get("/comfydl/switches")
+async def switches_list(request: web.Request) -> web.Response:
+    """Every registered feature switch, for the Settings > ComfyDL panel."""
+    return web.json_response({
+        "switches": [switch_registry.describe(sid)
+                     for sid in switch_registry.list_switches()]
+    })
+
+
+@routes.patch("/comfydl/switches/{switch_id}")
+async def switches_set(request: web.Request) -> web.Response:
+    """Hot-toggle one feature switch: ``{"enabled": bool}``.
+
+    Same contract as every other switch route: unknown id 404, re-enabling a
+    hard-disabled process 409 (needs a restart without the hard flag), success
+    echoes the fresh description so the panel never lies.
+    """
+    switch_id = request.match_info["switch_id"]
+    if switch_id not in switch_registry.list_switches():
+        return web.json_response({"error": "unknown switch"}, status=404)
+    try:
+        body: Dict[str, Any] = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    enabled = body.get("enabled") if isinstance(body, dict) else None
+    if not isinstance(enabled, bool):
+        return web.json_response({"error": "enabled must be a boolean"},
+                                 status=400)
+    if enabled and switch_registry.is_hard_disabled(switch_id):
+        return web.json_response(
+            {"error": "hard-disabled",
+             "switch": switch_registry.describe(switch_id)},
+            status=409)
+    switch_registry.set_enabled(switch_id, enabled)
+    return web.json_response({"switch": switch_registry.describe(switch_id)})

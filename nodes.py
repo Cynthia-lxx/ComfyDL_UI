@@ -704,6 +704,10 @@ async def init_builtin_extra_nodes():
         # Rehydrated generation nodes: Empty Latent Image + KSampler (real sampling
         # stack restored under comfy.sample / comfy.samplers / comfy.k_diffusion).
         "nodes_generation.py",
+        # Performance cluster (M-B): attention backend selection + torch.compile
+        # wrapper, backed by comfy/attention_select.py and comfy/compile_manager.py.
+        "nodes_attention_select.py",
+        "nodes_compile.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",

@@ -1037,6 +1037,7 @@ _SKIPPED_NODES: dict[str, str] = {
     "GetImageSize": "reports progress through PromptServer.instance, which only exists inside the server",
     "CdlReadXLSX": "needs openpyxl (xlsx reader) - covered by cdl_smoke_tests/test_data_io.py",
     "CdlReadAccDB": "needs pyodbc + Microsoft Access driver - covered by cdl_smoke_tests/test_data_io.py",
+    "CdlCompileModel": "needs a real diffusion_model module to compile (the fake MODEL is a flat StateDictModule) - covered by cdl_smoke_tests/test_compile.py",
 }
 
 #: node id -> substring its raised error must contain.  These nodes are part of the

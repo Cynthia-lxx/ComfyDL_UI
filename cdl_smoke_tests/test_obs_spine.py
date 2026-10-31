@@ -260,6 +260,9 @@ async def _route_checks() -> None:
     from aiohttp.test_utils import TestClient, TestServer
 
     from app.spine import routes as spine_routes
+    # The perf switches register at module import (same as at boot).
+    import comfy_extras.nodes_attention_select  # noqa: F401
+    import comfy_extras.nodes_compile  # noqa: F401
 
     spine = get_spine()
     switch_registry._force_state(SWITCH_ID, enabled=True, hard_checked=True)
@@ -299,6 +302,39 @@ async def _route_checks() -> None:
               resp.status == 400)
         resp = await client.patch("/comfydl/spine", data=b"not json")
         check("T5f route: non-JSON body rejected with 400",
+              resp.status == 400)
+
+        # --- T5g-i: the generic switch registry routes (perf panel) -------
+        resp = await client.get("/comfydl/switches")
+        body = await resp.json()
+        ids = {s["id"] for s in body.get("switches", [])}
+        check("T5g route: GET switches lists every registered switch",
+              resp.status == 200
+              and {"comfydl.attention_select", "comfydl.compile"} <= ids,
+              str(sorted(ids))[:120])
+        desc = {s["id"]: s for s in body.get("switches", [])}
+        check("T5g2 route: descriptions carry the panel's fields",
+              all(k in desc.get("comfydl.attention_select", {})
+                  for k in ("enabled", "default", "hot_toggle", "self_meter",
+                            "self_overhead")))
+
+        original = desc["comfydl.compile"]["enabled"]
+        resp = await client.patch("/comfydl/switches/comfydl.compile",
+                                  json={"enabled": not original})
+        body = await resp.json()
+        check("T5h route: PATCH toggles a switch and echoes the fresh state",
+              resp.status == 200
+              and body["switch"]["enabled"] is (not original))
+        # restore
+        await client.patch("/comfydl/switches/comfydl.compile",
+                           json={"enabled": original})
+
+        resp = await client.patch("/comfydl/switches/comfydl.nope",
+                                  json={"enabled": False})
+        check("T5i route: unknown switch id 404s", resp.status == 404)
+        resp = await client.patch("/comfydl/switches/comfydl.compile",
+                                  json={"enabled": "yes"})
+        check("T5i2 route: non-boolean enabled rejected with 400",
               resp.status == 400)
     finally:
         await client.close()

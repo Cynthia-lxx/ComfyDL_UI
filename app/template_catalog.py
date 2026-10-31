@@ -73,6 +73,7 @@ _UUID_RE = re.compile(
 _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "language_model_load_and_chat": "language_model_train_and_chat-1.png",
     "regression_model_reuse": "tabular_regression_production-1.png",
+    "attention_lab": "language_model_train_and_chat-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -232,6 +233,23 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             # badge and the Apps vs Node-Graph filter in the template browser.
             "isApp": True,
         },
+        {
+            "name": "attention_lab",
+            "title": "Attention Lab",
+            "description": (
+                "Two facades of one mechanism on the MODEL protocol layer: "
+                "Attention Optimizer (Auto) benchmarks every runnable "
+                "attention backend, attaches the fastest to the MODEL branch "
+                "and prints the timing table (cached - re-runs are free); "
+                "Attention Backend (Manual) pins one backend and explains "
+                "what it does. Needs any checkpoint in models/checkpoints."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "png",
+            "tags": ["attention", "performance", "benchmark", "backend"],
+            "date": "2026-10-31",
+            "openSource": True,
+        },
     ],
 }
 
@@ -277,6 +295,12 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "首个默认以 App 模式打开的 ComfyDL 工作流（ComfyUI APP mode，Beta）：在 App 输入面板里改"
             "公式、噪声、种子、步数与学习率，按 Run 即可在 App 输出区看到训练 loss 曲线；随时切回节点图"
             "查看内部结构。"
+        ),
+        "attention_lab": (
+            "MODEL 协议层上同一机制的两副面孔：Attention Optimizer (Auto) 实测本机所有可运行的 "
+            "attention 后端，把最快者挂到 MODEL 分支并输出计时表（结果有缓存，重跑零开销）；"
+            "Attention Backend (Manual) 手动钉选一个后端并讲解其原理。需在 models/checkpoints "
+            "中放任意一个 checkpoint。"
         ),
     },
 }
