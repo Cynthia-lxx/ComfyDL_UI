@@ -152,19 +152,26 @@ if GGUF_OK:
     except Exception as exc:  # noqa: BLE001
         skip("T4b gguf version probe", str(exc))
 
-    # T5: random-block K-quants vs gguf-py reference dequantizer
-    for qtype, block_size, type_size in ((qf.QTYPE_Q4_K, 256, 144),
-                                         (qf.QTYPE_Q6_K, 256, 210)):
-        n_blocks = 16
+    # T5: every pure-torch kernel vs gguf-py's reference dequantizer, on
+    # random raw blocks (any bytes decode to *some* valid values).
+    for qtype, (block_size, type_size) in sorted(qf.GGML_QTYPE_SIZES.items()):
+        if qtype not in qf._DEQUANT_FUNCTIONS:
+            continue  # no torch kernel: numpy fallback covers it
+        n_blocks = 8
         rng = torch.randint(0, 255, (n_blocks, type_size), dtype=torch.uint8)
-        ours = qf.dequantize(rng.reshape(-1), qtype,
-                             torch.Size((n_blocks, block_size)),
-                             dtype=torch.float32).flatten()
+        try:
+            ours = qf.dequantize(rng.reshape(-1), qtype,
+                                 torch.Size((n_blocks, block_size)),
+                                 dtype=torch.float32).flatten()
+        except Exception as exc:  # noqa: BLE001
+            check(f"T5 {qf.qtype_name(qtype)} kernel runs", False, repr(exc))
+            continue
         ref = gguf.quants.dequantize(rng.numpy(), gguf.GGMLQuantizationType(qtype))
         ref_t = torch.from_numpy(ref.copy()).flatten().to(torch.float32)
         scale = ref_t.abs().max().clamp(min=1e-6)
         check(f"T5 {qf.qtype_name(qtype)} torch dequant matches gguf-py reference",
-              torch.allclose(ours, ref_t, atol=scale * 1e-3),
+              ours.shape == ref_t.shape
+              and torch.allclose(ours, ref_t, atol=scale * 1e-3),
               f"max diff {(ours - ref_t).abs().max().item():.3e} vs scale {scale.item():.2f}")
 
     # T5b/T5c: fixture round-trip through a real .gguf file

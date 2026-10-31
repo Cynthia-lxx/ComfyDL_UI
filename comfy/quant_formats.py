@@ -42,43 +42,46 @@ import torch
 # GGML type codes + size table (gguf-py GGMLQuantizationType / GGML_QUANT_SIZES)
 # --------------------------------------------------------------------------- #
 
-#: GGML quantization type integer codes (stable across gguf-py versions).
+#: GGML quantization type integer codes - MIRRORED from gguf-py 0.13.0's
+#: ``GGMLQuantizationType`` (dumped via the T4 cross-check in
+#: ``cdl_smoke_tests/test_quant_gguf.py``, which fails loudly on drift).
+#: Do NOT hand-edit: re-dump from the installed package instead.
 QTYPE_F32 = 0
 QTYPE_F16 = 1
 QTYPE_Q4_0 = 2
 QTYPE_Q4_1 = 3
-QTYPE_Q4_1_SOME_F16 = 4
+QTYPE_Q5_0 = 6
+QTYPE_Q5_1 = 7
 QTYPE_Q8_0 = 8
-QTYPE_Q5_0 = 9
-QTYPE_Q5_1 = 10
-QTYPE_Q2_K = 11
-QTYPE_Q3_K = 12
-QTYPE_Q4_K = 13
-QTYPE_Q5_K = 14
-QTYPE_Q6_K = 15
-QTYPE_Q8_K = 16
-QTYPE_IQ2_XXS = 17
-QTYPE_IQ2_XS = 18
-QTYPE_IQ3_XXS = 19
-QTYPE_IQ1_S = 20
-QTYPE_IQ4_NL = 21
-QTYPE_IQ3_S = 22
-QTYPE_IQ2_S = 23
-QTYPE_IQ4_XS = 24
-QTYPE_I8 = 25
-QTYPE_I16 = 26
-QTYPE_I32 = 27
-QTYPE_I64 = 28
-QTYPE_F64 = 29
-QTYPE_IQ1_M = 30
-QTYPE_BF16 = 31
-QTYPE_TQ1_0 = 36
-QTYPE_TQ2_0 = 37
+QTYPE_Q8_1 = 9
+QTYPE_Q2_K = 10
+QTYPE_Q3_K = 11
+QTYPE_Q4_K = 12
+QTYPE_Q5_K = 13
+QTYPE_Q6_K = 14
+QTYPE_Q8_K = 15
+QTYPE_IQ2_XXS = 16
+QTYPE_IQ2_XS = 17
+QTYPE_IQ3_XXS = 18
+QTYPE_IQ1_S = 19
+QTYPE_IQ4_NL = 20
+QTYPE_IQ3_S = 21
+QTYPE_IQ2_S = 22
+QTYPE_IQ4_XS = 23
+QTYPE_I8 = 24
+QTYPE_I16 = 25
+QTYPE_I32 = 26
+QTYPE_I64 = 27
+QTYPE_F64 = 28
+QTYPE_IQ1_M = 29
+QTYPE_BF16 = 30
+QTYPE_TQ1_0 = 34
+QTYPE_TQ2_0 = 35
 
 QTYPE_NAMES: Dict[int, str] = {
     QTYPE_F32: "F32", QTYPE_F16: "F16", QTYPE_Q4_0: "Q4_0", QTYPE_Q4_1: "Q4_1",
-    QTYPE_Q4_1_SOME_F16: "Q4_1_SOME_F16", QTYPE_Q8_0: "Q8_0", QTYPE_Q5_0: "Q5_0",
-    QTYPE_Q5_1: "Q5_1", QTYPE_Q2_K: "Q2_K", QTYPE_Q3_K: "Q3_K",
+    QTYPE_Q5_0: "Q5_0", QTYPE_Q5_1: "Q5_1", QTYPE_Q8_0: "Q8_0",
+    QTYPE_Q8_1: "Q8_1", QTYPE_Q2_K: "Q2_K", QTYPE_Q3_K: "Q3_K",
     QTYPE_Q4_K: "Q4_K", QTYPE_Q5_K: "Q5_K", QTYPE_Q6_K: "Q6_K",
     QTYPE_Q8_K: "Q8_K", QTYPE_IQ2_XXS: "IQ2_XXS", QTYPE_IQ2_XS: "IQ2_XS",
     QTYPE_IQ3_XXS: "IQ3_XXS", QTYPE_IQ1_S: "IQ1_S", QTYPE_IQ4_NL: "IQ4_NL",
@@ -88,22 +91,22 @@ QTYPE_NAMES: Dict[int, str] = {
     QTYPE_TQ1_0: "TQ1_0", QTYPE_TQ2_0: "TQ2_0",
 }
 
-#: ``{qtype: (block_size, type_size)}`` - mirrored from gguf-py's
+#: ``{qtype: (block_size, type_size)}`` - mirrored from gguf-py 0.13.0's
 #: ``GGML_QUANT_SIZES`` (GGML spec).  ``type_size`` is the bytes each
 #: ``block_size``-element block occupies on disk; bytes/element is the ratio
-#: (e.g. Q4_K_M-family Q4_K: 144/256 = 0.5625 B/elem = 4.5 bits).
+#: (e.g. Q4_K: 144/256 = 0.5625 B/elem = 4.5 bits).  Same drift guard as above.
 GGML_QTYPE_SIZES: Dict[int, Tuple[int, int]] = {
     QTYPE_F32: (1, 4), QTYPE_F16: (1, 2), QTYPE_Q4_0: (32, 18),
-    QTYPE_Q4_1: (32, 20), QTYPE_Q4_1_SOME_F16: (32, 20), QTYPE_Q8_0: (32, 34),
-    QTYPE_Q5_0: (32, 22), QTYPE_Q5_1: (32, 24), QTYPE_Q2_K: (256, 84),
+    QTYPE_Q4_1: (32, 20), QTYPE_Q5_0: (32, 22), QTYPE_Q5_1: (32, 24),
+    QTYPE_Q8_0: (32, 34), QTYPE_Q8_1: (32, 40), QTYPE_Q2_K: (256, 84),
     QTYPE_Q3_K: (256, 110), QTYPE_Q4_K: (256, 144), QTYPE_Q5_K: (256, 176),
     QTYPE_Q6_K: (256, 210), QTYPE_Q8_K: (256, 292), QTYPE_IQ2_XXS: (256, 66),
     QTYPE_IQ2_XS: (256, 74), QTYPE_IQ3_XXS: (256, 98), QTYPE_IQ1_S: (256, 50),
-    QTYPE_IQ4_NL: (32, 20), QTYPE_IQ3_S: (256, 110), QTYPE_IQ2_S: (256, 78),
-    QTYPE_IQ4_XS: (256, 72), QTYPE_I8: (1, 1), QTYPE_I16: (1, 2),
+    QTYPE_IQ4_NL: (32, 18), QTYPE_IQ3_S: (256, 110), QTYPE_IQ2_S: (256, 82),
+    QTYPE_IQ4_XS: (256, 136), QTYPE_I8: (1, 1), QTYPE_I16: (1, 2),
     QTYPE_I32: (1, 4), QTYPE_I64: (1, 8), QTYPE_F64: (1, 8),
-    QTYPE_IQ1_M: (256, 56), QTYPE_BF16: (1, 2), QTYPE_TQ1_0: (16, 18),
-    QTYPE_TQ2_0: (16, 6),
+    QTYPE_IQ1_M: (256, 56), QTYPE_BF16: (1, 2), QTYPE_TQ1_0: (256, 54),
+    QTYPE_TQ2_0: (256, 66),
 }
 
 #: Types torch handles natively (weight used as-is, no dequant pass).
