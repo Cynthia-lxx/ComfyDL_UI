@@ -153,10 +153,20 @@ def require_gguf():
     try:
         import gguf  # noqa: F401
     except ImportError as exc:
+        missing = getattr(exc, "name", None) or "unknown module"
+        if missing == "gguf":
+            detail = "the gguf package itself is missing."
+        else:
+            detail = (
+                f"gguf is installed but its dependency '{missing}' failed to "
+                f"import ({exc}). Install that dependency first. Note: if it "
+                "is sentencepiece, there is no prebuilt wheel for embedded "
+                "Python 3.14 - use a Python <= 3.12 environment instead."
+            )
         raise ImportError(
             "The GGUF quantization family is hard-disabled: install "
             "`pip install gguf>=0.13.0,<0.14` (see requirements.txt) and "
-            "restart."
+            f"restart. Underlying cause: {detail}"
         ) from exc
     import gguf
     return gguf
