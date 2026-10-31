@@ -719,6 +719,10 @@ async def init_builtin_extra_nodes():
         # over the shared training core, runs ledger integration, backed by
         # comfy/training_core.py + comfy/runs_ledger.py.
         "nodes_experiment.py",
+        # Auto-queue (P3 Craft 4, M-C): workflow-level batch repetition
+        # (CdlBatchLoop + CdlOutputGate), backed by comfy/autoqueue.py and
+        # the prompt_worker requeue hook in main.py.
+        "nodes_autoqueue.py",
         "nodes_number_convert.py",
         "nodes_curve.py",
         "nodes_text.py",

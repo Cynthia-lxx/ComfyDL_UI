@@ -413,6 +413,20 @@ class TrainingSession:
         # tensor cannot take part in a backward pass, and the parameters built
         # here have to stay ordinary (grad carrying) tensors.
         with torch.inference_mode(False):
+            # Host inference mode (the V1 trainers' documented discipline,
+            # see comfydl/nodes/linreg_train.py): the whole prompt evaluates
+            # under torch.inference_mode(), so x/y arrived as *inference
+            # tensors* - they can be neither updated in place nor saved for
+            # backward.  Cloning them INSIDE this normal-mode scope converts
+            # them to ordinary tensors and the backward pass below is legal.
+            if data.inputs.is_inference() or data.targets.is_inference():
+                data = dataclasses.replace(
+                    data,
+                    inputs=torch.as_tensor(
+                        data.inputs, dtype=torch.float32).clone(),
+                    targets=torch.as_tensor(data.targets).clone(),
+                )
+            device = data.inputs.device
             model = tp.build_mlp(self.widths, self.activation, seed=self.seed, device=device)
             if self.params is not None:
                 loaded, missing, skipped = tp.load_into_module(

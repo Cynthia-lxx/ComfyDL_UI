@@ -106,6 +106,18 @@ def _run_workflow(path: Path):
         args.update(
             {k: v for k, v in zip(order_names, wvals) if k != "control_after_generate"}
         )
+        if hasattr(cls, "GET_SCHEMA") and hasattr(cls, "define_schema"):
+            # V3 node: run through the same normalised entry point the engine
+            # uses and unwrap the NodeOutput (same contract as the node smoke
+            # harness, run_smoke_test._execute).
+            entry = getattr(cls, cls.FUNCTION)
+            # Mirror the host: execution.py runs the whole prompt inside
+            # torch.inference_mode(), so every node here must survive that too.
+            with torch.inference_mode():
+                result = entry(**args)
+            raw = getattr(result, "result", result)
+            node_out[node["id"]] = raw if isinstance(raw, tuple) else (raw,)
+            continue
         instance = cls()
         # Mirror the host: execution.py runs the whole prompt inside
         # torch.inference_mode(), so every node here must survive that too.
@@ -130,6 +142,7 @@ def main() -> int:
         "tabular_classification_production",
         "formula_playground_app",
         "attention_lab",
+        "hyperparameter_exploration",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -273,6 +286,23 @@ def main() -> int:
           and all(links_g[l[0]][2] in node_ids for l in string_links)
           and all(next(n for n in wf_g["nodes"] if n["id"] == links_g[l[0]][2])["type"] == "SaveText"
                   for l in string_links))
+
+    # --- Template H: hyperparameter_exploration (P3 experiment bench) --------- #
+    # The Grid Search Train story: a JSON param_grid sweeps widths x lr, the
+    # winner's params + the scan table land in two SaveText reports, and the
+    # scan itself is ledgered (the comparison view reads the same rows).
+    out = _run_workflow(workflows_dir / "hyperparameter_exploration.json")
+    summary, best_params = out[5][0], out[6][0]
+    check("H: scan table names the direction and marks the best",
+          isinstance(summary, str) and "best-by-min" in summary
+          and "*" in summary, summary[:120])
+    params_h = json.loads(best_params)
+    check("H: winner params are whitelisted grid keys",
+          set(params_h) <= {"hidden", "activation", "loss", "steps",
+                            "batch_size", "lr"}
+          and "hidden" in params_h and "lr" in params_h, best_params)
+    check("H: both SaveText reports carry the promise's artifacts",
+          isinstance(out[5][0], str) and isinstance(out[6][0], str))
 
     return _report()
 

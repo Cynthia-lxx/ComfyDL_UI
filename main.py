@@ -265,6 +265,7 @@ import comfy.utils
 
 import execution
 import server
+from comfy import autoqueue
 from protocol import BinaryEventTypes
 import nodes
 import comfy.model_management
@@ -419,6 +420,18 @@ def prompt_worker(q, server_instance):
                             messages=e.status_messages), process_item=remove_sensitive)
             if server_instance.client_id is not None:
                 server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
+
+            # ComfyDL auto-queue (P3 Craft 4, M-C): a successful run whose
+            # nodes asked for another round (CdlBatchLoop) gets the very
+            # same queue item back - same prompt, same extra_data.  Failed
+            # or interrupted runs are never re-queued: an abort aborts.
+            if e.success:
+                chain_id = autoqueue.take_requeue()
+                if chain_id is not None:
+                    logging.info(
+                        f"[ComfyDL] auto-queue: re-queueing prompt {prompt_id} (chain '{chain_id}')",
+                        extra={'color': 'green'})
+                    q.put(item)
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time

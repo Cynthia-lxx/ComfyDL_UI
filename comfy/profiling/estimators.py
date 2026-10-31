@@ -713,6 +713,40 @@ def _estimate_grid_search(ctx: EstimationCtx) -> NodeEstimate:
     return inner
 
 
+# Batch Loop / Output Gate (comfy_extras/nodes_autoqueue.py)
+# --------------------------------------------------------------------------- #
+@register("CdlBatchLoop")
+def _estimate_batch_loop(ctx: EstimationCtx) -> NodeEstimate:
+    """Control node: books an iteration and asks the worker to re-queue."""
+    estimate = NodeEstimate(
+        basis={"key": "batch_loop", "params": {
+            "iterations": ctx.widget("iterations", 2),
+            "chain_id": ctx.str_widget("chain_id", "default"),
+        }}
+    )
+    estimate.outputs = [Unknown("scalar"), Unknown("scalar"), Unknown("scalar")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "control node - no matmul in this node"
+    estimate.confidence = "exact"
+    estimate.reason = "control node (auto-queue): requeues prompts, no compute"
+    return estimate
+
+
+@register("CdlOutputGate")
+def _estimate_output_gate(ctx: EstimationCtx) -> NodeEstimate:
+    """Control node: passes the value through or blocks it, no own compute."""
+    estimate = NodeEstimate(basis={"key": "output_gate", "params": {
+        "gate": bool(ctx.widget("gate", True))}})
+    estimate.outputs = [Unknown("passthrough")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "control node - no matmul in this node"
+    estimate.confidence = "exact"
+    estimate.reason = "control node (output gate): passthrough or block"
+    return estimate
+
+
 # --------------------------------------------------------------------------- #
 # Shared helpers for the M3 family estimators.
 # --------------------------------------------------------------------------- #
