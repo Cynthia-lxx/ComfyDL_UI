@@ -165,9 +165,26 @@ def main() -> int:
           "COLLAPSE_KEY" in js and 'saved !== "0") setCollapsed(true);' in js)
     check("A2 horizontal splitters: row boundaries draggable (2026-11-01)",
           "function makeHSplitter" in js and "function dragRowBoundary" in js
-          and "ROWS_KEY" in js
+          and "RowsV2" in js
           and "cdlapp-splitter-h" in css and "row-resize" in css
-          and "--cdl-h1" in css and '"hsp1"' in js)
+          and "--cdl-r1" in css and '"hsp1"' in js)
+    # 2026-11-01 regression: the rows template listed 6 tracks for 7 area
+    # rows - the hsp2 gutter landed in a 0.55fr track and runs degraded to
+    # auto.  All three fr rows + both 9px gutters must be in the template.
+    _rows_template = re.search(
+        r"#cdl-app-extras \{[^}]*grid-template-rows:([^;]+);", css, re.S)
+    check("A2 rows template: 7 tracks matching the 7 area rows",
+          _rows_template is not None
+          and _rows_template.group(1).count("minmax(") == 3
+          and _rows_template.group(1).count("9px") == 2
+          and _rows_template.group(1).strip().startswith("auto")
+          and _rows_template.group(1).strip().endswith("auto")
+          and "--cdl-r1" in _rows_template.group(1)
+          and "--cdl-r3" in _rows_template.group(1),
+          _rows_template.group(1).strip()[:90] if _rows_template else "no match")
+    check("A2 row drag model v2: own-boundary-only fractions",
+          "RowsV2" in js and "v.p1" in js and "v.p2" in js
+          and '"--cdl-r3"' in js)
     check("A2 side-bar tab panels yield (help center was under-docked)",
           ".side-bar-panel .sidebar-content-container" in js)
     check("A2 builder step jump via the official setMode path",
@@ -500,6 +517,13 @@ def main() -> int:
           and "cdlapp-runs-item-active" in css
           and "clearRunsChart" in js and "runs_hint" in js
           and "state.runsChartName === name" in js)
+    check("A8 empty placeholders dismiss with content + runs animation",
+          "function updatePrevEmpty" in js
+          and 'grid.style.display = shown.length ? "" : "none";' in js
+          and "secEmpty.style.display = groups.size ? " in js
+          and "runsFadeToken" in js
+          and "card.animate(" in js
+          and "Image outputs appear here" not in js)
     check("A8 Stop (interrupt) button wired to the official api method",
           'interruptMethod: "interrupt"' in js
           and 'square: \'<rect width="18" height="18" x="3" y="3" rx="2"/>\'' in js

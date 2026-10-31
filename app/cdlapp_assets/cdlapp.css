@@ -99,9 +99,12 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
   /* col 2 is the draggable 9px gutter between the preview and outputs zones */
   grid-template-columns: var(--cdl-prev-w, 55%) 9px minmax(0, 1fr);
   /* P3 Craft 3: runs section takes a bottom-left tile under progress.
-     2026-11-01: rows h1/h2 are user-draggable via the horizontal splitters
-     (hsp1/hsp2 gutters) - see dragRowBoundary in cdlapp.js. */
-  grid-template-rows: auto minmax(0, var(--cdl-h1, 1.15fr)) 9px minmax(0, var(--cdl-h2, 0.6fr)) minmax(0, 0.55fr) auto;
+     2026-11-01: rows r1/r2/r3 are user-draggable via the horizontal
+     splitters (hsp1/hsp2 gutters).  The template MUST list SEVEN tracks to
+     match the seven area rows below - the first cut listed six, so the hsp2
+     gutter landed in a 0.55fr track (a huge invisible drag zone) and the
+     runs row degraded to auto (user: "完全反物理"). */
+  grid-template-rows: auto minmax(0, var(--cdl-r1, 1.15fr)) 9px minmax(0, var(--cdl-r2, 0.6fr)) 9px minmax(0, var(--cdl-r3, 0.55fr)) auto;
   grid-template-areas:
     "head head head"
     "prev sp  out"

@@ -159,7 +159,7 @@
       out_title: "Outputs",
       out_empty: "Run the app to collect outputs here - files become downloads, text becomes copyable.",
       prev_title: "Previews",
-      prev_empty: "Image outputs appear here as a thumbnail grid.",
+      prev_empty: "Run charts and image outputs appear here as the workflow streams data.",
       chart_idle: "Live vector charts appear here while a training / generation node streams data.",
       chart_best: "best",
       chart_step: "step",
@@ -204,7 +204,7 @@
       out_title: "输出",
       out_empty: "运行后在收集输出：文件可下载，文本可复制。",
       prev_title: "预览",
-      prev_empty: "图像输出会以缩略图网格呈现在这里。",
+      prev_empty: "工作流运行时，实时图表与图像输出会出现在这里。",
       chart_idle: "训练 / 生成节点上报实时数据时，矢量图表会出现在这里。",
       chart_best: "best",
       chart_step: "step",
@@ -1114,30 +1114,35 @@
     }
   }
 
-  // Horizontal row split ({h1,h2} fr pair).  Row frs: h1 (previews),
-  // h2 (progress), 0.55 fixed (runs) share the fixed left-column height, so
-  // the fr unit is S/(h1+h2+0.55) where S = current px sum of the three
-  // rows - constant while dragging (the extras height does not change).
-  // Solving desired px -> fr: h = desired * (othersFrSum) / (S - desired).
-  const ROWS_KEY = "ComfyDL.AppPanel.RowsH";
-  const ROW_DEFAULTS = { h1: 1.15, h2: 0.6 };
+  // Horizontal row split model v2 (2026-11-01): two boundary FRACTIONS of
+  // the fr space - p1 = previews share, p2 = progress share, runs takes the
+  // remainder.  Dragging a splitter moves ONLY its own boundary: hsp1
+  // resizes previews (runs absorbs), hsp2 resizes progress (runs absorbs).
+  // The first cut used an {h1,h2} fr pair whose unit shifted on every drag,
+  // so the OTHER boundary moved too (user: "操作体验完全反物理"); the real
+  // killer was a rows template listing 6 tracks for 7 area rows, which put
+  // the hsp2 gutter in a 0.55fr track and degraded runs to auto.
+  const ROWS_KEY = "ComfyDL.AppPanel.RowsV2";
+  const ROW_DEFAULTS = { p1: 0.5, p2: 0.26 };
   function loadRowVars() {
     try {
       const v = JSON.parse(localStorage.getItem(ROWS_KEY) || "{}");
       return {
-        h1: typeof v.h1 === "number" ? v.h1 : ROW_DEFAULTS.h1,
-        h2: typeof v.h2 === "number" ? v.h2 : ROW_DEFAULTS.h2,
+        p1: typeof v.p1 === "number" ? v.p1 : ROW_DEFAULTS.p1,
+        p2: typeof v.p2 === "number" ? v.p2 : ROW_DEFAULTS.p2,
       };
     } catch (e) { return { ...ROW_DEFAULTS }; }
   }
   function applyRowVars(v) {
     if (!state.extras) return;
-    // MUST carry the fr unit: minmax(0, var(--cdl-h1, 1.15fr)) substitutes
-    // the raw value, and a unitless number makes the whole declaration
-    // invalid at computed-value time (every row silently degrades to auto -
-    // live-caught 2026-11-01, the two 9px gutters collapsed to 0px).
-    state.extras.style.setProperty("--cdl-h1", v.h1.toFixed(3) + "fr");
-    state.extras.style.setProperty("--cdl-h2", v.h2.toFixed(3) + "fr");
+    const r3 = Math.max(0.06, 1 - v.p1 - v.p2);
+    // fr values MUST carry the unit: minmax(0, var(--cdl-r1, 1.15fr))
+    // substitutes the raw string, and a unitless number makes the whole
+    // declaration invalid at computed-value time (every row silently
+    // degrades to auto - live-caught 2026-11-01).
+    state.extras.style.setProperty("--cdl-r1", v.p1.toFixed(4) + "fr");
+    state.extras.style.setProperty("--cdl-r2", v.p2.toFixed(4) + "fr");
+    state.extras.style.setProperty("--cdl-r3", r3.toFixed(4) + "fr");
   }
   function dragRowBoundary(which, y) {
     const ex = state.extras;
@@ -1150,14 +1155,14 @@
       + prog.getBoundingClientRect().height
       + runs.getBoundingClientRect().height;
     if (S < 80) return;
-    const topRef = (which === "h1" ? prev : prog).getBoundingClientRect().top;
-    const desired = Math.min(S - 70, Math.max(30, y - topRef));
-    const others = which === "h1"
-      ? (loadRowVars().h2 + 0.55)
-      : (loadRowVars().h1 + 0.55);
     const v = loadRowVars();
-    v[which] = Math.min(6, Math.max(0.15,
-      desired * others / Math.max(40, S - desired)));
+    if (which === "h1") {
+      const top = prev.getBoundingClientRect().top;
+      v.p1 = Math.min(0.85, Math.max(0.06, (y - top) / S));
+    } else {
+      const top = prog.getBoundingClientRect().top;
+      v.p2 = Math.min(0.9 - v.p1, Math.max(0.05, (y - top) / S));
+    }
     try { localStorage.setItem(ROWS_KEY, JSON.stringify(v)); } catch (e) { /* optional */ }
     applyRowVars(v);
   }
@@ -1333,8 +1338,27 @@
       if (o.kind === "image" && o.url) cells.push({ name: o.name, url: o.url });
     });
     const shown = cells.slice(0, PREVIEW_LIMIT);
-    if (empty) empty.style.display = shown.length ? "none" : "";
+    // 2026-11-01 (user): an empty grid still reserved its min-height -
+    // a mysterious blank slab under live charts.  Hide it with no cells,
+    // and let the section empty-state consider charts too (the pane is no
+    // longer images-only).
+    grid.style.display = shown.length ? "" : "none";
+    if (empty) {
+      empty.style.display = (shown.length || state.charts.size) ? "none" : "";
+    }
     shown.forEach((c) => grid.appendChild(previewCell(c)));
+  }
+
+  // Re-evaluate the previews section empty-state (called from renderCharts
+  // too - a chart arriving must dismiss the placeholder even when the grid
+  // is empty).
+  function updatePrevEmpty() {
+    if (!state.panel) return;
+    const empty = state.panel.querySelector(".cdlapp-sec-previews .cdlapp-empty");
+    if (!empty) return;
+    const grid = state.panel.querySelector(".cdlapp-preview-grid");
+    const hasCells = !!(grid && grid.children.length);
+    empty.style.display = (hasCells || state.charts.size) ? "none" : "";
   }
 
   function previewCell(c) {
@@ -2410,6 +2434,7 @@
     if (!host) return;
     const empty = state.charts.size === 0;
     host.style.display = empty ? "none" : "";
+    updatePrevEmpty();
     // incremental reuse keyed by node id - a live chart must NOT replay its
     // entrance animation on every push (same discipline as renderProgress)
     const existing = new Map();
@@ -2502,6 +2527,11 @@
       if (!groups.has(name)) groups.set(name, []);
       groups.get(name).push(row);
     });
+    // 2026-11-01 (user): the "no runs recorded" placeholder must go away
+    // once the list has content.
+    const secEmpty = host.closest(".cdlapp-sec-runs")
+      ? host.closest(".cdlapp-sec-runs").querySelector(".cdlapp-empty") : null;
+    if (secEmpty) secEmpty.style.display = groups.size ? "none" : "";
     if (!groups.size) return;
     groups.forEach((rows, name) => {
       const best = rows.find((r) => Number(r.best) === 1)
@@ -2534,18 +2564,37 @@
   }
 
   // Collapse the runs overlay chart (item 2026-11-01: symmetric expand).
+  // The fade-out is guarded by a token: a re-expand during the animation
+  // supersedes the pending clear instead of hiding the new chart.
   function clearRunsChart() {
     state.runsChartName = null;
     const host = state.extras
       ? state.extras.querySelector(".cdlapp-runs-chart-host")
       : (state.panel ? state.panel.querySelector(".cdlapp-runs-chart-host")
         : null);
-    if (host) {
-      host.textContent = "";
-      host.style.display = "none";
-    }
     document.querySelectorAll(".cdlapp-runs-item-active")
       .forEach((n) => n.classList.remove("cdlapp-runs-item-active"));
+    if (!host) return;
+    const finish = () => {
+      host.textContent = "";
+      host.style.display = "none";
+    };
+    const animate = state.motion
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!animate) { finish(); return; }
+    const token = (state.runsFadeToken = (state.runsFadeToken || 0) + 1);
+    try {
+      const anim = host.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: 160, easing: "ease-in" });
+      anim.onfinish = () => {
+        if (state.runsFadeToken === token) finish();
+      };
+      // safety net in case onfinish never fires
+      setTimeout(() => {
+        if (state.runsFadeToken === token) finish();
+      }, 300);
+    } catch (e) { finish(); }
   }
 
   async function loadRunCurves(name, rows) {
@@ -2577,6 +2626,7 @@
     if (!host) return;
     host.style.display = "";
     state.runsChartName = name;
+    state.runsFadeToken = (state.runsFadeToken || 0) + 1; // supersede a pending fade-out
     host.textContent = "";
     const card = buildRunsChart({
       type: "runs", node_id: "runs:" + name, title: name,
@@ -2585,6 +2635,16 @@
       series: series,
     });
     host.appendChild(card);
+    // expand animation (2026-11-01 user request; reduced-motion exempt)
+    if (state.motion
+        && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      try {
+        card.animate(
+          [{ opacity: 0, transform: "translateY(10px)" },
+           { opacity: 1, transform: "none" }],
+          { duration: 240, easing: "ease-out" });
+      } catch (e) { /* WAAPI optional */ }
+    }
   }
 
   function attachEvents() {
