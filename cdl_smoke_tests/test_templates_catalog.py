@@ -132,6 +132,7 @@ check(
         "formula_playground_app",
         "attention_lab",
         "hyperparameter_exploration",
+        "data_list_demo",
     },
     str(sorted(comfydl_names)),
 )

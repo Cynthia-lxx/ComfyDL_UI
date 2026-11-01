@@ -143,6 +143,7 @@ def main() -> int:
         "formula_playground_app",
         "attention_lab",
         "hyperparameter_exploration",
+        "data_list_demo",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -303,6 +304,23 @@ def main() -> int:
           and "hidden" in params_h and "lr" in params_h, best_params)
     check("H: both SaveText reports carry the promise's artifacts",
           isinstance(out[5][0], str) and isinstance(out[6][0], str))
+
+    # --- Template I: data_list_demo (SP-6a list semantics) --------------------- #
+    # The list-semantics story: split a 500-row synthetic table into shuffled
+    # 50-row batches, merge them back (round-trip), pick row 0, preview head.
+    out_i = _run_workflow(workflows_dir / "data_list_demo.json")
+    merged_i = out_i[5][0]
+    row_i = out_i[6][0]
+    preview_i = out_i[7][0]
+    check("I: split -> merge reproduces all 500 rows",
+          merged_i.n_samples == 500 and merged_i.n_features == 4,
+          f"{merged_i.n_samples}x{merged_i.n_features}")
+    check("I: merged schema carried",
+          len(merged_i.feature_names) == 4 and merged_i.meta.get("merged", {}).get("items") == 10,
+          str(merged_i.meta.get("merged")))
+    check("I: get item picks row 0", row_i.n_samples == 1 and row_i.meta.get("row") == 0)
+    check("I: preview is a table string",
+          isinstance(preview_i, str) and "x0" in preview_i, preview_i[:80])
 
     return _report()
 

@@ -979,6 +979,20 @@ def _f_loss_target(cfg: dict, name: str) -> Any:
     return _regression_pair()[1]
 
 
+def _f_dataset(cfg: dict, name: str) -> Any:
+    """``DATASET`` dummy: a small deterministic labelled 8x3 table."""
+    import torch
+
+    from comfydl.nodes.data_types import CdlDataset
+
+    X = torch.arange(24, dtype=torch.float32).reshape(8, 3) / 4.0
+    y = (X[:, 0] * 2.0 + 1.0)
+    return CdlDataset.from_tensors(
+        X, y, feature_names=["a", "b", "c"], target_name="y",
+        meta={"source": "smoke-fixture"},
+    )
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -991,6 +1005,7 @@ _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "MASK": _f_mask,
     "LATENT": _f_latent,
     "NN_MODEL": _f_model,
+    "DATASET": _f_dataset,
     "CDLDATALOADER": _f_dataloader,
     "CDLVOCAB": _f_vocab,
     "ARRAY": _f_array,
@@ -1040,6 +1055,7 @@ _SKIPPED_NODES: dict[str, str] = {
     "CdlRNNLMScratchPredict": "needs an RNN model built by the RNN scratch nodes, not a generic nn.Module",
     "GetImageSize": "reports progress through PromptServer.instance, which only exists inside the server",
     "CdlReadXLSX": "needs openpyxl (xlsx reader) - covered by cdl_smoke_tests/test_data_io.py",
+    "CdlWriteXLSX": "needs openpyxl (xlsx writer) - covered by cdl_smoke_tests/test_data_io.py",
     "CdlReadAccDB": "needs pyodbc + Microsoft Access driver - covered by cdl_smoke_tests/test_data_io.py",
     "CdlCompileModel": "needs a real diffusion_model module to compile (the fake MODEL is a flat StateDictModule) - covered by cdl_smoke_tests/test_compile.py",
 }
@@ -2191,6 +2207,88 @@ def _check_classification_data_gen(result: Any, args: dict[str, Any]) -> None:
     assert dataset.n_samples == n and dataset.n_features == 2, "dataset shape disagrees with X"
     assert dataset.labels is not None and dataset.meta.get("source") == "classification", (
         "dataset must be labelled with provenance metadata"
+    )
+
+
+def _check_split_batches(result: Any, args: dict[str, Any]) -> None:
+    """The list-semantics splitter must emit cover-all row batches.
+
+    ``OUTPUT_IS_LIST`` contract: the single declared output carries a Python
+    list of ``CdlDataset`` views whose row counts sum to the source (or to
+    ``drop_last``-truncated rows), every batch honours ``batch_size`` (the
+    last one may be short when ``drop_last`` is False), and metadata records
+    the split provenance.
+    """
+    from comfydl.nodes.data_types import CdlDataset as _CdlDataset
+
+    batches = _as_tuple(result)[0]
+    assert isinstance(batches, list), (
+        f"OUTPUT_IS_LIST output must be a Python list, got {type(batches)}"
+    )
+    assert batches, "the 8-row dummy must produce at least one batch"
+    batch_size = int(args["batch_size"])
+    total = 0
+    for pos, batch in enumerate(batches):
+        assert isinstance(batch, _CdlDataset), (
+            f"batch {pos} must be a CdlDataset, got {type(batch)}"
+        )
+        assert batch.n_features == 3 and batch.feature_names == ["a", "b", "c"], (
+            f"batch {pos} lost the table schema"
+        )
+        if pos < len(batches) - 1 or int(args["drop_last"]):
+            assert batch.n_samples == batch_size, (
+                f"batch {pos} has {batch.n_samples} rows, expected {batch_size}"
+            )
+        else:
+            assert 0 < batch.n_samples <= batch_size, (
+                f"trailing batch has {batch.n_samples} rows"
+            )
+        assert "split" in batch.meta, f"batch {pos} lost the split provenance"
+        total += batch.n_samples
+    expected = 8 if not args["drop_last"] else 8 - (8 % batch_size)
+    assert total == expected, f"batches cover {total} rows, expected {expected}"
+
+
+def _check_from_list(result: Any, args: dict[str, Any]) -> None:
+    """The list merger must reproduce a single labelled table.
+
+    ``INPUT_IS_LIST`` contract: the harness/engine deliver every input as a
+    list; merging the single dummy list must reproduce the 8x3 table with
+    schema, labels and a ``merged`` metadata note intact.
+    """
+    from comfydl.nodes.data_types import CdlDataset as _CdlDataset
+
+    merged = _as_tuple(result)[0]
+    assert isinstance(merged, _CdlDataset), (
+        f"merged output must be a CdlDataset, got {type(merged)}"
+    )
+    assert merged.n_samples == 8 and merged.n_features == 3, (
+        f"merged table is {merged.n_samples}x{merged.n_features}, expected 8x3"
+    )
+    assert merged.feature_names == ["a", "b", "c"] and merged.target_name == "y", (
+        "merged table lost the schema"
+    )
+    assert merged.labels is not None, "merged table lost its labels"
+    assert merged.meta.get("merged", {}).get("items", 0) >= 1, (
+        "merged table lost the merge provenance"
+    )
+
+
+def _check_get_item(result: Any, args: dict[str, Any]) -> None:
+    """The row picker must return a 1-row zero-copy view with provenance."""
+    from comfydl.nodes.data_types import CdlDataset as _CdlDataset
+
+    row = _as_tuple(result)[0]
+    assert isinstance(row, _CdlDataset), (
+        f"row output must be a CdlDataset, got {type(row)}"
+    )
+    index = int(args["index"])
+    assert row.n_samples == 1 and row.n_features == 3, (
+        f"row view must be 1x3, got {row.n_samples}x{row.n_features}"
+    )
+    assert row.meta.get("row") == index, "row view lost the picked index"
+    assert row.feature_names == ["a", "b", "c"] and row.target_name == "y", (
+        "row view lost the schema"
     )
 
 
@@ -3497,6 +3595,9 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "CdlRegressionTrain": [_check_regression_train],
     "CdlFormulaDataGen": [_check_formula_data_gen],
     "CdlClassificationDataGen": [_check_classification_data_gen],
+    "CdlDatasetSplitBatches": [_check_split_batches],
+    "CdlDatasetFromList": [_check_from_list],
+    "CdlDatasetGetItem": [_check_get_item],
     "CdlSoftmaxTrain": [_check_softmax_train],
     "CdlClassificationTrain": [_check_classification_train],
     "CdlConfusionMatrixEval": [_check_confusion_matrix_eval],

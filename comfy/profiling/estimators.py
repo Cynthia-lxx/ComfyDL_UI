@@ -747,6 +747,62 @@ def _estimate_output_gate(ctx: EstimationCtx) -> NodeEstimate:
     return estimate
 
 
+# Dataset list semantics (comfydl/nodes/data_list.py)
+# --------------------------------------------------------------------------- #
+@register("CdlDatasetSplitBatches")
+def _estimate_split_batches(ctx: EstimationCtx) -> NodeEstimate:
+    """List splitter: emits zero-copy row views (or gathered permutations).
+
+    The output is a *list* of datasets (OUTPUT_IS_LIST) — statically the
+    estimator cannot size table inputs yet, so the memory footprint is the
+    bookkeeping only; unshuffled batches alias the source storage.
+    """
+    estimate = NodeEstimate(basis={"key": "dataset_split", "params": {
+        "batch_size": ctx.int_widget("batch_size", 32) or 32,
+        "drop_last": bool(ctx.widget("drop_last", False)),
+        "shuffle": bool(ctx.widget("shuffle", False)),
+        "seed": ctx.int_widget("seed", 0) or 0,
+    }})
+    estimate.outputs = [Unknown("dataset_list")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "data reshaping - no matmul in this node"
+    estimate.confidence = "exact"
+    estimate.reason = (
+        "list splitter: unshuffled batches are zero-copy views of the source "
+        "table (shuffled ones gather once); no own allocation beyond wrappers")
+    return estimate
+
+
+@register("CdlDatasetFromList")
+def _estimate_from_list(ctx: EstimationCtx) -> NodeEstimate:
+    """List merger: one torch.cat copy of every incoming table row."""
+    estimate = NodeEstimate(basis={"key": "dataset_merge", "params": {}})
+    estimate.outputs = [Unknown("dataset")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "data reshaping - no matmul in this node"
+    estimate.confidence = "approx"
+    estimate.reason = (
+        "list merger: concatenates incoming DATASET rows (one O(N) copy); "
+        "input table sizes are not statically known")
+    return estimate
+
+
+@register("CdlDatasetGetItem")
+def _estimate_get_item(ctx: EstimationCtx) -> NodeEstimate:
+    """Row picker: a 1-row zero-copy view of the source table."""
+    estimate = NodeEstimate(basis={"key": "dataset_get_item", "params": {
+        "index": ctx.int_widget("index", 0) or 0}})
+    estimate.outputs = [Unknown("dataset")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "data reshaping - no matmul in this node"
+    estimate.confidence = "exact"
+    estimate.reason = "row picker: zero-copy 1-row view; no own allocation"
+    return estimate
+
+
 # --------------------------------------------------------------------------- #
 # Shared helpers for the M3 family estimators.
 # --------------------------------------------------------------------------- #

@@ -75,6 +75,7 @@ _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "regression_model_reuse": "tabular_regression_production-1.png",
     "attention_lab": "language_model_train_and_chat-1.png",
     "hyperparameter_exploration": "tabular_regression_production-1.png",
+    "data_list_demo": "tabular_regression_production-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -267,6 +268,22 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-10-31",
             "openSource": True,
         },
+        {
+            "name": "data_list_demo",
+            "title": "Dataset List Semantics",
+            "description": (
+                "Native ComfyUI list flow for DATASET: Dataset Split Batches "
+                "emits zero-copy shuffled batches (OUTPUT_IS_LIST), Dataset "
+                "From List merges them back with one torch.cat "
+                "(INPUT_IS_LIST), and Dataset Get Item picks a single row - "
+                "the building blocks for per-batch epoch loops."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "png",
+            "tags": ["dataset", "list", "batching", "data"],
+            "date": "2026-11-01",
+            "openSource": True,
+        },
     ],
 }
 
@@ -323,6 +340,12 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "Grid Search Train 一趟排队扫描小回归的超参数网格（学习率 × 步数）：各组合的 loss 曲线"
             "在 App 面板实时叠加，最小 loss 的组合被标星，整场扫描写入实验记录账本，"
             "可与历史实验对比。"
+        ),
+        "data_list_demo": (
+            "DATASET 的原生 ComfyUI 列表语义：Dataset Split Batches 以 OUTPUT_IS_LIST 吐出"
+            "零拷贝的分批行视图（可洗牌、可定种子），Dataset From List 以 INPUT_IS_LIST 一次 "
+            "torch.cat 合并回完整表，Dataset Get Item 抽单行做 1 样本视图——"
+            "这是搭逐批 epoch 训练环的地基。"
         ),
     },
 }
