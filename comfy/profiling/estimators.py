@@ -761,7 +761,7 @@ def _estimate_split_batches(ctx: EstimationCtx) -> NodeEstimate:
         "batch_size": ctx.int_widget("batch_size", 32) or 32,
         "drop_last": bool(ctx.widget("drop_last", False)),
         "shuffle": bool(ctx.widget("shuffle", False)),
-        "seed": ctx.int_widget("seed", 0) or 0,
+        "perm_seed": ctx.int_widget("perm_seed", 0) or 0,
     }})
     estimate.outputs = [Unknown("dataset_list")]
     estimate.items = []

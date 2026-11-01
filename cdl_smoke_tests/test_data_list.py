@@ -93,7 +93,7 @@ def main() -> int:
               REG["CdlDatasetFromList"]().execute(list(s1))[0].features.sort(dim=0).values,
               ds.features.sort(dim=0).values))
     check("split meta carries provenance",
-          s1[0].meta.get("split", {}).get("seed") == 7
+          s1[0].meta.get("split", {}).get("perm_seed") == 7
           and s1[0].meta.get("split", {}).get("shuffle") is True)
 
     # 5. zero-copy views (unshuffled) -----------------------------------------
