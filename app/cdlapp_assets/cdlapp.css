@@ -813,10 +813,13 @@ body.cdlapp-motion-off .cdlapp-chart-pulse {
   flex: none;
   font-variant-numeric: tabular-nums;
 }
+/* 2026-11-01 (user): the list must NOT scroll on its own - a nested
+   scrollbar understated the section's total height and buttons pushed out
+   by an expanded chart were unreachable.  The list grows naturally and the
+   SECTION is the single scroll container. */
 .cdlapp-sec-runs .cdlapp-runs-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
+  flex: 0 0 auto;
+  overflow-y: visible;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -834,6 +837,30 @@ body.cdlapp-motion-off .cdlapp-chart-pulse {
   cursor: pointer;
   color: var(--fg-color, #ffffff);
   font-size: 11px;
+}
+/* 2026-11-01 user redesign: the item IS the collapsed chart - clicking the
+   head grows the item in place and the chart renders inside .runs-body;
+   clicking the head again folds it back. */
+.cdlapp-runs-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cdlapp-runs-body:empty {
+  display: none;
+}
+.cdlapp-runs-body .cdlapp-chart-card {
+  margin-top: 4px;
 }
 .cdlapp-runs-item:hover {
   border-color: rgba(26, 188, 156, 0.55);

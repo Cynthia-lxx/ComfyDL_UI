@@ -168,7 +168,7 @@
       runs_empty: "No runs recorded yet - run a scan first.",
       runs_best_fmt: "best: {label} ({value})",
       runs_runs_fmt: "{count} runs",
-      runs_hint: "Click to overlay its curves - click again to collapse.",
+      runs_hint: "Click to expand its curves here - click again to fold it back.",
       prev_open: "Open full size",
       splitter_hint: "Drag to resize the zones",
       locate_inputs: "Show the input widgets' nodes on the graph",
@@ -213,7 +213,7 @@
       runs_empty: "还没有运行记录——先跑一次扫描。",
       runs_best_fmt: "最优：{label}（{value}）",
       runs_runs_fmt: "{count} 条记录",
-      runs_hint: "点击叠加该实验的曲线——再次点击收起。",
+      runs_hint: "点击在此展开曲线——再次点击收起。",
       prev_open: "查看原图",
       splitter_hint: "拖动调整分区大小",
       locate_inputs: "在节点图中定位输入所在的节点",
@@ -279,6 +279,7 @@
     charts: new Map(), // node_id -> live cdl_preview_data payload (batch 18)
     runsIndex: [], // runs ledger csv rows (P3 Craft 3, /comfydl/runs)
     runsChartName: null, // experiment whose curves currently overlay
+    runsChartCard: null, // {name, card, count} - cached expanded chart
   };
 
   const getApp = () => (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || null;
@@ -2536,55 +2537,86 @@
     groups.forEach((rows, name) => {
       const best = rows.find((r) => Number(r.best) === 1)
         || rows[rows.length - 1];
-      const item = el("button", "cdlapp-runs-item");
-      item.appendChild(el("span", "cdlapp-runs-name", name));
-      item.appendChild(el("span", "cdlapp-runs-info",
+      // 2026-11-01 user redesign: the button IS the collapsed chart.  Each
+      // item is a container - clicking the head grows the item in place and
+      // the chart renders inside it; clicking the head again folds it back.
+      // (The chart's own interactive areas never trigger the toggle.)
+      const item = el("div", "cdlapp-runs-item");
+      const head = el("button", "cdlapp-runs-head");
+      head.appendChild(el("span", "cdlapp-runs-name", name));
+      head.appendChild(el("span", "cdlapp-runs-info",
         t("runs_runs_fmt").replace("{count}", String(rows.length))
         + (best && best.params_json
           ? " · " + String(best.params_json).slice(0, 48) : "")));
-      // Click = expand (overlay its curves); click again = collapse
-      // (2026-11-01 user callout: there was no way back).  The active state
-      // survives refreshRuns() re-renders via state.runsChartName.
-      item.title = t("runs_hint");
+      head.title = t("runs_hint");
+      const body = el("div", "cdlapp-runs-body");
+      item.appendChild(head);
+      item.appendChild(body);
       if (state.runsChartName === name) {
+        // survives refreshRuns() re-renders; re-attach the cached card
+        // synchronously unless the ledger data for it changed.
         item.classList.add("cdlapp-runs-item-active");
-      }
-      item.addEventListener("click", () => {
-        if (state.runsChartName === name) {
-          clearRunsChart();
+        const cache = state.runsChartCard;
+        if (cache && cache.name === name && cache.count === rows.length) {
+          body.appendChild(cache.card);
         } else {
-          host.querySelectorAll(".cdlapp-runs-item-active")
-            .forEach((n) => n.classList.remove("cdlapp-runs-item-active"));
-          item.classList.add("cdlapp-runs-item-active");
-          loadRunCurves(name, rows);
+          state.runsChartCard = null;
+          loadRunCurves(body, name, rows);
+        }
+      }
+      head.addEventListener("click", () => {
+        if (state.runsChartName === name) {
+          collapseRunsItem(item, name);
+        } else {
+          expandRunsItem(item, name, rows);
         }
       });
       host.appendChild(item);
     });
   }
 
-  // Collapse the runs overlay chart (item 2026-11-01: symmetric expand).
-  // The fade-out is guarded by a token: a re-expand during the animation
-  // supersedes the pending clear instead of hiding the new chart.
-  function clearRunsChart() {
+  // The expanded chart lives INSIDE its experiment item (2026-11-01 user
+  // redesign: "the button and the chart are equivalent").  One chart is
+  // expanded at a time; the built card is cached so collapsing and
+  // re-expanding does not refetch the ledger details.
+  function expandRunsItem(item, name, rows) {
+    if (state.runsChartName && state.runsChartName !== name) {
+      // fold the previously expanded item without animation - the new one
+      // takes over immediately
+      state.runsChartName = null;
+      document.querySelectorAll(".cdlapp-runs-item.cdlapp-runs-item-active")
+        .forEach((n) => n.classList.remove("cdlapp-runs-item-active"));
+      document.querySelectorAll(".cdlapp-runs-body")
+        .forEach((b) => { b.textContent = ""; });
+    }
+    state.runsChartName = name;
+    state.runsFadeToken = (state.runsFadeToken || 0) + 1;
+    item.classList.add("cdlapp-runs-item-active");
+    const body = item.querySelector(".cdlapp-runs-body");
+    const cache = state.runsChartCard;
+    if (cache && cache.name === name && cache.count === rows.length) {
+      body.appendChild(cache.card);
+      animateRunsCard(cache.card);
+    } else {
+      state.runsChartCard = null;
+      loadRunCurves(body, name, rows);
+    }
+  }
+
+  function collapseRunsItem(item, name) {
+    if (state.runsChartName !== name) return;
     state.runsChartName = null;
-    const host = state.extras
-      ? state.extras.querySelector(".cdlapp-runs-chart-host")
-      : (state.panel ? state.panel.querySelector(".cdlapp-runs-chart-host")
-        : null);
-    document.querySelectorAll(".cdlapp-runs-item-active")
-      .forEach((n) => n.classList.remove("cdlapp-runs-item-active"));
-    if (!host) return;
-    const finish = () => {
-      host.textContent = "";
-      host.style.display = "none";
-    };
+    item.classList.remove("cdlapp-runs-item-active");
+    const body = item.querySelector(".cdlapp-runs-body");
+    if (!body) return;
+    const finish = () => { body.textContent = ""; };
     const animate = state.motion
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!animate) { finish(); return; }
+    // token guard: a re-expand during the fade-out supersedes this clear
     const token = (state.runsFadeToken = (state.runsFadeToken || 0) + 1);
     try {
-      const anim = host.animate(
+      const anim = body.animate(
         [{ opacity: 1 }, { opacity: 0 }],
         { duration: 160, easing: "ease-in" });
       anim.onfinish = () => {
@@ -2597,7 +2629,20 @@
     } catch (e) { finish(); }
   }
 
-  async function loadRunCurves(name, rows) {
+  function animateRunsCard(card) {
+    // expand animation (2026-11-01 user request; reduced-motion exempt)
+    if (state.motion
+        && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      try {
+        card.animate(
+          [{ opacity: 0, transform: "translateY(10px)" },
+           { opacity: 1, transform: "none" }],
+          { duration: 240, easing: "ease-out" });
+      } catch (e) { /* WAAPI optional */ }
+    }
+  }
+
+  async function loadRunCurves(body, name, rows) {
     const take = rows.slice(-12); // bound the overlay: newest 12 runs
     const series = [];
     const direction = take.length ? take[0].direction : "min";
@@ -2620,31 +2665,17 @@
       } catch (e) { /* skip unreadable runs */ }
     }
     if (!series.length) return;
-    const host = state.extras
-      ? state.extras.querySelector(".cdlapp-runs-chart-host")
-      : (state.panel ? state.panel.querySelector(".cdlapp-runs-chart-host") : null);
-    if (!host) return;
-    host.style.display = "";
-    state.runsChartName = name;
-    state.runsFadeToken = (state.runsFadeToken || 0) + 1; // supersede a pending fade-out
-    host.textContent = "";
+    if (state.runsChartName !== name) return; // collapsed while fetching
     const card = buildRunsChart({
       type: "runs", node_id: "runs:" + name, title: name,
       direction: direction, finished: true,
       best_index: series.findIndex((s) => s.best),
       series: series,
     });
-    host.appendChild(card);
-    // expand animation (2026-11-01 user request; reduced-motion exempt)
-    if (state.motion
-        && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      try {
-        card.animate(
-          [{ opacity: 0, transform: "translateY(10px)" },
-           { opacity: 1, transform: "none" }],
-          { duration: 240, easing: "ease-out" });
-      } catch (e) { /* WAAPI optional */ }
-    }
+    state.runsChartCard = { name, card, count: rows.length };
+    body.textContent = "";
+    body.appendChild(card);
+    animateRunsCard(card);
   }
 
   function attachEvents() {

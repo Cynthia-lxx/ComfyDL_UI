@@ -512,11 +512,17 @@ def main() -> int:
     check("A8 scroll rule ordered AFTER .cdlapp-section overflow hidden",
           _sec_hidden != -1 and _prev_scroll != -1 and _prev_scroll > _sec_hidden
           and _runs_scroll > _sec_hidden)
-    check("A8 runs pane scrolls like previews + expand toggle (2026-11-01)",
+    check("A8 runs pane: single scroll container + in-place expand (2026-11-01)",
           ".cdlapp-sec-runs" in css
           and "cdlapp-runs-item-active" in css
-          and "clearRunsChart" in js and "runs_hint" in js
-          and "state.runsChartName === name" in js)
+          and "cdlapp-runs-head" in css and "cdlapp-runs-body:empty" in css
+          and "expandRunsItem" in js and "collapseRunsItem" in js
+          and "runsChartCard" in js and "runs_hint" in js
+          and "state.runsChartName === name" in js
+          # the list must NOT scroll on its own: the section is the single
+          # scroll container (a nested scrollbar understated total height and
+          # buttons pushed out by a chart were unreachable - user report)
+          and "overflow-y: visible" in css)
     check("A8 empty placeholders dismiss with content + runs animation",
           "function updatePrevEmpty" in js
           and 'grid.style.display = shown.length ? "" : "none";' in js
