@@ -271,6 +271,8 @@ def main() -> int:
               "onExecuted" in js and "onConfigure" in js)
         check("js widgets_values[1:] restore", "v.slice(1)" in js)
         check("js readonly display", "readOnly" in js)
+        check("js readonly survives re-render",
+              'setAttribute("readonly"' in js and "requestAnimationFrame" in js)
         check("js no eval", "eval(" not in js and "new Function" not in js)
         import subprocess
         try:
@@ -286,6 +288,47 @@ def main() -> int:
     nodes_src = (REPO_ROOT / "nodes.py").read_text(encoding="utf-8")
     check("web dir registered in nodes.py",
           'EXTENSION_WEB_DIRS["comfydl"]' in nodes_src)
+
+    # stats acceptance surface: route + panel logging
+    routes_src = (REPO_ROOT / "app" / "spine" / "routes.py").read_text(
+        encoding="utf-8")
+    check("cache stats route",
+          '"/comfydl/dataio/cache/stats"' in routes_src
+          and '"available": False' in routes_src)
+    perf_src = (REPO_ROOT / "app" / "perf_assets" / "perftools.js").read_text(
+        encoding="utf-8")
+    check("panel logs cache stats",
+          "logCacheStats" in perf_src
+          and "/comfydl/dataio/cache/stats" in perf_src)
+
+    # the route handler itself (spine app, no torch needed)
+    try:
+        from aiohttp import web as _webmod
+
+        async def _probe():
+            from aiohttp.test_utils import TestClient, TestServer
+
+            app = _webmod.Application()
+            import importlib
+            routes_mod = importlib.import_module("app.spine.routes")
+            app.add_routes(routes_mod.routes)
+            client = TestClient(TestServer(app))
+            await client.start_server()
+            try:
+                resp = await client.get("/comfydl/dataio/cache/stats")
+                body = await resp.json()
+                return resp.status, body
+            finally:
+                await client.close()
+
+        import asyncio
+        status, body = asyncio.new_event_loop().run_until_complete(_probe())
+        check("stats route responds",
+              status == 200 and body.get("available") is True
+              and {"hits", "misses", "entries", "cached_bytes"} <= set(body),
+              str(body)[:110])
+    except Exception as exc:  # noqa: BLE001
+        check("stats route responds", False, str(exc)[:110])
 
     _fail = [r for r in _RESULTS if not r[1]]
     for name, ok, detail in _RESULTS:

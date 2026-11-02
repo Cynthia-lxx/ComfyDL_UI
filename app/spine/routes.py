@@ -94,6 +94,25 @@ async def switches_list(request: web.Request) -> web.Response:
     })
 
 
+@routes.get("/comfydl/dataio/cache/stats")
+async def dataio_cache_stats(request: web.Request) -> web.Response:
+    """Live DataFrame-cache counters (hits/misses/entries/bytes/evictions).
+
+    The user-visible acceptance surface for ``comfydl.dataio.cache``: run a
+    workflow twice and watch ``hits`` climb; flip the switch off and watch
+    ``misses`` accumulate instead.  Always 200 — ``{"available": false}`` when
+    the cache module is not loaded (bare environment).
+    """
+    try:
+        from comfydl.nodes import _dataio_cache as _dc
+    except Exception:  # noqa: BLE001 - bare environment
+        return web.json_response({"available": False})
+    stats = _dc.stats()
+    stats["enabled"] = _dc.enabled()
+    stats["available"] = True
+    return web.json_response(stats)
+
+
 @routes.patch("/comfydl/switches/{switch_id}")
 async def switches_set(request: web.Request) -> web.Response:
     """Hot-toggle one feature switch: ``{"enabled": bool}``.

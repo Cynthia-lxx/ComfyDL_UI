@@ -104,11 +104,26 @@
         console.warn(TAG, `PATCH ${switchId} -> ${resp.status}`);
         return null;
       }
+      if (switchId === "comfydl.dataio.cache") logCacheStats(api);
       return await resp.json();
     } catch (e) {
       console.warn(TAG, `PATCH ${switchId} failed`, e);
       return null;
     }
+  }
+
+  // Live counters for the data IO cache (the switch's visible acceptance
+  // surface): hits/misses/entries/bytes/evictions.  Logged to the console on
+  // setup and after each cache-toggle change; also curl-able at
+  // /comfydl/dataio/cache/stats.
+  async function logCacheStats(api) {
+    const f = (api && typeof api.fetchApi === "function")
+      ? api.fetchApi.bind(api) : fetch;
+    try {
+      const resp = await f("/comfydl/dataio/cache/stats");
+      if (!resp.ok) return;
+      console.info(TAG, "dataio cache stats:", await resp.json());
+    } catch (e) { /* backend without the route: silent */ }
   }
 
   // Settings store readiness gate - the exact 2026-10-30 lesson from
@@ -167,6 +182,7 @@
             }
           } catch (e) { /* store not writable: leave the default */ }
         }
+        logCacheStats(app.extensionManager?.api ?? getApi(app));
       },
       settings: PERF_SWITCHES.map((def) => ({
         id: def.settingId,
