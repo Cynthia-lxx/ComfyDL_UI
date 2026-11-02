@@ -1380,6 +1380,12 @@ class PromptServer():
         if os.path.isdir(perf_assets):
             self.app.add_routes([web.static('/comfydl/perf', perf_assets)])
 
+        dataops_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "dataops_assets"
+        )
+        if os.path.isdir(dataops_assets):
+            self.app.add_routes([web.static('/comfydl/dataops', dataops_assets)])
+
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True
         if installed_templates_version:

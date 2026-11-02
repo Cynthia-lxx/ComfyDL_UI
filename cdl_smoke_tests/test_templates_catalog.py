@@ -133,6 +133,7 @@ check(
         "attention_lab",
         "hyperparameter_exploration",
         "data_list_demo",
+        "dataops_demo",
     },
     str(sorted(comfydl_names)),
 )

@@ -79,6 +79,15 @@ CDLAPP_LOADER_TAG = (
 )
 CDLAPP_LOADER_MARK = "<!--ComfyDL_UI:cdlapp-loader-->"
 
+# The DataOps module (dataset Pack/Unpack dynamic column ports): same loader
+# pattern.  It only patches node prototypes for CdlDatasetPack/CdlDatasetUnpack
+# and is inert in every workflow that does not use them.
+DATAOPS_LOADER_TAG = (
+    '<!--ComfyDL_UI:dataops-loader-->'
+    '<script type="module" src="/comfydl/dataops/dataops.js"></script>'
+)
+DATAOPS_LOADER_MARK = "<!--ComfyDL_UI:dataops-loader-->"
+
 # The Motion module (staged entrance + ripple): a loader script before </body>
 # plus the entrance pre-hide CSS in the <head>. The CSS must ship in the head
 # (not be injected by motion.js at runtime) so it is already in the CSSOM when
@@ -373,6 +382,13 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("perf loader")
     except Exception as exc:
         logging.warning(f"{TAG} perf loader not applied: {exc}")
+
+    # The DataOps loader (dataset Pack/Unpack dynamic ports): same channel.
+    try:
+        if _patch_dataops_loader(Path(web_root)):
+            applied.append("dataops loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} dataops loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -938,6 +954,28 @@ def _patch_crashsite_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", CRASHSITE_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} crashsite panel loader injected into {path.name}")
+    return True
+
+
+def _patch_dataops_loader(web_root: Path) -> bool:
+    """Inject the DataOps module's loader into ``index.html``.
+
+    Same pattern as :func:`_patch_cdlapp_loader`: the module is a repository
+    asset served by ``server.py`` from ``/comfydl/dataops/``, and this patch
+    only adds the one ``<script type="module">`` tag before ``</body>``.  The
+    module patches only the CdlDatasetPack/CdlDatasetUnpack prototypes and is
+    inert in every other workflow.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if DATAOPS_LOADER_MARK in text:
+        logging.debug(f"{TAG} dataops loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", DATAOPS_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} dataops loader injected into {path.name}")
     return True
 
 

@@ -993,6 +993,13 @@ def _f_dataset(cfg: dict, name: str) -> Any:
     )
 
 
+def _f_column(cfg: dict, name: str) -> Any:
+    """``TENSOR`` column dummy for the Pack family: one 8-row feature column."""
+    import torch
+
+    return torch.arange(8, dtype=torch.float32)
+
+
 #: type string (upper-cased) -> factory producing a dummy value
 _VALUE_FACTORIES: dict[str, Callable[[dict, str], Any]] = {
     "INT": _f_int,
@@ -1091,6 +1098,10 @@ _EXPECTED_REHYDRATED: dict[str, str] = {
 #: know that, so the harness declares it here instead of weakening the node.
 _INPUT_OVERRIDES: dict[str, dict[str, Callable[[dict, str], Any]]] = {
     "BasicEmbedding": {"tensor": _f_index_small},
+    # Dataset Pack: the dynamic col_N slots are optional forceInput TENSORs —
+    # without an override the harness would leave them all unconnected and the
+    # node (rightly) refuses to run.
+    "CdlDatasetPack": {"col_0": _f_column},
     # NLP: indices have to fall inside the dummy vocabulary.
     "CdlVocabDecode": {"indices": _f_index_1d},
     # Object detection: (num_boxes, 4) boxes plus matching scores/anchors.
@@ -2290,6 +2301,63 @@ def _check_get_item(result: Any, args: dict[str, Any]) -> None:
     assert row.feature_names == ["a", "b", "c"] and row.target_name == "y", (
         "row view lost the schema"
     )
+
+
+def _check_pack(result: Any, args: dict[str, Any]) -> None:
+    """The column packer must build an 8x1 unlabelled table from the dummy.
+
+    The harness connects a single ``col_0`` TENSOR column; the workflow
+    reflection is empty (``{"workflow": {}}``), so the raw port name becomes
+    the feature name and no port matches the ``target`` default.
+    """
+    from comfydl.nodes.data_types import CdlDataset as _CdlDataset
+
+    packed = _as_tuple(result)[0]
+    assert isinstance(packed, _CdlDataset), (
+        f"packed output must be a CdlDataset, got {type(packed)}"
+    )
+    assert packed.n_samples == 8 and packed.n_features == 1, (
+        f"packed table is {packed.n_samples}x{packed.n_features}, expected 8x1"
+    )
+    assert packed.feature_names == ["col_0"], (
+        f"packed table lost the fallback port name: {packed.feature_names}"
+    )
+    assert packed.labels is None and packed.target_name == "", (
+        "the dummy column must not be mistaken for the target"
+    )
+    pack_meta = packed.meta.get("pack", {})
+    assert pack_meta.get("columns") == ["col_0"] and pack_meta.get("rows") == 8, (
+        "packed table lost the pack provenance"
+    )
+
+
+def _check_unpack(result: Any, args: dict[str, Any]) -> None:
+    """The column splitter must emit one view per column plus the target.
+
+    The ``DATASET`` dummy is a labelled 8x3 table: four tensor outputs (a, b,
+    c, y) delivered through the ``{"ui", "result"}`` payload, the ui schema
+    naming every port, and each output aliasing the source storage.
+    """
+    import torch
+
+    assert isinstance(result, dict) and "ui" in result and "result" in result, (
+        "Unpack must return the {ui, result} payload (runtime port channel)"
+    )
+    schema = result["ui"]["columns"]
+    assert [c["name"] for c in schema] == ["a", "b", "c", "y"], (
+        f"ui schema lost the column names: {schema}"
+    )
+    assert all(c["type"] == "TENSOR" for c in schema), "columns must be TENSORs"
+    cols = result["result"]
+    assert len(cols) == 4, f"expected 4 column views, got {len(cols)}"
+    dataset = args["dataset"]
+    sources = [dataset.features] * 3 + [dataset.labels]
+    for pos, (col, source) in enumerate(zip(cols, sources)):
+        assert isinstance(col, torch.Tensor), f"port {pos} is not a tensor"
+        assert (
+            col.untyped_storage().data_ptr()
+            == source.untyped_storage().data_ptr()
+        ), f"column view {pos} copied the source storage (must be zero-copy)"
 
 
 def _check_softmax_train(result: Any, args: dict[str, Any]) -> None:
@@ -3598,6 +3666,8 @@ _OUTPUT_CHECKS: dict[str, list[Callable[[Any, dict[str, Any]], None]]] = {
     "CdlDatasetSplitBatches": [_check_split_batches],
     "CdlDatasetFromList": [_check_from_list],
     "CdlDatasetGetItem": [_check_get_item],
+    "CdlDatasetPack": [_check_pack],
+    "CdlDatasetUnpack": [_check_unpack],
     "CdlSoftmaxTrain": [_check_softmax_train],
     "CdlClassificationTrain": [_check_classification_train],
     "CdlConfusionMatrixEval": [_check_confusion_matrix_eval],
@@ -3921,7 +3991,10 @@ def _count_outputs(result: Any) -> int:
     if result is None:
         return 0
     if isinstance(result, dict):
-        return 0
+        # {"ui": ..., "result": (...)} payloads (data_ops Unpack family) —
+        # count the values the engine would actually deliver downstream.
+        inner = result.get("result")
+        return len(inner) if isinstance(inner, (tuple, list)) else 0
     if isinstance(result, (tuple, list)):
         return len(result)
     return 1
@@ -4037,7 +4110,12 @@ def main(argv: list[str] | None = None) -> int:
                     args, _ = _legacy_inputs(node_id, node_cls)
                 result, arity, allows_fewer = _execute(node_id, node_cls, args, opts.timeout)
                 got = _count_outputs(result)
-                if got > arity or (got != arity and not allows_fewer):
+                # ByPassTypeTuple RETURN_TYPES (data_ops Pack/Unpack) declares
+                # a dynamic output arity: the real port list is maintained by
+                # the frontend, so any returned count is legal at run time.
+                return_types = getattr(node_cls, "RETURN_TYPES", ()) or ()
+                dynamic_arity = type(return_types).__name__ == "ByPassTypeTuple"
+                if not dynamic_arity and (got > arity or (got != arity and not allows_fewer)):
                     raise AssertionError(f"returned {got} value(s), schema declares {arity}")
                 for check in _OUTPUT_CHECKS.get(node_id, ()):
                     check(result, args)

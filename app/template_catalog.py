@@ -76,6 +76,7 @@ _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "attention_lab": "language_model_train_and_chat-1.png",
     "hyperparameter_exploration": "tabular_regression_production-1.png",
     "data_list_demo": "tabular_regression_production-1.png",
+    "dataops_demo": "tabular_regression_production-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -284,6 +285,22 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-11-01",
             "openSource": True,
         },
+        {
+            "name": "dataops_demo",
+            "title": "Dataset Pack / Unpack (column ports)",
+            "description": (
+                "Column-to-port dynamic binding for DATASET: Dataset Unpack "
+                "emits one output port per column (x0..x3 plus target), "
+                "Dataset Pack stacks per-column ports back into a table - "
+                "the port name is the column name, so feature-engineering "
+                "branches can consume individual columns."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "png",
+            "tags": ["dataset", "columns", "ports", "data"],
+            "date": "2026-11-02",
+            "openSource": True,
+        },
     ],
 }
 
@@ -346,6 +363,11 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "零拷贝的分批行视图（可洗牌、可定种子），Dataset From List 以 INPUT_IS_LIST 一次 "
             "torch.cat 合并回完整表，Dataset Get Item 抽单行做 1 样本视图——"
             "这是搭逐批 epoch 训练环的地基。"
+        ),
+        "dataops_demo": (
+            "DATASET 的列→端口动态绑定：Dataset Unpack 把表拆成每列一个输出端口（x0..x3 加 "
+            "target），Dataset Pack 把逐列张量端口堆叠回完整表——端口名就是列名，"
+            "特征工程分支可以直接消费单列。跑一次后端口按真实 schema 自动生成并随工作流保存。"
         ),
     },
 }

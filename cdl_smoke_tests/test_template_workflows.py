@@ -119,10 +119,30 @@ def _run_workflow(path: Path):
             node_out[node["id"]] = raw if isinstance(raw, tuple) else (raw,)
             continue
         instance = cls()
+        # Legacy nodes may declare hidden inputs (data_ops Pack/Unpack use
+        # unique_id/extra_pnginfo for workflow reflection) — feed them what
+        # the engine would: this node's id and the serialized workflow.
+        try:
+            declared_hidden = (cls.INPUT_TYPES() or {}).get("hidden") or {}
+        except Exception:
+            declared_hidden = {}
+        for hname in declared_hidden:
+            if hname in args:
+                continue
+            if hname == "unique_id":
+                args[hname] = str(node["id"])
+            elif hname == "extra_pnginfo":
+                args[hname] = {"workflow": wf}
+            elif hname == "prompt":
+                args[hname] = {}
         # Mirror the host: execution.py runs the whole prompt inside
         # torch.inference_mode(), so every node here must survive that too.
         with torch.inference_mode():
             out = getattr(instance, cls.FUNCTION)(**args)
+        if isinstance(out, dict) and "result" in out:
+            # {"ui": ..., "result": (...)} payloads (data_ops Unpack) — the
+            # engine delivers result's tuple downstream.
+            out = tuple(out["result"])
         node_out[node["id"]] = out if isinstance(out, tuple) else (out,)
     return node_out
 
@@ -144,6 +164,7 @@ def main() -> int:
         "attention_lab",
         "hyperparameter_exploration",
         "data_list_demo",
+        "dataops_demo",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -321,6 +342,30 @@ def main() -> int:
     check("I: get item picks row 0", row_i.n_samples == 1 and row_i.meta.get("row") == 0)
     check("I: preview is a table string",
           isinstance(preview_i, str) and "x0" in preview_i, preview_i[:80])
+
+    # --- Template J: dataops_demo (SP-6b column->port binding) ----------------- #
+    # The Pack/Unpack story: unpack a 500-row table into per-column ports,
+    # repack them (the port labelled "target" becomes the label again via the
+    # workflow-reflection channel), preview the head.
+    out_j = _run_workflow(workflows_dir / "dataops_demo.json")
+    packed_j = out_j[5][0]
+    preview_j = out_j[6][0]
+    check("J: unpack -> pack reproduces all 500 rows",
+          packed_j.n_samples == 500 and packed_j.n_features == 4,
+          f"{packed_j.n_samples}x{packed_j.n_features}")
+    check("J: column names recovered from workflow reflection",
+          packed_j.feature_names == ["x0", "x1", "x2", "x3"],
+          str(packed_j.feature_names))
+    check("J: target port restored as labels",
+          packed_j.target_name == "target" and packed_j.labels is not None
+          and packed_j.n_samples == len(packed_j.labels),
+          str(packed_j.meta.get("pack")))
+    check("J: pack provenance",
+          packed_j.meta.get("pack", {}).get("rows") == 500
+          and packed_j.meta.get("pack", {}).get("target") == "target",
+          str(packed_j.meta.get("pack")))
+    check("J: preview is a table string",
+          isinstance(preview_j, str) and "x0" in preview_j, preview_j[:80])
 
     return _report()
 

@@ -803,6 +803,40 @@ def _estimate_get_item(ctx: EstimationCtx) -> NodeEstimate:
     return estimate
 
 
+# Dataset Pack/Unpack — column-to-port dynamic binding (comfydl/nodes/data_ops.py)
+# --------------------------------------------------------------------------- #
+@register("CdlDatasetPack")
+def _estimate_pack(ctx: EstimationCtx) -> NodeEstimate:
+    """Column merger: one torch.stack/cat copy of every connected column."""
+    estimate = NodeEstimate(basis={"key": "dataset_pack", "params": {
+        "target_name": str(ctx.widget("target_name", "target") or ""),
+    }})
+    estimate.outputs = [Unknown("dataset")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "data reshaping - no matmul in this node"
+    estimate.confidence = "approx"
+    estimate.reason = (
+        "column packer: stacks the connected column tensors into one table "
+        "(one O(N*C) copy); column sizes are not statically known")
+    return estimate
+
+
+@register("CdlDatasetUnpack")
+def _estimate_unpack(ctx: EstimationCtx) -> NodeEstimate:
+    """Column splitter: emits zero-copy column views, no own compute."""
+    estimate = NodeEstimate(basis={"key": "dataset_unpack", "params": {}})
+    estimate.outputs = [Unknown("dataset_columns")]
+    estimate.items = []
+    estimate.flops_status = "unknown"
+    estimate.flops_reason = "data reshaping - no matmul in this node"
+    estimate.confidence = "exact"
+    estimate.reason = (
+        "column splitter: outputs are zero-copy views (features[:, i]) of "
+        "the source table; no own allocation beyond wrappers")
+    return estimate
+
+
 # --------------------------------------------------------------------------- #
 # Shared helpers for the M3 family estimators.
 # --------------------------------------------------------------------------- #
