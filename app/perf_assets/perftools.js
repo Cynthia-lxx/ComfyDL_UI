@@ -49,6 +49,18 @@
         zh: "热关闭 Compile Model 节点：关闭后编译请求直接返回原模块，不做任何包装。",
       },
     },
+    {
+      settingId: "ComfyDL.Perf.DataIOCache",
+      switchId: "comfydl.dataio.cache",
+      name: {
+        en: "ComfyDL data IO cache",
+        zh: "ComfyDL 数据读取缓存",
+      },
+      tooltip: {
+        en: "Caches parsed DataFrames for the dataset readers (md5 key over path + mtime + parse parameters, 512 MB byte budget, FIFO eviction). Hot-off: every run re-parses its files.",
+        zh: "缓存读取节点解析出的 DataFrame（键 = 路径 + mtime + 解析参数的 md5，512 MB 字节预算，FIFO 淘汰）。热关闭后每次执行都重新解析文件。",
+      },
+    },
   ];
 
   let locale = "en";

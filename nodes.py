@@ -801,6 +801,18 @@ async def init_builtin_dl_nodes():
     dl_display_mappings = getattr(comfydl, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
     NODE_DISPLAY_NAME_MAPPINGS.update(dl_display_mappings)
 
+    # comfydl is imported as a top-level package (not via load_custom_node),
+    # so its WEB_DIRECTORY never hits the custom-node web-folder contract —
+    # register it here so /extensions/comfydl/... serves its JS and the
+    # /extensions endpoint lists it (SP-6c ShowText frontend).
+    dl_web = getattr(comfydl, "WEB_DIRECTORY", None)
+    if dl_web:
+        dl_web_abs = os.path.abspath(
+            os.path.join(os.path.dirname(comfydl.__file__), dl_web)
+        )
+        if os.path.isdir(dl_web_abs):
+            EXTENSION_WEB_DIRS["comfydl"] = dl_web_abs
+
     return import_failed
 
 
