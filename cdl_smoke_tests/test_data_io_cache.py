@@ -42,6 +42,7 @@ def _expect_error(name, fn, needle):
 def main() -> int:
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_diocache_"))
     harness._bootstrap(sandbox)
+    harness._install_sandbox_paths(sandbox)  # redirect folder_paths input root
     harness._load_registry(False)
     import nodes as host_nodes  # noqa: E402
 
@@ -204,6 +205,32 @@ def main() -> int:
     ds_s = REG["CdlReadString"]().execute(
         text_data, "", header=False, start_idx=2, num_samples=4)[0]
     check("string shard", ds_s.n_samples == 4)
+
+    # 5b. input-directory path resolution (ComfyUI convention) ------------------
+    # The harness chdirs into the sandbox and redirects folder_paths' input
+    # root to sandbox/input; a bare filename must resolve from there first,
+    # then the CWD (where the seed fixtures live), and absolute paths must
+    # stay untouched.
+    from comfydl.nodes.data_io import _resolve_input_path
+
+    (sandbox / "input" / "in_dir.csv").write_text("p,q\n1,2\n", encoding="utf-8")
+    ds_in = reader.execute("in_dir.csv", "q")[0]
+    check("bare filename resolves from the input directory", ds_in.n_samples == 1)
+    check("absolute path passes through",
+          _resolve_input_path(str(csv_path)) == str(csv_path))
+    check("cwd-relative still resolves (legacy fallback)",
+          Path(_resolve_input_path("cdl_dataset.csv")).is_file())
+
+    def _expect_filenf(name, fn):
+        try:
+            fn()
+            check(name, False, "no error raised")
+        except FileNotFoundError as exc:
+            check(name, "tried:" in str(exc), str(exc)[:120])
+
+    _expect_filenf(
+        "missing file names every candidate",
+        lambda: reader.execute("nope_nowhere.csv", ""))
 
     # 6. Preview ShowText contract (SP-6c) --------------------------------------
     from comfydl.nodes.data_io_writers import (

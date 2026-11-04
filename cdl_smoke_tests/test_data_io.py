@@ -189,10 +189,13 @@ def main() -> int:
         check("WriteXLSX (openpyxl)", True, "openpyxl absent - skipped")
     except Exception as e:  # pragma: no cover
         check("WriteXLSX", False, f"{type(e).__name__}: {e}")
-    # Preview
+    # Preview (SP-6c: {"ui", "result"} payload — result[0] is the full string)
     try:
-        prev = REG["CdlDatasetPreview"]().execute(ds_in, 2)[0]
-        check("DatasetPreview non-empty", isinstance(prev, str) and len(prev) > 0)
+        prev_out = REG["CdlDatasetPreview"]().execute(ds_in, 2)
+        prev = prev_out["result"][0]
+        check("DatasetPreview non-empty",
+              isinstance(prev, str) and len(prev) > 0
+              and isinstance(prev_out["ui"]["text"][0], str))
     except Exception as e:  # pragma: no cover
         check("DatasetPreview", False, f"{type(e).__name__}: {e}")
 
