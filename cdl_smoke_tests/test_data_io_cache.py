@@ -236,8 +236,8 @@ def main() -> int:
     # A >1MB file with no line break must fail FAST with a readable error
     # instead of wedging the executor in the C parser for hours.
     giant = sandbox / "single_line.csv"
-    giant.write_text(",".join(f'{{"x{i}":1}}' for i in range(200_000)),
-                     encoding="utf-8")  # ~2.4 MB, zero newlines
+    giant.write_text(",".join(str(i % 100) for i in range(400_000)),
+                     encoding="utf-8")  # ~1 MB of numeric CSV, zero newlines
     t0 = time.perf_counter()
     _expect_error("single-line giant file fails fast",
                   lambda: reader.execute(str(giant), ""),
@@ -245,6 +245,14 @@ def main() -> int:
     check("guard fails immediately",
           time.perf_counter() - t0 < 1.0,
           f"{(time.perf_counter() - t0):.2f}s")
+    # opt-out: the Advanced toggle bypasses the guard (robustness is a
+    # choice, not an unconditional gate) — numeric single-line data parses
+    ds_raw = reader.execute(str(giant), "", header=False,
+                            single_line_guard=False)[0]
+    check("guard opt-out parses anyway", ds_raw.n_samples == 1)
+    spec_adv = REG["CdlReadCSV"].INPUT_TYPES()["optional"]["single_line_guard"]
+    check("guard toggle sits in the Advanced section",
+          spec_adv[1].get("advanced") is True)
 
     # 6. Preview ShowText contract (SP-6c) --------------------------------------
     from comfydl.nodes.data_io_writers import (
