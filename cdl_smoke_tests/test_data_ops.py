@@ -317,6 +317,8 @@ def main() -> int:
         check("js dataset io type", '"DATASET"' in js)
         check("js configuringGraph guard", "configuringGraph" in js)
         check("js onExecuted channel", "onExecuted" in js)
+        check("js boot race guard",
+              "registerExtension too early" in js and "return false" in js)
         check("js no eval", "eval(" not in js and "new Function" not in js)
 
         # Syntax: node --check when available, bracket balance as fallback.

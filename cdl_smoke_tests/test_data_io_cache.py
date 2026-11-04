@@ -232,6 +232,20 @@ def main() -> int:
         "missing file names every candidate",
         lambda: reader.execute("nope_nowhere.csv", ""))
 
+    # 5c. single-line giant file guard (the executor-wedge hotfix) ------------
+    # A >1MB file with no line break must fail FAST with a readable error
+    # instead of wedging the executor in the C parser for hours.
+    giant = sandbox / "single_line.csv"
+    giant.write_text(",".join(f'{{"x{i}":1}}' for i in range(200_000)),
+                     encoding="utf-8")  # ~2.4 MB, zero newlines
+    t0 = time.perf_counter()
+    _expect_error("single-line giant file fails fast",
+                  lambda: reader.execute(str(giant), ""),
+                  "no line break")
+    check("guard fails immediately",
+          time.perf_counter() - t0 < 1.0,
+          f"{(time.perf_counter() - t0):.2f}s")
+
     # 6. Preview ShowText contract (SP-6c) --------------------------------------
     from comfydl.nodes.data_io_writers import (
         PREVIEW_WRITEBACK_MAX_CHARS,
