@@ -125,6 +125,13 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
   <img src="assets/loss_map_focus.png" alt="训练节点下方的实时 loss map 预览卡，同时展示原始与平滑损失曲线" width="520" />
 </p>
 
+### 双渲染器 richwidget
+
+数据集预览是首个 custom-canvas richwidget：同一份可滚动报告同时支持 Legacy 与
+Nodes 2.0，可指针拖拽滚动、正常调整节点尺寸。隐藏的只读 ShowText 状态通道保持严格的
+`[head, canvas_text]` 工作流契约，并在旧版前端转为可见降级。保存/加载走官方图生命周期
+钩子恢复文本，不会在前端 widget 值迁移时把文本错位进真正的 `head` 值。
+
 ### CDL App Panel——为深度学习重造的 App 模式
 
 官方 Beta App 模式（工作流 → App）是为图片输出设计的；而深度学习跑出来的是张量、模型、

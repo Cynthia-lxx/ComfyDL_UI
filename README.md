@@ -170,6 +170,14 @@ divergence is visible at a glance, without opening anything:
   <img src="assets/loss_map_focus.png" alt="Live loss map preview card under a training node, showing the raw and smoothed loss curves" width="520" />
 </p>
 
+### Dual-renderer rich widgets
+
+Dataset Preview is the first custom-canvas rich widget: the same scrollable report works in
+Legacy and Nodes 2.0, with pointer scrolling and normal node resizing. A hidden read-only
+ShowText state channel preserves the exact `[head, canvas_text]` workflow contract and remains
+the visible fallback on older frontends. Save/load restores text through the official graph
+lifecycle hooks without letting widget-value migration shift text into the real `head` value.
+
 ### CDL App Panel — the App mode, rebuilt for deep learning
 
 The official beta App mode (workflow → app) is designed for image outputs; DL
