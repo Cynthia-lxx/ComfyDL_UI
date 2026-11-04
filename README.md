@@ -110,6 +110,11 @@ per-node breakdown, the measured history and the ATen operator graph:
   estimates, and mismatches are flagged, not hidden.
 - **Watchdog** — sampled CPU / RSS facts attributed to the executing node catch the nodes that
   monopolize the machine mid-run.
+- **Data cache** — a live inventory of the DataFrame cache behind the dataset readers: budget
+  usage meter, hit / miss / eviction counters and one card per cached table (source file, parse
+  parameters, cached size, hit count), so "what is cached right now" is always visible. The
+  file readers also expose `IS_CHANGED` fingerprints, letting the executor skip unchanged
+  reads before they run at all.
 - **Honest about unknowns** — uncovered node types report `unknown`; failed probes fall back
   to formula values with an explicit `fallback` grade. Panels, badges and dialogs follow the
   UI language.

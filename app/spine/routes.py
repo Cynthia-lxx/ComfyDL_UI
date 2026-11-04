@@ -113,6 +113,28 @@ async def dataio_cache_stats(request: web.Request) -> web.Response:
     return web.json_response(stats)
 
 
+@routes.get("/comfydl/dataio/cache/entries")
+async def dataio_cache_entries(request: web.Request) -> web.Response:
+    """Per-entry inventory of the DataFrame cache (Profiling Data cache card).
+
+    Returns ``{"available": bool, "enabled": bool, "stats": {...},
+    "entries": [...]}`` where each entry carries ``key/reader/label/path/
+    mtime_ns/file_size/params/cached_bytes/hits/stored_ts/last_hit`` (no
+    payloads).  Always 200 — same bare-environment contract as the stats
+    endpoint above.
+    """
+    try:
+        from comfydl.nodes import _dataio_cache as _dc
+    except Exception:  # noqa: BLE001 - bare environment
+        return web.json_response({"available": False})
+    return web.json_response({
+        "available": True,
+        "enabled": _dc.enabled(),
+        "stats": _dc.stats(),
+        "entries": _dc.entries(),
+    })
+
+
 @routes.patch("/comfydl/switches/{switch_id}")
 async def switches_set(request: web.Request) -> web.Response:
     """Hot-toggle one feature switch: ``{"enabled": bool}``.

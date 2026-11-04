@@ -388,6 +388,42 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 }
 .cdlp-tag-sys { border-color: rgba(248, 113, 113, 0.55); color: #f87171; }
 
+/* Data cache card (DataFrame-cache inventory): neutral teal accents to set
+   it apart from the red burst ledger while staying inside the panel's
+   quiet-ledger look. */
+.cdlp-cache-item {
+  border-left: 2px solid #1abc9c;
+  border-radius: 0 6px 6px 0;
+  background: rgba(26, 188, 154, 0.05);
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
+.cdlp-cache-head { display: flex; align-items: center; gap: 8px; }
+.cdlp-cache-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdlp-cache-size {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--cdlp-font-display);
+  font-variant-numeric: tabular-nums;
+}
+.cdlp-cache-meta {
+  font-size: 11px;
+  color: var(--input-text-read-only, #9a9a9a);
+  margin-top: 2px;
+}
+.cdlp-cache-path {
+  font-size: 11px;
+  color: var(--input-text-read-only, #6e6e6e);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* M2: topbar live indicator (W2) */
 .cdlp-live {
   display: flex;

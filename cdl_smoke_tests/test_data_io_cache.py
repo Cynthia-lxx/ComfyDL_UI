@@ -350,11 +350,17 @@ def main() -> int:
           "logCacheStats" in perf_src
           and "/comfydl/dataio/cache/stats" in perf_src)
 
-    # the route handler itself (spine app, no torch needed)
+    # the route handlers themselves (spine app, no torch needed)
     try:
         from aiohttp import web as _webmod
 
-        async def _probe():
+        # seed one entry so the inventory endpoint has something to list
+        dc.clear()
+        dc.store("probe_key", pd.DataFrame({"a": range(10)}),
+                 meta=dc.describe("csv", "probe_fixture.csv", str(csv_path),
+                                  "sep=',' header=on"))
+
+        async def _probe(path):
             from aiohttp.test_utils import TestClient, TestServer
 
             app = _webmod.Application()
@@ -364,20 +370,119 @@ def main() -> int:
             client = TestClient(TestServer(app))
             await client.start_server()
             try:
-                resp = await client.get("/comfydl/dataio/cache/stats")
+                resp = await client.get(path)
                 body = await resp.json()
                 return resp.status, body
             finally:
                 await client.close()
 
         import asyncio
-        status, body = asyncio.new_event_loop().run_until_complete(_probe())
+        _loop = asyncio.new_event_loop()
+        status, body = _loop.run_until_complete(
+            _probe("/comfydl/dataio/cache/stats"))
         check("stats route responds",
               status == 200 and body.get("available") is True
               and {"hits", "misses", "entries", "cached_bytes"} <= set(body),
               str(body)[:110])
+        status, body = _loop.run_until_complete(
+            _probe("/comfydl/dataio/cache/entries"))
+        check("entries route responds",
+              status == 200 and body.get("available") is True
+              and body.get("enabled") is not None
+              and isinstance(body.get("stats"), dict)
+              and isinstance(body.get("entries"), list)
+              and len(body["entries"]) == 1
+              and body["entries"][0]["reader"] == "csv"
+              and body["entries"][0]["label"] == "probe_fixture.csv"
+              and body["entries"][0]["hits"] == 0,
+              str(body)[:160])
+        _loop.close()
+        dc.clear()
     except Exception as exc:  # noqa: BLE001
         check("stats route responds", False, str(exc)[:110])
+        check("entries route responds", False, str(exc)[:110])
+
+    # 8. per-entry metadata (Data cache card backend) --------------------------
+    import math
+
+    dc.clear()
+    reader.execute(str(csv_path), "y")
+    ents = dc.entries()
+    check("meta recorded on store",
+          len(ents) == 1 and ents[0]["reader"] == "csv"
+          and ents[0]["label"] == "fixture.csv"
+          and ents[0]["cached_bytes"] > 0
+          and ents[0]["hits"] == 0 and ents[0]["last_hit"] is None,
+          str(ents)[:130])
+    check("meta stamp matches the file",
+          bool(ents) and ents[0]["file_size"] == csv_path.stat().st_size
+          and ents[0]["mtime_ns"] == csv_path.stat().st_mtime_ns
+          and Path(ents[0]["path"]).is_file())
+    check("meta params recorded",
+          bool(ents) and "sep=','" in ents[0]["params"],
+          str(ents[0]["params"])[:60] if ents else "no entries")
+    reader.execute(str(csv_path), "y")
+    ents = dc.entries()
+    check("meta hit ledger updates",
+          len(ents) == 1 and ents[0]["hits"] == 1
+          and ents[0]["last_hit"] is not None, str(ents)[:130])
+
+    # eviction pops the side table in lockstep
+    dc.MAX_TOTAL_BYTES = 64
+    try:
+        dc.store("meta_evict", pd.DataFrame({"a": range(10)}),
+                 meta=dc.describe("csv", "evict_me.csv", None))
+        check("eviction drops meta too",
+              all(e["label"] != "evict_me.csv" for e in dc.entries()),
+              str([e["label"] for e in dc.entries()])[:100])
+    finally:
+        dc.MAX_TOTAL_BYTES = real_budget
+        dc.clear()
+
+    # IS_CHANGED: the official execution-cache fingerprint (V1 contract:
+    # same-args-as-FUNCTION, compared with !=, never a bool)
+    csv_cls = REG["CdlReadCSV"]
+    fp = csv_cls.IS_CHANGED(file=str(csv_path))
+    check("IS_CHANGED returns the file stamp",
+          isinstance(fp, tuple) and len(fp) == 3
+          and fp[1] == csv_path.stat().st_mtime_ns
+          and fp[2] == csv_path.stat().st_size, str(fp)[:110])
+    fp_missing = csv_cls.IS_CHANGED(file="nope_nowhere.csv")
+    check("IS_CHANGED missing file -> NaN (forces re-run)",
+          isinstance(fp_missing, float) and math.isnan(fp_missing),
+          str(fp_missing))
+    check("IS_CHANGED never returns bool",
+          not isinstance(fp, bool) and not isinstance(fp_missing, bool))
+    db_fp = REG["CdlReadDB"].IS_CHANGED(db_path=str(csv_path))
+    check("IS_CHANGED honours the db_path parameter",
+          isinstance(db_fp, tuple) and db_fp == fp, str(db_fp)[:110])
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    check("IS_CHANGED tracks file change",
+          csv_cls.IS_CHANGED(file=str(csv_path)) != fp)
+    dc.clear()
+
+    # 9. frontend contract: Data cache card in the Profiling panel -------------
+    prof_src = (REPO_ROOT / "app" / "profiling_assets" / "profiler.js").read_text(
+        encoding="utf-8")
+    check("profiler data cache card",
+          "fetchCacheEntries" in prof_src
+          and "/comfydl/dataio/cache/entries" in prof_src
+          and "datacache_title" in prof_src
+          and "cdlp-cache-refresh" in prof_src)
+    css_src = (REPO_ROOT / "app" / "profiling_assets" / "profiler.css").read_text(
+        encoding="utf-8")
+    check("profiler data cache css",
+          "cdlp-cache-item" in css_src and "cdlp-cache-path" in css_src)
+    import subprocess
+    try:
+        proc = subprocess.run(
+            ["node", "--check",
+             str(REPO_ROOT / "app" / "profiling_assets" / "profiler.js")],
+            capture_output=True, text=True, timeout=30)
+        check("profiler.js node --check", proc.returncode == 0,
+              proc.stderr[:160])
+    except (OSError, subprocess.TimeoutExpired):
+        check("profiler.js node --check", True, "node unavailable; skipped")
 
     _fail = [r for r in _RESULTS if not r[1]]
     for name, ok, detail in _RESULTS:

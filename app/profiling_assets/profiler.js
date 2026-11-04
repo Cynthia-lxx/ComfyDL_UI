@@ -36,6 +36,7 @@
   const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
   const SERVER_LOG_URL = "/internal/logs/raw";
   const HISTORY_URL = "/comfydl/profiling/history";
+  const CACHE_ENTRIES_URL = "/comfydl/dataio/cache/entries";
   const TAB_ID = "comfydl-profiling";
   const SETTING_LOG_LEVEL = "ComfyDL.Profiling.LogLevel";
   // P0: the real-execution probe is opt-in. The setting alone is not enough -
@@ -223,6 +224,17 @@
       master_enable: "Enable profiling",
       opgraph_leaf: "no ATen ops (pure-Python leaf)",
       opgraph_probe_ms: "probe {ms} ms",
+      // Data cache card (DataFrame-cache inventory, dataio cache).
+      datacache_title: "Data cache",
+      datacache_hits: "hits",
+      datacache_misses: "misses",
+      datacache_evictions: "evictions",
+      datacache_rejected: "rejected",
+      datacache_off: "cache off",
+      datacache_empty: "No cached tables yet - run a read node (CSV/JSON/XLSX/DB).",
+      datacache_unavailable: "cache module unavailable on the server",
+      datacache_never: "never",
+      datacache_of: "{used} of {total}",
     },
     zh: {
       sidebar_title: "性能分析",
@@ -404,6 +416,17 @@
       master_enable: "启用 Profiling",
       opgraph_leaf: "无 ATen 算子（纯 Python 叶子节点）",
       opgraph_probe_ms: "探针 {ms} ms",
+      // 数据缓存卡（DataFrame 缓存清单）
+      datacache_title: "数据缓存",
+      datacache_hits: "命中",
+      datacache_misses: "未中",
+      datacache_evictions: "淘汰",
+      datacache_rejected: "拒存",
+      datacache_off: "缓存已关",
+      datacache_empty: "还没有缓存的数据表——先跑一次读取节点（CSV/JSON/XLSX/DB）。",
+      datacache_unavailable: "服务端缓存模块不可用",
+      datacache_never: "从未",
+      datacache_of: "{used} / {total}",
     },
   };
 
@@ -436,7 +459,7 @@
     // update and would otherwise reset any DOM-only collapsed flag.
     // Burst log starts collapsed (2026-10-07 user feedback): it is a running
     // ledger, not the first thing to read.
-    collapsed: { bursts: true, nodes: false, history: false },
+    collapsed: { bursts: true, nodes: false, history: false, cache: false },
     // M3: operator-graph probe (manual Analyze button - never auto-run).
     opgraph: null,
     opgraphLoading: false,
@@ -458,6 +481,9 @@
     handlers: null,
     // P2: measured-FLOPs run history (from /comfydl/profiling/history).
     history: null,
+    // Data cache inventory (from /comfydl/dataio/cache/entries): stats +
+    // per-entry metadata of the DataFrame cache. null = not fetched yet.
+    cache: null,
     serverLog: null,
     serverLogLoading: false,
     // M3: display mode - "sidebar" (quick view) vs "overlay" (full dashboard).
@@ -1387,6 +1413,7 @@
     stopLivePolling();
     fetchBursts();
     fetchHistory();  // P2: a run just finished - its measured FLOPs landed.
+    fetchCacheEntries();  // read nodes may have just populated the DataFrame cache
     renderPanel();
   }
 
@@ -1470,6 +1497,22 @@
         renderPanel();
       }
     } catch (e) { plog("low", "History fetch failed: " + e); }
+  }
+
+  // Data cache inventory: what the DataFrame cache currently holds (stats +
+  // per-entry metadata). Fetched lazily with the panel, after each run ends,
+  // and via the card's Refresh button - never on a timer.
+  async function fetchCacheEntries() {
+    const api = getApi();
+    if (!api) return;
+    try {
+      const resp = await api.fetchApi(CACHE_ENTRIES_URL, { headers: profHeaders() });
+      if (resp.ok) {
+        state.cache = await resp.json();
+        plog("high", "Data cache: " + ((state.cache.entries || []).length) + " entr(y|ies)");
+        renderPanel();
+      }
+    } catch (e) { plog("low", "Data cache fetch failed: " + e); }
   }
 
   // M3+: pull the app-wide server log ring buffer and keep only the lines
@@ -1827,6 +1870,63 @@
       html.push("</div>");
     }
 
+    // Data cache card: what the DataFrame cache currently holds. Rendered
+    // once the inventory has been fetched; the card follows the standard
+    // collapsible/refresh conventions of this panel.
+    if (state.cache !== null) {
+      const body = state.cache || {};
+      const cstats = body.stats || {};
+      const centries = body.entries || [];
+      html.push('<div class="cdlp-card' + (state.collapsed.cache ? " cdlp-collapsed" : "") + '" data-col="right">');
+      html.push('<div class="cdlp-card-title cdlp-collapsible" data-collapse="cache">'
+        + '<span class="cdlp-collapse-label">' + esc(t("datacache_title")) + "</span>"
+        + '<span class="cdlp-title-right">'
+        + (body.available === false
+          ? ""
+          : (body.enabled === false ? '<span class="cdlp-tag">' + esc(t("datacache_off")) + "</span>" : ""))
+        + '<button class="cdlp-button cdlp-refresh" id="cdlp-cache-refresh">' + esc(t("refresh")) + "</button>"
+        + '<i class="cdlp-chevron"></i></span></div>');
+      html.push('<div class="cdlp-card-body">');
+      if (body.available === false) {
+        html.push('<div class="cdlp-hint">' + esc(t("datacache_unavailable")) + "</div>");
+      } else {
+        const usedB = Number(cstats.cached_bytes) || 0;
+        const budgetB = Number(cstats.budget_bytes) || 0;
+        const pct = budgetB ? Math.min(100, Math.round((usedB / budgetB) * 100)) : 0;
+        html.push('<div class="cdlp-budget">');
+        html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("budget_used"))
+          + '</div><div class="cdlp-v">' + esc(t("datacache_of", { used: fmtBytes(usedB), total: fmtBytes(budgetB) })) + "</div></div>");
+        html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("datacache_hits"))
+          + '</div><div class="cdlp-v">' + esc(String(cstats.hits ?? 0)) + "</div></div>");
+        html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("datacache_misses"))
+          + '</div><div class="cdlp-v">' + esc(String(cstats.misses ?? 0)) + "</div></div>");
+        html.push("</div>");
+        html.push('<div class="cdlp-meter"><div class="cdlp-meter-fill" style="width:' + pct + '%"></div></div>');
+        html.push('<div class="cdlp-hint">' + esc(String(centries.length)) + " / " + esc(String(cstats.max_entries ?? "?"))
+          + " \u00b7 " + esc(t("datacache_evictions")) + " " + esc(String(cstats.evictions ?? 0))
+          + " \u00b7 " + esc(t("datacache_rejected")) + " " + esc(String(cstats.rejected_too_large ?? 0)) + "</div>");
+        if (!centries.length) {
+          html.push('<div class="cdlp-hint">' + esc(t("datacache_empty")) + "</div>");
+        } else {
+          centries.forEach((e) => {
+            html.push('<div class="cdlp-cache-item">');
+            html.push('<div class="cdlp-cache-head"><b>' + esc(e.label || "?") + "</b>"
+              + '<span class="cdlp-tag">' + esc(String(e.reader || "?")) + "</span>"
+              + '<span class="cdlp-cache-size">' + esc(fmtBytes(e.cached_bytes)) + "</span></div>");
+            const metaBits = [t("datacache_hits") + " " + String(e.hits ?? 0)];
+            metaBits.push(e.last_hit
+              ? new Date(e.last_hit * 1000).toLocaleTimeString()
+              : t("datacache_never"));
+            if (e.params) metaBits.push(String(e.params));
+            html.push('<div class="cdlp-cache-meta">' + esc(metaBits.join(" \u00b7 ")) + "</div>");
+            if (e.path) html.push('<div class="cdlp-cache-path">' + esc(String(e.path)) + "</div>");
+            html.push("</div>");
+          });
+        }
+      }
+      html.push("</div></div>");
+    }
+
     // Per-node breakdown
     html.push('<div class="cdlp-card' + (state.collapsed.nodes ? " cdlp-collapsed" : "") + '" data-col="mid">'
       + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="nodes">'
@@ -1983,6 +2083,8 @@
     });
     const refresh = el.querySelector("#cdlp-refresh");
     if (refresh) refresh.addEventListener("click", () => requestEstimate(true));
+    const cacheRefresh = el.querySelector("#cdlp-cache-refresh");
+    if (cacheRefresh) cacheRefresh.addEventListener("click", () => fetchCacheEntries());
     const apply = el.querySelector("#cdlp-apply-suggestion");
     if (apply) apply.addEventListener("click", applySuggestion);
     const analyze = el.querySelector("#cdlp-analyze");
@@ -2055,6 +2157,7 @@
         requestEstimate(true);
         if (state.bursts === null) fetchBursts();
         if (state.history === null) fetchHistory();
+        if (state.cache === null) fetchCacheEntries();
         return () => { state.panelEl = null; };
       },
     });

@@ -80,6 +80,10 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
 - **算子拆解** — 每个节点都被展开成它真正执行的 ATen 算子（`aten.mm`、`aten._softmax`、
   `aten.conv2d`…）；算子级账本与公式估算交叉验证，偏差会被标记而不是隐藏。
 - **看门狗** — 采样到的 CPU / RSS 事实归属到正在执行的节点，抓住运行中独占机器的节点。
+- **数据缓存** — 数据集读取节点背后 DataFrame 缓存的实时清单：预算占用条、命中/未中/淘汰
+  计数，以及每张缓存表一张小卡（源文件、解析参数、缓存大小、命中次数）——"现在缓存了
+  什么"随时可见。文件读取节点同时暴露 `IS_CHANGED` 指纹，让执行器在未变更的读取发生
+  之前就直接跳过。
 
 设计文档：[`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md)、
 [`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md)、
