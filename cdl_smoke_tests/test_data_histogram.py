@@ -55,72 +55,83 @@ def test_backend():
     check("dataset passthrough + OUTPUT_NODE",
           REG["CdlDatasetHistogram"].OUTPUT_NODE is True
           and REG["CdlDatasetHistogram"].RETURN_TYPES == ("DATASET",))
+    check("VALIDATE_INPUTS accepts any string feature selector",
+          REG["CdlDatasetHistogram"].VALIDATE_INPUTS("y") is True
+          and REG["CdlDatasetHistogram"].VALIDATE_INPUTS("*") is True
+          and isinstance(REG["CdlDatasetHistogram"].VALIDATE_INPUTS(3), str))
 
     # Binning correctness: 100 uniform values in [0,1), 10 bins -> 10 per bin.
     ds = _dataset([[i / 100] for i in range(100)], names=["x0"])
     payload = _histogram_payload(ds, "*", 10, 100000)
+    entry = payload["series"]["x0"]
     check("uniform column bins evenly",
-          payload["counts"] == [10] * 10, str(payload["counts"]))
+          entry["counts"] == [10] * 10, str(entry["counts"]))
     check("payload carries summary statistics",
-          math.isclose(payload["min"], 0.0, abs_tol=1e-6)
-          and payload["max"] < 1.0
-          and payload["n_used"] == 100 and payload["n_total"] == 100
-          and payload["n_dropped"] == 0 and not payload["sampled"]
+          math.isclose(entry["min"], 0.0, abs_tol=1e-6)
+          and entry["max"] < 1.0
+          and entry["n_used"] == 100 and entry["n_total"] == 100
+          and entry["n_dropped"] == 0 and not entry["sampled"]
           and payload["feature"] == "x0"
-          and len(payload["edges"]) == 11
-          and math.isclose(payload["std"], ds.features.std(), rel_tol=1e-3),
+          and len(entry["edges"]) == 11
+          and math.isclose(entry["std"], ds.features.std(), rel_tol=1e-3)
+          and payload["n_total"] == 100,
           str(payload)[:160])
+
+    # Every numeric column lands in the series map.
+    ds_multi = _dataset([[1.0, 2.0], [3.0, 4.0]], labels=[5.0, 6.0],
+                        names=["a", "b"], target="y")
+    payload = _histogram_payload(ds_multi, "b", 4, 100000)
+    check("all numeric columns aggregated into the series map",
+          list(payload["series"].keys()) == ["a", "b", "y"]
+          and payload["feature"] == "b"
+          and payload["series"]["b"]["min"] == 2.0
+          and payload["series"]["y"]["counts"], str(payload)[:160])
 
     # NaN handling: NaN values are excluded, not silently binned.
     ds_nan = _dataset([[v] for v in (1.0, float("nan"), 2.0, float("inf"), 3.0)],
                       names=["v"])
-    payload = _histogram_payload(ds_nan, "v", 4, 100000)
+    entry = _histogram_payload(ds_nan, "v", 4, 100000)["series"]["v"]
     check("NaN/Inf dropped and reported",
-          payload["n_used"] == 3 and payload["n_dropped"] == 2
-          and sum(payload["counts"]) == 3, str(payload)[:140])
+          entry["n_used"] == 3 and entry["n_dropped"] == 2
+          and sum(entry["counts"]) == 3, str(entry)[:140])
 
     # Sampling: a huge column is down-sampled with endpoints kept.
     ds_big = _dataset([[i] for i in range(1000)], names=["i"])
-    payload = _histogram_payload(ds_big, "i", 8, 100)
+    entry = _histogram_payload(ds_big, "i", 8, 100)["series"]["i"]
     check("oversized column is sampled",
-          payload["sampled"] and payload["n_used"] == 100
-          and payload["n_total"] == 1000
-          and payload["min"] == 0 and payload["max"] == 999, str(payload)[:140])
+          entry["sampled"] and entry["n_used"] == 100
+          and entry["n_total"] == 1000
+          and entry["min"] == 0 and entry["max"] == 999, str(entry)[:140])
 
-    # Feature resolution: *, exact name, label column, numeric index.
-    ds_multi = _dataset([[1.0, 2.0], [3.0, 4.0]], labels=[5.0, 6.0],
-                        names=["a", "b"], target="y")
+    # Feature resolution: *, exact name, label column, numeric index,
+    # and stale names degrade to the first column instead of raising.
     columns, default_index = _resolve_hist_columns(ds_multi)
     check("label column joins the histogrammable set",
           [name for name, _ in columns] == ["a", "b", "y"] and default_index == 0)
     check("'*' resolves to the first feature",
-          _resolve_hist_feature(columns, "*")[0] == "a")
+          _resolve_hist_feature(columns, "*") == "a")
     check("numeric index resolves positionally",
-          _resolve_hist_feature(columns, "2")[0] == "y")
-    try:
-        _resolve_hist_feature(columns, "nope")
-        check("unknown feature raises with available columns", False)
-    except KeyError as exc:
-        check("unknown feature raises with available columns",
-              "a, b, y" in str(exc), str(exc)[:120])
+          _resolve_hist_feature(columns, "2") == "y")
+    check("unknown feature degrades to the first column",
+          _resolve_hist_feature(columns, "nope") == "a")
 
-    # Hard errors: empty dataset / all-NaN column.
+    # Graceful degradation: empty dataset / all-NaN column no longer abort
+    # the flow; they produce empty series entries instead.
     import torch
     from comfydl.nodes.data_types import CdlDataset
 
-    try:
-        _histogram_payload(
-            CdlDataset.from_tensors(torch.zeros((0, 1)), feature_names=["x"]),
-            "*", 8, 100)
-        check("empty dataset raises", False)
-    except ValueError as exc:
-        check("empty dataset raises", "0 samples" in str(exc), str(exc)[:120])
+    payload = _histogram_payload(
+        CdlDataset.from_tensors(torch.zeros((0, 1)), feature_names=["x"]),
+        "*", 8, 100)
+    check("empty dataset yields an empty series entry",
+          payload["series"]["x"]["counts"] == []
+          and payload["series"]["x"]["n_total"] == 0
+          and payload["n_total"] == 0)
     ds_allnan = _dataset([[float("nan")] for _ in range(5)], names=["x"])
-    try:
-        _histogram_payload(ds_allnan, "*", 8, 100)
-        check("all-NaN column raises", False)
-    except ValueError as exc:
-        check("all-NaN column raises", "NaN/Inf" in str(exc), str(exc)[:120])
+    entry = _histogram_payload(ds_allnan, "*", 8, 100)["series"]["x"]
+    check("all-NaN column yields an empty series entry",
+          entry["counts"] == [] and entry["n_used"] == 0
+          and entry["n_dropped"] == 5, str(entry)[:140])
 
     # execute(): ui channel, passthrough identity, workflow write-back.
     workflow = {"workflow": {"nodes": [{"id": 9, "properties": {}}]}}
@@ -130,8 +141,9 @@ def test_backend():
     check("result is the same dataset object (zero-copy passthrough)",
           out["result"][0] is ds_multi)
     payload = out["ui"]["cdl_histogram"][0]
-    check("ui payload is the histogram summary",
-          payload["feature"] == "a" and len(payload["counts"]) == 4
+    check("ui payload carries every column",
+          payload["feature"] == "a"
+          and set(payload["series"].keys()) == {"a", "b", "y"}
           and "a" in payload["feature_names"])
     check("payload written back into node properties",
           out is not None)
@@ -140,7 +152,8 @@ def test_backend():
     node_dict, _ = resolve_workflow_node(workflow, "9")
     check("write-back lands in properties.cdl_histogram",
           node_dict is not None
-          and node_dict["properties"]["cdl_histogram"]["feature"] == "a")
+          and node_dict["properties"]["cdl_histogram"]["feature"] == "a"
+          and "y" in node_dict["properties"]["cdl_histogram"]["series"])
 
 
 def test_frontend_source():
@@ -152,10 +165,17 @@ def test_frontend_source():
     check("histogram draw and hover contract",
           "state.hover" in rich and "fillRect" in rich
           and '"pointermove"' in rich)
-    check("feature combo refresh from the payload",
+    check("feature combo refresh from the payload series",
           "function refreshHistogramCombo" in rich
           and 'w.name === "feature"' in rich
-          and '["*"].concat(names)' in rich)
+          and '["*"].concat(Object.keys(series))' in rich
+          and "syncComboOptionsToVueStore(node, widget, values)" in rich)
+    check("combo selection redraws instantly from the cached series",
+          "__cdlHistFeatureHook" in rich
+          and "original?.call(feature, value)" in rich
+          and "function normalizeHistogramPayload" in rich
+          and "hist.state.series = body.series" in rich
+          and "hist.state.feature = body.series[wanted]" in rich)
     check("payload persisted in node.properties",
           "node.properties[HIST_PROPERTY] = body" in rich)
     check("both delivery paths wired",

@@ -177,9 +177,10 @@ Legacy and Nodes 2.0, with pointer scrolling and normal node resizing. A hidden 
 ShowText state channel preserves the exact `[head, canvas_text]` workflow contract and remains
 the visible fallback on older frontends. Save/load restores text through the official graph
 lifecycle hooks without letting widget-value migration shift text into the real `head` value.
-**Dataset → Histogram** is the second instance: one dataset column is aggregated server-side
-(NaN-aware, sub-sampled) and drawn as an interactive bar chart with hover bin read-outs —
-no raw data ever reaches the frontend.
+**Dataset → Histogram** is the second instance: every numeric column is aggregated
+server-side in one pass (NaN-aware, sub-sampled) into a `series` payload, so the
+feature combo switches the chart instantly without a re-run — hover bin read-outs
+included, and no raw data ever reaches the frontend.
 
 ### CDL App Panel — the App mode, rebuilt for deep learning
 
