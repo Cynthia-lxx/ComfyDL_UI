@@ -160,6 +160,20 @@ def main():
           "beforeConfigureGraph(graphData)" in rich
           and "RESTORE_PROPERTY" in rich
           and "definitions?.subgraphs" in rich)
+    check("executed-event fallback with late api binding",
+          "executedFallbackBound" in rich
+          and "clearInterval(retry), 10000" in rich
+          and "addEventListener(\"executed\", updatePreviewFromEvent)" in rich)
+    check("fallback reads payload from event.detail",
+          "const detail = event?.detail;" in rich
+          and "detail?.output?.text" in rich
+          and "detail.display_node ?? detail.node" in rich)
+    check("fallback normalizes string node ids",
+          "function findPreviewNode" in rich
+          and "Number(rawId)" in rich
+          and "String(n.id) === String(rawId)" in rich)
+    check("showPreview is idempotent",
+          "preview.state.lines.join(\"\\n\") === text" in rich)
     check("loadedGraphNode restores head and text",
           "loadedGraphNode(node)" in rich and "head.value = raw[0]" in rich
           and "state.value = previewText(raw.slice(1))" in rich)
