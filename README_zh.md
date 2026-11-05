@@ -131,6 +131,8 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
 Nodes 2.0，可指针拖拽滚动、正常调整节点尺寸。隐藏的只读 ShowText 状态通道保持严格的
 `[head, canvas_text]` 工作流契约，并在旧版前端转为可见降级。保存/加载走官方图生命周期
 钩子恢复文本，不会在前端 widget 值迁移时把文本错位进真正的 `head` 值。
+**Dataset → Histogram** 是第二个实例：单列在服务端完成聚合（NaN 感知、超限抽样）
+后绘制为可交互柱状图，hover 可读每个 bin 的区间与计数——原始数据不出后端。
 
 ### CDL App Panel——为深度学习重造的 App 模式
 
