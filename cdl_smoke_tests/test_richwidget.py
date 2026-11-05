@@ -180,6 +180,16 @@ def main():
           and "state.value = previewText(raw.slice(1))" in rich)
     check("no dynamic code execution",
           "eval(" not in rich and "new Function" not in rich)
+    check("Nodes 2.0 combo options sync via widgetValue store",
+          "function widgetValueStore" in rich
+          and 'pinia?._s?.get("widgetValue")' in rich
+          and "syncComboOptionsToVueStore(node, widget, values)" in rich
+          and "record.options = { ...record.options, values }" in rich)
+    check("Nodes 2.0 hover bridge on widget DOM canvas",
+          "function ensureHistogramHoverHook" in rich
+          and 'canvas.addEventListener("pointermove"' in rich
+          and 'canvas.addEventListener("pointerleave"' in rich
+          and "canvas.offsetWidth" in rich)
 
     check("ShowText hidden dual marks",
           "w.hidden = true" in show and "w.options.hidden = true" in show)
