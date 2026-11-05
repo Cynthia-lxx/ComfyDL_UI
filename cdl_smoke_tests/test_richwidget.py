@@ -166,10 +166,11 @@ def main():
           and "addEventListener(\"executed\", updatePreviewFromEvent)" in rich)
     check("fallback reads payload from event.detail",
           "const detail = event?.detail;" in rich
-          and "detail?.output?.text" in rich
-          and "detail.display_node ?? detail.node" in rich)
+          and "const output = detail?.output;" in rich
+          and "output.text" in rich
+          and "output.cdl_histogram" in rich)
     check("fallback normalizes string node ids",
-          "function findPreviewNode" in rich
+          "function findRichNode" in rich
           and "Number(rawId)" in rich
           and "String(n.id) === String(rawId)" in rich)
     check("showPreview is idempotent",
