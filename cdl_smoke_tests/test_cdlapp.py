@@ -163,24 +163,25 @@ def main() -> int:
           and "modalOpen=" in js)
     check("A2 legacy overlay: minimap-style default collapsed window",
           "COLLAPSE_KEY" in js and 'saved !== "0") setCollapsed(true);' in js)
-    check("A2 horizontal splitters: row boundaries draggable (2026-11-01)",
-          "function makeHSplitter" in js and "function dragRowBoundary" in js
-          and "RowsV2" in js
-          and "cdlapp-splitter-h" in css and "row-resize" in css
-          and "--cdl-r1" in css and '"hsp1"' in js)
-    # 2026-11-01 regression: the rows template listed 6 tracks for 7 area
-    # rows - the hsp2 gutter landed in a 0.55fr track and runs degraded to
-    # auto.  All three fr rows + both 9px gutters must be in the template.
+    # 2026-11-07: the 7-row splitter grid was RETIRED in favour of the
+    # 2x2 four-tile grid.  The helpers stay in the JS (legacy overlay still
+    # builds them) but the dock hides all gutters; recombination is via
+    # drag-to-swap on data-slot instead of boundary dragging.
+    check("A2 four-tile recombination replaces the retired splitters",
+          "function setupLayoutReorder" in js
+          and "function makeHSplitter" in js  # legacy overlay still builds them
+          and "#cdl-app-extras > .cdlapp-splitter," in css
+          and "display: none;" in css
+          and "cdlapp-grip" in css)
     _rows_template = re.search(
         r"#cdl-app-extras \{[^}]*grid-template-rows:([^;]+);", css, re.S)
-    check("A2 rows template: 7 tracks matching the 7 area rows",
+    check("A2 rows template: 2x2 four-tile grid (no stray gutter tracks)",
           _rows_template is not None
-          and _rows_template.group(1).count("minmax(") == 3
-          and _rows_template.group(1).count("9px") == 2
+          and _rows_template.group(1).count("minmax(") == 2
           and _rows_template.group(1).strip().startswith("auto")
           and _rows_template.group(1).strip().endswith("auto")
-          and "--cdl-r1" in _rows_template.group(1)
-          and "--cdl-r3" in _rows_template.group(1),
+          and "9px" not in _rows_template.group(1)
+          and "hsp1" not in css,
           _rows_template.group(1).strip()[:90] if _rows_template else "no match")
     check("A2 row drag model v2: own-boundary-only fractions",
           "RowsV2" in js and "v.p1" in js and "v.p2" in js
@@ -259,8 +260,8 @@ def main() -> int:
     check("A2 css: zoned layout (left params, right dashboard)",
           "var(--cdl-params-w, 340px)" in css
           and "grid-template-areas" in css
-          and '"prev sp  out"' in css and '"prog sp  out"' in css
-          and '"err  err err"' in css
+          and '"slot1 slot2"' in css and '"slot3 slot4"' in css
+          and '"err   err"' in css
           and "nth-of-type(1)" in css and "nth-of-type(2)" in css
           and "max-width: 880px" not in css)
     # batch 9: draggable zone splitters - 9px grid gutter tracks with handles;
@@ -591,12 +592,20 @@ def main() -> int:
           and "collapse is legacy-overlay-only" in js
           and "if (state.extras && state.panel === state.extras) return;" in js)
     # 2026-11-07 UXD round 1 (user-approved walk-through findings)
-    check("A8 outputs empty-state claims no grid column",
-          'el("aside", "cdlapp-extras cdlapp-out-empty")' in js
-          and 'classList.toggle("cdlapp-out-empty", !hasOutputs)' in js
-          and "#cdl-app-extras.cdlapp-out-empty {" in css
-          and "grid-template-columns: minmax(0, 1fr) 0 0;" in css
-          and ".cdlapp-splitter:not(.cdlapp-splitter-h)" in css)
+    # 2026-11-07 (user): the horizontal "hide empty outputs" stretch was the
+    # WRONG direction - the live views needed VERTICAL room.  Four equal
+    # tiles in a 2x2 grid, swappable by dragging the title grips.
+    check("A8 four-tile grid + user layout recombination",
+          "grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);" in css
+          and '"slot1 slot2"' in css and '"slot3 slot4"' in css
+          and css.count('[data-slot="slot') >= 4
+          and "function setupLayoutReorder" in js
+          and "function loadLayout" in js and "function saveLayout" in js
+          and 'grip.draggable = true;' in js
+          and 'sec.dataset.slot = target[1].dataset.slot;' in js
+          and 'data-nav="layout-reset"' not in js  # created via dataset.nav
+          and 'reset.dataset.nav = "layout-reset";' in js
+          and "cdlapp-out-empty" not in js and "cdlapp-out-empty" not in css)
     check("A8 segmented total bar (per-node error segments)",
           'el("div", "cdlapp-total-seg")' in js
           and 'seg.className = "cdlapp-total-seg cdlapp-st-" + r.state;' in js

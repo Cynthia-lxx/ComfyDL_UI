@@ -159,6 +159,8 @@
       out_title: "Outputs",
       out_empty: "Run the app to collect outputs here - files become downloads, text becomes copyable.",
       runs_ledger_hint: "Grid-search experiments land here - single runs don't.",
+      layout_drag: "Drag onto another tile to swap their positions",
+      layout_reset: "Reset the four-tile layout",
       prog_fold: "Fold the per-node rows",
       prog_unfold: "Unfold the per-node rows",
       prev_title: "Previews",
@@ -206,6 +208,8 @@
       expand: "展开面板",
       out_title: "输出",
       runs_ledger_hint: "这里只记录 GridSearch 实验扫描；单次 Run 不入账。",
+      layout_drag: "拖到另一块视图上可交换两者位置",
+      layout_reset: "重置四宫格布局",
       prog_fold: "折叠逐节点进度行",
       prog_unfold: "展开逐节点进度行",
       out_empty: "运行后在收集输出：文件可下载，文本可复制。",
@@ -980,11 +984,101 @@
 
   // The CDL sections that ride INSIDE the official input panel (native look
   // guaranteed - it is the official element, we only append a sibling).
+  // Four-tile layout (2026-11-07 user callout): the previous "empty outputs"
+    // trick stretched the three live views HORIZONTALLY - wrong direction.
+    // All four views now get an equal, generous TILE with real vertical room,
+    // and the user can swap tiles by dragging a title grip.  Only data-slot
+    // attributes change - the DOM stays put, so every render function that
+    // queries by class keeps working (zero re-mount risk).
+  const LAYOUT_KEY = "comfydl.cdlapp.layout.v1";
+  const LAYOUT_DEFAULT = {
+    previews: "slot1", outputs: "slot2", runs: "slot3", progress: "slot4",
+  };
+  const LAYOUT_SECTIONS = [
+    ["previews", ".cdlapp-sec-previews"],
+    ["outputs", ".cdlapp-sec-outputs"],
+    ["runs", ".cdlapp-sec-runs"],
+    ["progress", ".cdlapp-sec-progress"],
+  ];
+
+  function loadLayout() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
+      const slots = Object.keys(LAYOUT_DEFAULT).map((k) => raw[k]);
+      const valid = Object.keys(LAYOUT_DEFAULT).every(
+        (k) => ["slot1", "slot2", "slot3", "slot4"].includes(raw[k]))
+        && new Set(slots).size === 4;
+      if (valid) return raw;
+    } catch (e) { /* corrupt storage -> defaults */ }
+    return Object.assign({}, LAYOUT_DEFAULT);
+  }
+
+  function saveLayout(map) {
+    try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(map)); } catch (e) { /* optional */ }
+  }
+
+  function applyLayout(extras, map) {
+    LAYOUT_SECTIONS.forEach(([key, sel]) => {
+      const sec = extras.querySelector(sel);
+      if (sec) sec.dataset.slot = map[key];
+    });
+  }
+
+  function setupLayoutReorder(extras) {
+    const map = loadLayout();
+    applyLayout(extras, map);
+    const sections = LAYOUT_SECTIONS.map(([key, sel]) => [key, extras.querySelector(sel)])
+      .filter(([, sec]) => sec);
+    sections.forEach(([key, sec]) => {
+      const title = sec.querySelector(".cdlapp-sec-title");
+      if (!title) return;
+      const grip = el("span", "cdlapp-grip", "⋮⋮");
+      grip.draggable = true;
+      grip.title = t("layout_drag");
+      grip.setAttribute("role", "button");
+      grip.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", key);
+        e.dataTransfer.effectAllowed = "move";
+        sec.classList.add("cdlapp-tile-source");
+      });
+      grip.addEventListener("dragend", () => {
+        sec.classList.remove("cdlapp-tile-source");
+        sections.forEach(([, s]) => s.classList.remove("cdlapp-drop-target"));
+      });
+      title.appendChild(grip);
+      sec.addEventListener("dragover", (e) => { e.preventDefault(); });
+      sec.addEventListener("dragenter", () => sec.classList.add("cdlapp-drop-target"));
+      sec.addEventListener("dragleave", () => sec.classList.remove("cdlapp-drop-target"));
+      sec.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const from = e.dataTransfer.getData("text/plain");
+        const target = from && sections.find(([k]) => k === from);
+        sec.classList.remove("cdlapp-drop-target");
+        if (!target || from === key) return;
+        const mine = sec.dataset.slot;
+        sec.dataset.slot = target[1].dataset.slot;
+        target[1].dataset.slot = mine;
+        const next = {};
+        sections.forEach(([k, s]) => { next[k] = s.dataset.slot; });
+        saveLayout(next);
+      });
+    });
+    // one-click way back to the curated default
+    const nav = extras.querySelector(".cdlapp-nav");
+    const reset = el("button", btnCls("size-8", "cdlapp-btn-icon"));
+    reset.type = "button";
+    reset.textContent = "⟲";
+    reset.title = t("layout_reset");
+    reset.dataset.nav = "layout-reset";
+    reset.addEventListener("click", () => {
+      applyLayout(extras, LAYOUT_DEFAULT);
+      saveLayout(Object.assign({}, LAYOUT_DEFAULT));
+    });
+    if (nav) nav.appendChild(reset);
+  }
+
   function buildExtras() {
-    const extras = el("aside", "cdlapp-extras cdlapp-out-empty");
-    // B6: the dock starts in the out-empty state (the outputs tile claims
-    // its grid column only once a run produced something); renderOutputs
-    // toggles the class both ways.
+    const extras = el("aside", "cdlapp-extras");
     extras.id = OFFICIAL_SURFACE.layout.extrasId;
     const head = el("div", "cdlapp-head");
     head.appendChild(el("div", "cdlapp-title", t("panel_title")));
@@ -1012,6 +1106,7 @@
     extras.appendChild(secErr);
 
     applyCapabilities(extras);
+    setupLayoutReorder(extras);
     return extras;
   }
 
@@ -1388,12 +1483,6 @@
   // idempotent and only rebuilds its own section.)
   function renderOutputs() {
     if (!state.panel) return;
-    // B6: the outputs tile only claims its grid column once a run produced
-    // something - an empty outputs column was dead screen real estate.
-    if (state.extras) {
-      const hasOutputs = state.outputs.length > 0 || state.artifacts.length > 0;
-      state.extras.classList.toggle("cdlapp-out-empty", !hasOutputs);
-    }
     const list = state.panel.querySelector(".cdlapp-out-list");
     const empty = state.panel.querySelector(".cdlapp-sec-outputs .cdlapp-empty");
     if (!list) return;

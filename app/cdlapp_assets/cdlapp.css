@@ -89,55 +89,62 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
 }
 
 /* CDL sections ride inside the official panel.  No shell of their own:
-   transparent background + teal section titles carry the accent.  The right
-   zone is a PLANNED grid, not a stack: previews as the hero tile on the
-   left, the long outputs list as its own tall column on the right, progress
-   under previews, errors as a full-width strip at the bottom.  Every tile
-   scrolls inside its own box. */
+   transparent background + teal section titles carry the accent.
+   2026-11-07 (user): FOUR EQUAL TILES in a 2x2 grid - the old layout gave
+   outputs a full-height column while previews / progress / runs were
+   squeezed into a 3-row left stack.  Every tile now gets real VERTICAL room
+   (the previous "hide empty outputs" attempt stretched them horizontally
+   instead - wrong direction, reverted).  Tiles are assigned by data-slot,
+   which the title grips swap at runtime (see setupLayoutReorder); the DOM
+   order never changes, so all class-based render functions keep working. */
 #cdl-app-extras {
   display: grid;
-  /* col 2 is the draggable 9px gutter between the preview and outputs zones */
-  grid-template-columns: var(--cdl-prev-w, 55%) 9px minmax(0, 1fr);
-  /* P3 Craft 3: runs section takes a bottom-left tile under progress.
-     2026-11-01: rows r1/r2/r3 are user-draggable via the horizontal
-     splitters (hsp1/hsp2 gutters).  The template MUST list SEVEN tracks to
-     match the seven area rows below - the first cut listed six, so the hsp2
-     gutter landed in a 0.55fr track (a huge invisible drag zone) and the
-     runs row degraded to auto (user: "完全反物理"). */
-  grid-template-rows: auto minmax(0, var(--cdl-r1, 1.5fr)) 9px minmax(0, var(--cdl-r2, 0.75fr)) 9px minmax(0, var(--cdl-r3, 0.85fr)) auto;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 1fr) auto;
   grid-template-areas:
-    "head head head"
-    "prev sp  out"
-    "hsp1 sp  out"
-    "prog sp  out"
-    "hsp2 sp  out"
-    "runs sp  out"
-    "err  err err";
-  gap: 12px; /* adjacent borders never touch */
+    "head  head"
+    "slot1 slot2"
+    "slot3 slot4"
+    "err   err";
+  gap: 10px; /* adjacent borders never touch */
   padding-top: 12px; /* gap below the official header border */
   padding-bottom: 2px;
   min-height: 0;
 }
 #cdl-app-extras .cdlapp-head { grid-area: head; }
-#cdl-app-extras .cdlapp-sec-previews { grid-area: prev; }
+#cdl-app-extras .cdlapp-section[data-slot="slot1"] { grid-area: slot1; }
+#cdl-app-extras .cdlapp-section[data-slot="slot2"] { grid-area: slot2; }
+#cdl-app-extras .cdlapp-section[data-slot="slot3"] { grid-area: slot3; }
+#cdl-app-extras .cdlapp-section[data-slot="slot4"] { grid-area: slot4; }
 #cdl-app-extras .cdlapp-preview-grid {
   min-height: 160px; /* batch 23: floor so charts never starve the grid */
 }
-#cdl-app-extras .cdlapp-sec-outputs { grid-area: out; }
-#cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
-#cdl-app-extras .cdlapp-sec-runs { grid-area: runs; }
 #cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
-/* 2026-11-07 (user): the outputs tile claimed its full-height grid column
-   even when EMPTY - dead screen real estate that squeezed the three live
-   views.  cdlapp.js toggles .cdlapp-out-empty on the dock: empty hides the
-   tile + its gutter and collapses the column to zero, letting previews /
-   progress / runs take the full width. */
-#cdl-app-extras.cdlapp-out-empty {
-  grid-template-columns: minmax(0, 1fr) 0 0;
+/* The old 9px drag gutters belong to the retired 7-row grid - hiding them
+   keeps mountSplitters() harmless (no auto-placed stray boxes). */
+#cdl-app-extras > .cdlapp-splitter,
+#cdl-app-extras > .cdlapp-splitter-h { display: none; }
+/* All four tiles scroll inside their own box (source order AFTER the
+   .cdlapp-section overflow:hidden rule - same specificity, order wins). */
+#cdl-app-extras .cdlapp-section[data-slot] {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color, #333333) transparent;
 }
-#cdl-app-extras.cdlapp-out-empty > .cdlapp-sec-outputs,
-#cdl-app-extras.cdlapp-out-empty > .cdlapp-splitter:not(.cdlapp-splitter-h) {
-  display: none;
+/* Drag-to-swap affordances */
+.cdlapp-grip {
+  cursor: grab;
+  margin-left: auto;
+  padding: 0 6px;
+  color: var(--cdl-dim, #b8b8b8);
+  font-size: 12px;
+  user-select: none;
+}
+.cdlapp-grip:active { cursor: grabbing; }
+.cdlapp-tile-source { opacity: 0.55; }
+.cdlapp-drop-target {
+  outline: 1px dashed #1abc9c;
+  outline-offset: -2px;
 }
 /* B5: small explanatory line under a section title (runs ledger semantics) */
 .cdlapp-sec-hint {
@@ -481,6 +488,9 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   margin-bottom: 6px;
 }
 .cdlapp-sec-title {
+  display: flex; /* 2026-11-07: the drag grip sits at the right edge */
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--fg-color, #ffffff); /* neutral: no green text */

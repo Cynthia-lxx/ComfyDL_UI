@@ -203,6 +203,7 @@
       opgraph_pick: "Select a node",
       logs_title: "Server log (profiling)",
       logs_empty: "No profiling log lines yet - press Analyze or run a workflow with the log level raised.",
+      logs_off_hint: "Server diagnostics are off. Raise ComfyDL.Profiling.LogLevel in Settings to stream the log tail here (no restart needed).",
       opgraph_safe_mode: "Safe mode: the probe executes REAL node code, so it is disabled by default. Enable it under Settings \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe.",
       danger_confirm: "The profiling probe executes REAL node code with REAL tensors. Very large inputs can consume significant CPU and memory while it runs. Enable the dangerous probe?",
       opgraph_guarded: "Input guardrail blocked {n} node(s) from probing - their string inputs exceed the 64 KB per-node cap, and the probe would otherwise loop over every byte for real: {list}. Shrink the text or feed it through a data node instead.",
@@ -395,6 +396,7 @@
       opgraph_pick: "选择节点",
       logs_title: "服务端日志（profiling）",
       logs_empty: "暂无 profiling 日志——调高档位后点一次 Analyze 或跑一次工作流。",
+      logs_off_hint: "服务端诊断已关闭：在设置中调高 ComfyDL.Profiling.LogLevel 即可在此流式查看日志（无需重启）。",
       opgraph_safe_mode: "安全模式：探针会真实执行节点代码，默认关闭。到 设置 \u2192 ComfyDL \u2192 Profiling \u2192 Dangerous probe 开启后再分析。",
       danger_confirm: "profiling 探针将以真实张量真实执行节点代码。输入很大时可能占用大量 CPU 与内存。确定开启危险模式？",
       opgraph_guarded: "输入护栏拦截了 {n} 个节点——字符串输入超过单节点 64KB 上限（探针会逐字节真实处理）：{list}。请缩小文本，或改用文件 / 数据节点接入。",
@@ -2061,8 +2063,11 @@
       html.push("</div></div>");
     }
 
-    // M3+: server-side profiling log tail (visible only when level != off)
-    if (state.logLevel !== "off") {
+    // M3+: server-side profiling log tail. 2026-11-07 user callout: the
+    // card used to be gated on logLevel != off, so with the default dial it
+    // vanished entirely and there was no way to discover it.  Always render
+    // the card; when off, show the setting to raise instead of hiding it.
+    {
       html.push('<div class="cdlp-card' + (state.collapsed.serverlog ? " cdlp-collapsed" : "") + '" data-col="right">'
         + '<div class="cdlp-card-title cdlp-collapsible" data-collapse="serverlog">'
         + '<span class="cdlp-collapse-label">' + esc(t("logs_title")) + "</span>"
@@ -2070,7 +2075,9 @@
         + '<button class="cdlp-button" id="cdlp-logs-refresh">' + esc(t("refresh")) + "</button>"
         + '<i class="cdlp-chevron"></i></span></div>'
         + '<div class="cdlp-card-body">');
-      if (state.serverLogLoading || state.serverLog === null || !state.serverLog) {
+      if (state.logLevel === "off") {
+        html.push('<div class="cdlp-hint cdlp-hint-cta">' + esc(t("logs_off_hint")) + "</div>");
+      } else if (state.serverLogLoading || state.serverLog === null || !state.serverLog) {
         html.push('<div class="cdlp-hint">' + esc(t("logs_empty")) + "</div>");
       } else {
         html.push('<pre class="cdlp-pm-msg">' + ansiToHtml(esc(state.serverLog)) + "</pre>");

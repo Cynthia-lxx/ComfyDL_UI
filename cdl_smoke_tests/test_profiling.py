@@ -363,6 +363,27 @@ async def _route_checks() -> None:
         check("T9f assets: profiler.js served with JS content type",
               resp.status == 200 and "javascript" in resp.headers.get("Content-Type", ""),
               f"{resp.status} {resp.headers.get('Content-Type')}")
+        # 2026-11-07 UXD round: the Server log card used to be gated on
+        # logLevel != off, so the default dial made the whole view vanish.
+        # It must ALWAYS render (off shows a settings hint) and ANSI codes
+        # must go through the colored-span renderer.
+        _pjs = (REPO_ROOT / "app" / "profiling_assets" / "profiler.js").read_text(
+            encoding="utf-8")
+        check("T9f2 server log card is unconditional + ANSI colored",
+              'if (state.logLevel !== "off")' not in _pjs
+              and 'if (state.logLevel === "off")' in _pjs
+              and 't("logs_off_hint")' in _pjs
+              and "ansiToHtml(esc(state.serverLog))" in _pjs)
+        # use renderPanel-only anchors (some comment strings also appear in
+        # the helper functions earlier in the file)
+        _order = [
+            't("budget_title")', 'data-collapse="history"',
+            'data-collapse="cache"', 'data-collapse="nodes"',
+            "html.push(renderOpgraphSummary());", 't("logs_title")',
+        ]
+        _pos = [_pjs.index(a) for a in _order]
+        check("T9f3 first-glance card order (B2)",
+              _pos == sorted(_pos), str(_pos))
         resp = await client.get("/comfydl/profiling/profiler.css")
         check("T9g assets: profiler.css served",
               resp.status == 200 and "css" in resp.headers.get("Content-Type", ""),
