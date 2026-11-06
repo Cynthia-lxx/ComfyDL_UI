@@ -154,10 +154,21 @@ def test_frontend_source():
           and "beforeRegisterNodeDef" in js)
     check("sandbox banner is permanent in the canvas",
           "BANNER_TEXT" in js and "comfydl.notebook switch" in js)
+    check("payload extraction tolerates both message shapes",
+          "function extractLog" in js
+          and "message?.output ?? message" in js)
+    check("node matching accepts comfyClass and type",
+          "function isNotebookNode" in js
+          and 'node?.type === "CdlNotebookCell"' in js)
+    check("result repr echoed on the console",
+          "[Result]" in js)
     check("streamed log channel wired twice",
           '"cdl_notebook_log"' in js
           and 'app.api.addEventListener("executed", onStreamedEvent)' in js
           and "onExecuted" in js)
+    check("fallback retry never gives up",
+          "}, 2000);" in js
+          and "setTimeout(() => clearInterval(retry), 10000);" not in js)
     check("restore reads the persisted log",
           "LOG_PROPERTY" in js and "onConfigure" in js)
     try:
