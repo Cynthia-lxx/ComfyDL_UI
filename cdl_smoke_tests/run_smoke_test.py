@@ -1065,6 +1065,7 @@ _SKIPPED_NODES: dict[str, str] = {
     "CdlWriteXLSX": "needs openpyxl (xlsx writer) - covered by cdl_smoke_tests/test_data_io.py",
     "CdlReadAccDB": "needs pyodbc + Microsoft Access driver - covered by cdl_smoke_tests/test_data_io.py",
     "CdlCompileModel": "needs a real diffusion_model module to compile (the fake MODEL is a flat StateDictModule) - covered by cdl_smoke_tests/test_compile.py",
+    "CdlNotebookCell": "Tier-2 gated: refuses to run while the comfydl.notebook switch is off (default) - execution covered by cdl_smoke_tests/test_notebook.py",
 }
 
 #: node id -> substring its raised error must contain.  These nodes are part of the

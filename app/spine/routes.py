@@ -135,6 +135,70 @@ async def dataio_cache_entries(request: web.Request) -> web.Response:
     })
 
 
+@routes.get("/comfydl/notebook/variables")
+async def notebook_variables(request: web.Request) -> web.Response:
+    """Variable inspection for one notebook kernel (mechanism 4).
+
+    ``GET /comfydl/notebook/variables?workflow=<id>`` → ``{"available": bool,
+    "enabled": bool, "workflow": id, "variables": [{name, type, repr}, ...]}``.
+    Reprs are truncated server-side; tensor contents never leave the process.
+    Returns 409 while the ``comfydl.notebook`` switch is off (the kernels
+    cannot exist with the feature disabled).
+    """
+    try:
+        from comfydl.nodes import _notebook_kernel as _nk
+    except Exception:  # noqa: BLE001 - bare environment
+        return web.json_response({"available": False})
+    if not _nk.enabled():
+        return web.json_response({
+            "available": True,
+            "enabled": False,
+            "error": f"the '{_nk.SWITCH_ID}' switch is off",
+        }, status=409)
+    workflow_id = request.query.get("workflow", "")
+    if not workflow_id:
+        return web.json_response({"error": "missing ?workflow=<id>"},
+                                 status=400)
+    return web.json_response({
+        "available": True,
+        "enabled": True,
+        "workflow": workflow_id,
+        "has_kernel": workflow_id in _nk.active_workflows(),
+        "variables": _nk.describe_variables(workflow_id),
+    })
+
+
+@routes.post("/comfydl/notebook/free")
+async def notebook_free(request: web.Request) -> web.Response:
+    """Reset notebook kernel state (Jupyter's "restart kernel").
+
+    ``POST /comfydl/notebook/free`` with ``{"workflow": "<id>"}`` drops one
+    workflow's kernel; without a workflow body it drops all of them. 409
+    while the ``comfydl.notebook`` switch is off.
+    """
+    try:
+        from comfydl.nodes import _notebook_kernel as _nk
+    except Exception:  # noqa: BLE001 - bare environment
+        return web.json_response({"available": False})
+    if not _nk.enabled():
+        return web.json_response({
+            "available": True,
+            "enabled": False,
+            "error": f"the '{_nk.SWITCH_ID}' switch is off",
+        }, status=409)
+    try:
+        body: Dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+    workflow_id = body.get("workflow") if isinstance(body, dict) else None
+    removed = _nk.clear(str(workflow_id) if workflow_id else None)
+    return web.json_response({
+        "available": True,
+        "enabled": True,
+        "freed": removed,
+    })
+
+
 @routes.patch("/comfydl/switches/{switch_id}")
 async def switches_set(request: web.Request) -> web.Response:
     """Hot-toggle one feature switch: ``{"enabled": bool}``.
