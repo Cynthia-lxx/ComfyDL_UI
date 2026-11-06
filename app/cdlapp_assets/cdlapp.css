@@ -104,7 +104,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
      match the seven area rows below - the first cut listed six, so the hsp2
      gutter landed in a 0.55fr track (a huge invisible drag zone) and the
      runs row degraded to auto (user: "完全反物理"). */
-  grid-template-rows: auto minmax(0, var(--cdl-r1, 1.15fr)) 9px minmax(0, var(--cdl-r2, 0.6fr)) 9px minmax(0, var(--cdl-r3, 0.55fr)) auto;
+  grid-template-rows: auto minmax(0, var(--cdl-r1, 1.5fr)) 9px minmax(0, var(--cdl-r2, 0.75fr)) 9px minmax(0, var(--cdl-r3, 0.85fr)) auto;
   grid-template-areas:
     "head head head"
     "prev sp  out"
@@ -127,6 +127,26 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > #cdl-app-extras {
 #cdl-app-extras .cdlapp-sec-progress { grid-area: prog; }
 #cdl-app-extras .cdlapp-sec-runs { grid-area: runs; }
 #cdl-app-extras .cdlapp-sec-errors { grid-area: err; }
+/* 2026-11-07 (user): the outputs tile claimed its full-height grid column
+   even when EMPTY - dead screen real estate that squeezed the three live
+   views.  cdlapp.js toggles .cdlapp-out-empty on the dock: empty hides the
+   tile + its gutter and collapses the column to zero, letting previews /
+   progress / runs take the full width. */
+#cdl-app-extras.cdlapp-out-empty {
+  grid-template-columns: minmax(0, 1fr) 0 0;
+}
+#cdl-app-extras.cdlapp-out-empty > .cdlapp-sec-outputs,
+#cdl-app-extras.cdlapp-out-empty > .cdlapp-splitter:not(.cdlapp-splitter-h) {
+  display: none;
+}
+/* B5: small explanatory line under a section title (runs ledger semantics) */
+.cdlapp-sec-hint {
+  font-size: 11px;
+  color: var(--cdl-dim, #b8b8b8);
+  margin-bottom: 6px;
+}
+/* B7: auto-folded progress - the per-node rows hide, bar + label stay */
+.cdlapp-prog-collapsed .cdlapp-prog-rows { display: none; }
 #cdl-app-extras .cdlapp-section {
   background: transparent;
   border-color: var(--border-color, #333333);
@@ -522,12 +542,31 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   overflow: hidden;
   margin-bottom: 4px;
 }
+/* 2026-11-07 (user): segmented total bar - one segment per node in run
+   order, so a node error turns ITS segment red instead of tinting a single
+   fill.  cdlapp.js renders the segments (reused per nodeKey). */
 .cdlapp-total-bar {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+  width: 100%;
+}
+.cdlapp-total-seg {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.25); /* idle track */
+}
+.cdlapp-total-seg-fill {
   height: 100%;
   width: 0%;
   background: linear-gradient(90deg, #16a085, #1abc9c);
   transition: width 0.3s ease;
 }
+.cdlapp-st-done > .cdlapp-total-seg-fill { background: #4caf50; }
+.cdlapp-st-cached > .cdlapp-total-seg-fill { background: #6b7280; }
+.cdlapp-st-error > .cdlapp-total-seg-fill { background: #e5484d; }
 .cdlapp-total-label {
   font-size: 11px;
   color: var(--cdl-dim, #b8b8b8);

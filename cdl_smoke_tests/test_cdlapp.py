@@ -419,7 +419,10 @@ def main() -> int:
     check("A5 per-node percent next to the bar + overall percent on the label",
           '"cdlapp-prog-eta"' in js
           and '{ done: done, total: total, pct: pct }' in js
-          and 'bar.style.width = pct + "%";' in js
+          # 2026-11-07: the overall fill became per-node SEGMENTS
+          # (.cdlapp-total-seg, one per node in run order); the label keeps
+          # the aggregate "done/total - pct%" line.
+          and 'el("div", "cdlapp-total-seg")' in js
           and 'r.state === "idle"' in js)
     check("A5 sliding-window speed / ETA estimate (cheap, per-event)",
           "function noteProgressSample" in js
@@ -587,6 +590,31 @@ def main() -> int:
           and "head.appendChild(buildNav(true));" in js
           and "collapse is legacy-overlay-only" in js
           and "if (state.extras && state.panel === state.extras) return;" in js)
+    # 2026-11-07 UXD round 1 (user-approved walk-through findings)
+    check("A8 outputs empty-state claims no grid column",
+          'el("aside", "cdlapp-extras cdlapp-out-empty")' in js
+          and 'classList.toggle("cdlapp-out-empty", !hasOutputs)' in js
+          and "#cdl-app-extras.cdlapp-out-empty {" in css
+          and "grid-template-columns: minmax(0, 1fr) 0 0;" in css
+          and ".cdlapp-splitter:not(.cdlapp-splitter-h)" in css)
+    check("A8 segmented total bar (per-node error segments)",
+          'el("div", "cdlapp-total-seg")' in js
+          and 'seg.className = "cdlapp-total-seg cdlapp-st-" + r.state;' in js
+          and ".cdlapp-total-seg {" in css
+          and ".cdlapp-st-error > .cdlapp-total-seg-fill { background: #e5484d; }" in css
+          and 'if (bar) bar.textContent = "";' in js)
+    check("A8 progress auto-fold keeps contents",
+          "cdlapp-prog-fold" in js
+          and "cdlapp-prog-collapsed" in js
+          and ".cdlapp-prog-collapsed .cdlapp-prog-rows { display: none; }" in css
+          and "__cdlAutoFolded" in js and "__cdlProgManual" in js)
+    # the ledger hint must use a DEDICATED key - runs_hint is the chart-card
+    # tooltip copy and must stay untouched
+    check("A8 runs ledger hint uses a dedicated i18n key",
+          js.count("runs_ledger_hint:") == 2
+          and js.count("runs_hint:") == 2
+          and 't("runs_ledger_hint")' in js
+          and 'el("div", "cdlapp-sec-hint", t("runs_ledger_hint"))' in js)
 
     # --- B: artifacts routes integration (aiohttp TestServer) ----------------
     import asyncio

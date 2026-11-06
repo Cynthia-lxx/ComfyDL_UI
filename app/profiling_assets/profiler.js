@@ -86,6 +86,7 @@
       table_bytes: "Bytes",
       table_single: "Largest single",
       unknown_node: "unknown",
+      table_unmeasured: "Every node shows \"unknown\" until you queue a run - measured memory lands here.",
       approx_tag: "approx",
       based_on: "based on {n}",
       refresh: "Refresh",
@@ -277,6 +278,7 @@
       table_bytes: "内存",
       table_single: "单张量峰值",
       unknown_node: "未知",
+      table_unmeasured: "入列队列一次后才会有实测数据——实测内存会落在这里。",
       approx_tag: "近似",
       based_on: "基于假设 {n}",
       refresh: "刷新",
@@ -605,6 +607,26 @@
       .split(">").join("&gt;")
       .split('"').join("&quot;")
       .split("'").join("&#39;");
+  }
+  // A1: the backend log tail carries raw ANSI SGR codes; esc() alone
+  // leaves them as visible garbage. Map the handful we emit to colored
+  // spans (must run on ALREADY-escaped text; codes survive esc).
+  const ANSI_OPEN = [
+    [/\x1b\[31m/g, "cdlp-ansi-r"], [/\x1b\[91m/g, "cdlp-ansi-r"],
+    [/\x1b\[33m/g, "cdlp-ansi-y"], [/\x1b\[93m/g, "cdlp-ansi-y"],
+    [/\x1b\[32m/g, "cdlp-ansi-g"], [/\x1b\[92m/g, "cdlp-ansi-g"],
+    [/\x1b\[36m/g, "cdlp-ansi-c"], [/\x1b\[90m/g, "cdlp-ansi-d"],
+  ];
+  function ansiToHtml(escaped) {
+    let out = escaped.replace(/\x1b\[0m/g, "</span>");
+    for (const [re, cls] of ANSI_OPEN) {
+      out = out.replace(re, '<span class="' + cls + '">');
+    }
+    // close anything left open (truncated tails etc.)
+    const opens = (out.match(/<span class="cdlp-ansi-/g) || []).length;
+    const closes = (out.match(/<\/span>/g) || []).length;
+    for (let i = closes; i < opens; i++) out += "</span>";
+    return out;
   }
 
   // ------------------------------------------------- diagnostics logging --
@@ -1740,9 +1762,6 @@
     }
     html.push("</div>");
 
-    // M3: operator-graph summary + Analyze button (manual, never auto-run)
-    html.push(renderOpgraphSummary());
-
     // Budget card
     if (budget) {
       html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("budget_title")) + "</div>");
@@ -1754,125 +1773,6 @@
       const pct = budget.total_bytes ? Math.min(100, Math.round((used / budget.total_bytes) * 100)) : 0;
       html.push('<div class="cdlp-meter"><div class="cdlp-meter-fill" style="width:' + pct + '%"></div></div>');
       html.push("</div>");
-    }
-
-    // Compute ledger (M2)
-    const flops = (r && r.flops) || null;
-    if (flops && flops.any_estimated) {
-      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>");
-      html.push('<div class="cdlp-flops-total">' + esc(fmtFlops(flops.total)) + "</div>");
-      const byKind = flops.by_kind || {};
-      const flopsTotal = Math.max(1, Number(flops.total) || 0);
-      html.push('<div class="cdlp-kindbar">');
-      ["attn", "ffn", "conv", "logits", "other"].forEach((k) => {
-        const share = ((Number(byKind[k]) || 0) / flopsTotal) * 100;
-        if (share > 0) html.push('<div class="cdlp-k-' + k + '" style="width:' + share.toFixed(1) + '%"></div>');
-      });
-      html.push("</div>");
-      const parts = ["attn", "ffn", "conv", "logits"].filter((k) => byKind[k])
-        .map((k) => flopsKindLabel(k) + " " + ((Number(byKind[k]) / flopsTotal) * 100).toFixed(0) + "%");
-      if (parts.length) html.push('<div class="cdlp-hint">' + esc(parts.join(" \u00b7 ")) + "</div>");
-      html.push('<div class="cdlp-hint">' + esc(t("flops_note")) + "</div>");
-      html.push("</div>");
-    } else if (r && r.nodes && r.nodes.length) {
-      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>"
-        + '<div class="cdlp-hint">' + esc(t("flops_none")) + "</div></div>");
-    }
-
-    // Assumptions
-    const usedAssumptions = (r && r.assumptions_used) || [];
-    if (usedAssumptions.length) {
-      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("assumptions_title")) + "</div>");
-      html.push('<div class="cdlp-hint">' + esc(t("assumptions_hint")) + "</div>");
-      usedAssumptions.forEach((a) => {
-        html.push('<div class="cdlp-assumption">');
-        html.push('<span class="cdlp-assumption-key">' + esc(a.key) + "</span>");
-        html.push('<input type="number" min="0" step="1" value="' + esc(a.value)
-          + '" data-assumption="' + esc(a.key) + '">');
-        html.push('<span class="cdlp-assumption-src">' + esc(t("assumption_" + a.source)) + "</span>");
-        html.push("</div>");
-      });
-      html.push("</div>");
-    }
-
-    // Post-mortem
-    if (pm) {
-      html.push('<div class="cdlp-card cdlp-pm" data-col="left">');
-      html.push('<div class="cdlp-card-title cdlp-pm-title">' + esc(t("postmortem_title")) + "</div>");
-      if (pm.allocation_human) {
-        html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_alloc")) + '</span><b>' + esc(pm.allocation_human) + "</b></div>");
-      } else {
-        html.push('<div class="cdlp-hint">' + esc(t("postmortem_no_alloc")) + "</div>");
-      }
-      if (pm.attributed) {
-        html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_at"))
-          + '</span><b>' + esc(pm.attributed.label) + " \u00b7 " + esc(fmtBytes(pm.attributed.bytes)) + "</b></div>");
-      }
-      if (pm.suggestion) {
-        html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_suggest")) + '</span><b>batch_size = ' + esc(pm.suggestion.batch_size) + "</b></div>");
-        html.push('<button class="cdlp-button" id="cdlp-apply-suggestion">'
-          + esc(t("postmortem_apply", { n: pm.suggestion.batch_size })) + "</button>");
-      }
-      if (pm.message_head) {
-        html.push('<pre class="cdlp-pm-msg">' + esc(pm.message_head) + "</pre>");
-      }
-      html.push("</div>");
-    }
-
-    // Measured node time (M2 / F1)
-    if (state.timingStart) {
-      const closed = (state.timings || []).filter((x) => x.end !== null);
-      const totalMs = (state.timingEnd || Date.now()) - state.timingStart;
-      const active = closed.filter((x) => x.end - x.start >= 5)
-        .sort((a, b) => (b.end - b.start) - (a.end - a.start));
-      const cachedCount = closed.length - active.length;
-      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>");
-      html.push('<div class="cdlp-timing-total"><span>' + esc(t("timing_total")) + "</span><b>"
-        + esc(fmtDuration(totalMs)) + "</b></div>");
-      if (active.length) {
-        const maxD = Math.max.apply(null, active.map((x) => x.end - x.start));
-        active.slice(0, 12).forEach((x) => {
-          const d = x.end - x.start;
-          const width = Math.max(3, Math.round((Math.log(Math.max(2, d)) / Math.log(maxD || 2)) * 100));
-          html.push('<div class="cdlp-timing-row">'
-            + '<span class="cdlp-timing-name">' + esc(x.title || x.id) + "</span>"
-            + '<span class="cdlp-timing-bar"><i style="width:' + width + '%"></i></span>'
-            + '<span class="cdlp-timing-val">' + esc(fmtDuration(d)) + "</span></div>");
-        });
-      }
-      if (cachedCount) html.push('<div class="cdlp-hint">' + cachedCount + " \u00d7 " + esc(t("timing_cached")) + "</div>");
-      if (!closed.length) html.push('<div class="cdlp-hint">' + esc(t("timing_running")) + "</div>");
-      html.push("</div>");
-    } else if (state.executing) {
-      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>"
-        + '<div class="cdlp-hint">' + esc(t("timing_running")) + "</div></div>");
-    }
-
-    // Execution monitor burst log (M2 / W2)
-    if (state.watchdogUnavailable) {
-      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
-        + '<div class="cdlp-hint">' + esc(t("watchdog_unavailable")) + "</div></div>");
-    } else if (state.bursts && state.bursts.length) {
-      html.push('<div class="cdlp-card cdlp-wd' + (state.collapsed.bursts ? " cdlp-collapsed" : "") + '" data-col="right">'
-        + '<div class="cdlp-card-title cdlp-wd-title cdlp-collapsible" data-collapse="bursts">'
-        + '<span class="cdlp-collapse-label">' + esc(t("watchdog_bursts")) + "</span>"
-        + '<i class="cdlp-chevron"></i></div>'
-        + '<div class="cdlp-card-body">');
-      state.bursts.slice().reverse().forEach((ev) => {
-        html.push('<div class="cdlp-burst">');
-        html.push('<div class="cdlp-burst-head"><b>' + esc(ev.node_id ? nodeTitleOf(ev.node_id) : "?") + "</b>"
-          + (ev.system_wide ? ' <span class="cdlp-tag cdlp-tag-sys">' + esc(t("watchdog_systemwide")) + "</span>" : "")
-          + '<span class="cdlp-burst-time">' + esc(fmtDuration((Number(ev.duration_s) || 0) * 1000)) + "</span></div>");
-        html.push('<div class="cdlp-burst-meta">CPU ' + esc(String(ev.cpu_percent_peak)) + "% peak \u00b7 "
-          + esc(String(ev.cpu_percent_avg)) + "% avg \u00b7 MEM " + esc(String(ev.process_rss_mb)) + "MB \u00b7 "
-          + esc(String(ev.ts || "")) + "</div>");
-        if (ev.data_scale && ev.data_scale.class_type) {
-          html.push('<div class="cdlp-burst-scale">' + esc(String(ev.data_scale.class_type))
-            + (ev.data_scale.flops_total ? " \u00b7 " + esc(fmtFlops(ev.data_scale.flops_total)) : "") + "</div>");
-        }
-        html.push("</div>");
-      });
-      html.push("</div></div>");
     }
 
     // P2: measured-FLOPs run history.
@@ -2033,7 +1933,133 @@
       html.push("</details>");
     });
     if (!nodes.length) html.push('<div class="cdlp-hint">' + esc(t("loading")) + "</div>");
+    else if (nodes.every((n) => n.status !== "estimated")) {
+      html.push('<div class="cdlp-hint cdlp-hint-cta">'
+        + esc(t("table_unmeasured")) + "</div>");
+    }
     html.push("</div></div>");
+
+    // M3: operator-graph summary + Analyze button (manual, never auto-run)
+    html.push(renderOpgraphSummary());
+
+    // Compute ledger (M2)
+    const flops = (r && r.flops) || null;
+    if (flops && flops.any_estimated) {
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>");
+      html.push('<div class="cdlp-flops-total">' + esc(fmtFlops(flops.total)) + "</div>");
+      const byKind = flops.by_kind || {};
+      const flopsTotal = Math.max(1, Number(flops.total) || 0);
+      html.push('<div class="cdlp-kindbar">');
+      ["attn", "ffn", "conv", "logits", "other"].forEach((k) => {
+        const share = ((Number(byKind[k]) || 0) / flopsTotal) * 100;
+        if (share > 0) html.push('<div class="cdlp-k-' + k + '" style="width:' + share.toFixed(1) + '%"></div>');
+      });
+      html.push("</div>");
+      const parts = ["attn", "ffn", "conv", "logits"].filter((k) => byKind[k])
+        .map((k) => flopsKindLabel(k) + " " + ((Number(byKind[k]) / flopsTotal) * 100).toFixed(0) + "%");
+      if (parts.length) html.push('<div class="cdlp-hint">' + esc(parts.join(" \u00b7 ")) + "</div>");
+      html.push('<div class="cdlp-hint">' + esc(t("flops_note")) + "</div>");
+      html.push("</div>");
+    } else if (r && r.nodes && r.nodes.length) {
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("compute_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("flops_none")) + "</div></div>");
+    }
+
+    // Assumptions
+    const usedAssumptions = (r && r.assumptions_used) || [];
+    if (usedAssumptions.length) {
+      html.push('<div class="cdlp-card" data-col="left"><div class="cdlp-card-title">' + esc(t("assumptions_title")) + "</div>");
+      html.push('<div class="cdlp-hint">' + esc(t("assumptions_hint")) + "</div>");
+      usedAssumptions.forEach((a) => {
+        html.push('<div class="cdlp-assumption">');
+        html.push('<span class="cdlp-assumption-key">' + esc(a.key) + "</span>");
+        html.push('<input type="number" min="0" step="1" value="' + esc(a.value)
+          + '" data-assumption="' + esc(a.key) + '">');
+        html.push('<span class="cdlp-assumption-src">' + esc(t("assumption_" + a.source)) + "</span>");
+        html.push("</div>");
+      });
+      html.push("</div>");
+    }
+
+    // Post-mortem
+    if (pm) {
+      html.push('<div class="cdlp-card cdlp-pm" data-col="left">');
+      html.push('<div class="cdlp-card-title cdlp-pm-title">' + esc(t("postmortem_title")) + "</div>");
+      if (pm.allocation_human) {
+        html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_alloc")) + '</span><b>' + esc(pm.allocation_human) + "</b></div>");
+      } else {
+        html.push('<div class="cdlp-hint">' + esc(t("postmortem_no_alloc")) + "</div>");
+      }
+      if (pm.attributed) {
+        html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_at"))
+          + '</span><b>' + esc(pm.attributed.label) + " \u00b7 " + esc(fmtBytes(pm.attributed.bytes)) + "</b></div>");
+      }
+      if (pm.suggestion) {
+        html.push('<div class="cdlp-pm-row"><span>' + esc(t("postmortem_suggest")) + '</span><b>batch_size = ' + esc(pm.suggestion.batch_size) + "</b></div>");
+        html.push('<button class="cdlp-button" id="cdlp-apply-suggestion">'
+          + esc(t("postmortem_apply", { n: pm.suggestion.batch_size })) + "</button>");
+      }
+      if (pm.message_head) {
+        html.push('<pre class="cdlp-pm-msg">' + esc(pm.message_head) + "</pre>");
+      }
+      html.push("</div>");
+    }
+
+    // Measured node time (M2 / F1)
+    if (state.timingStart) {
+      const closed = (state.timings || []).filter((x) => x.end !== null);
+      const totalMs = (state.timingEnd || Date.now()) - state.timingStart;
+      const active = closed.filter((x) => x.end - x.start >= 5)
+        .sort((a, b) => (b.end - b.start) - (a.end - a.start));
+      const cachedCount = closed.length - active.length;
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>");
+      html.push('<div class="cdlp-timing-total"><span>' + esc(t("timing_total")) + "</span><b>"
+        + esc(fmtDuration(totalMs)) + "</b></div>");
+      if (active.length) {
+        const maxD = Math.max.apply(null, active.map((x) => x.end - x.start));
+        active.slice(0, 12).forEach((x) => {
+          const d = x.end - x.start;
+          const width = Math.max(3, Math.round((Math.log(Math.max(2, d)) / Math.log(maxD || 2)) * 100));
+          html.push('<div class="cdlp-timing-row">'
+            + '<span class="cdlp-timing-name">' + esc(x.title || x.id) + "</span>"
+            + '<span class="cdlp-timing-bar"><i style="width:' + width + '%"></i></span>'
+            + '<span class="cdlp-timing-val">' + esc(fmtDuration(d)) + "</span></div>");
+        });
+      }
+      if (cachedCount) html.push('<div class="cdlp-hint">' + cachedCount + " \u00d7 " + esc(t("timing_cached")) + "</div>");
+      if (!closed.length) html.push('<div class="cdlp-hint">' + esc(t("timing_running")) + "</div>");
+      html.push("</div>");
+    } else if (state.executing) {
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("timing_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("timing_running")) + "</div></div>");
+    }
+
+    // Execution monitor burst log (M2 / W2)
+    if (state.watchdogUnavailable) {
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
+        + '<div class="cdlp-hint">' + esc(t("watchdog_unavailable")) + "</div></div>");
+    } else if (state.bursts && state.bursts.length) {
+      html.push('<div class="cdlp-card cdlp-wd' + (state.collapsed.bursts ? " cdlp-collapsed" : "") + '" data-col="right">'
+        + '<div class="cdlp-card-title cdlp-wd-title cdlp-collapsible" data-collapse="bursts">'
+        + '<span class="cdlp-collapse-label">' + esc(t("watchdog_bursts")) + "</span>"
+        + '<i class="cdlp-chevron"></i></div>'
+        + '<div class="cdlp-card-body">');
+      state.bursts.slice().reverse().forEach((ev) => {
+        html.push('<div class="cdlp-burst">');
+        html.push('<div class="cdlp-burst-head"><b>' + esc(ev.node_id ? nodeTitleOf(ev.node_id) : "?") + "</b>"
+          + (ev.system_wide ? ' <span class="cdlp-tag cdlp-tag-sys">' + esc(t("watchdog_systemwide")) + "</span>" : "")
+          + '<span class="cdlp-burst-time">' + esc(fmtDuration((Number(ev.duration_s) || 0) * 1000)) + "</span></div>");
+        html.push('<div class="cdlp-burst-meta">CPU ' + esc(String(ev.cpu_percent_peak)) + "% peak \u00b7 "
+          + esc(String(ev.cpu_percent_avg)) + "% avg \u00b7 MEM " + esc(String(ev.process_rss_mb)) + "MB \u00b7 "
+          + esc(String(ev.ts || "")) + "</div>");
+        if (ev.data_scale && ev.data_scale.class_type) {
+          html.push('<div class="cdlp-burst-scale">' + esc(String(ev.data_scale.class_type))
+            + (ev.data_scale.flops_total ? " \u00b7 " + esc(fmtFlops(ev.data_scale.flops_total)) : "") + "</div>");
+        }
+        html.push("</div>");
+      });
+      html.push("</div></div>");
+    }
 
     // M3+: server-side profiling log tail (visible only when level != off)
     if (state.logLevel !== "off") {
@@ -2047,7 +2073,7 @@
       if (state.serverLogLoading || state.serverLog === null || !state.serverLog) {
         html.push('<div class="cdlp-hint">' + esc(t("logs_empty")) + "</div>");
       } else {
-        html.push('<pre class="cdlp-pm-msg">' + esc(state.serverLog) + "</pre>");
+        html.push('<pre class="cdlp-pm-msg">' + ansiToHtml(esc(state.serverLog)) + "</pre>");
       }
       html.push("</div></div>");
     }

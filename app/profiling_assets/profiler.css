@@ -596,3 +596,13 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 @media (max-width: 1100px) {
   .cdlp-overlay-cols { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* A1: server-log ANSI colors (profiler.js ansiToHtml) */
+.cdlp-ansi-g { color: #3fb950; }
+.cdlp-ansi-y { color: #d29922; }
+.cdlp-ansi-r { color: #e5484d; }
+.cdlp-ansi-c { color: #39c5cf; }
+.cdlp-ansi-d { color: #9a9a9a; }
+
+/* B3: call-to-action hint on an all-unknown per-node table */
+.cdlp-hint-cta { color: var(--input-text-read-only, #9a9a9a); border: 1px dashed rgba(154, 154, 154, 0.35); border-radius: 6px; padding: 6px 8px; }

@@ -158,6 +158,9 @@
       expand: "Expand panel",
       out_title: "Outputs",
       out_empty: "Run the app to collect outputs here - files become downloads, text becomes copyable.",
+      runs_ledger_hint: "Grid-search experiments land here - single runs don't.",
+      prog_fold: "Fold the per-node rows",
+      prog_unfold: "Unfold the per-node rows",
       prev_title: "Previews",
       prev_empty: "Run charts and image outputs appear here as the workflow streams data.",
       chart_idle: "Live vector charts appear here while a training / generation node streams data.",
@@ -202,6 +205,9 @@
       collapse: "折叠面板",
       expand: "展开面板",
       out_title: "输出",
+      runs_ledger_hint: "这里只记录 GridSearch 实验扫描；单次 Run 不入账。",
+      prog_fold: "折叠逐节点进度行",
+      prog_unfold: "展开逐节点进度行",
       out_empty: "运行后在收集输出：文件可下载，文本可复制。",
       prev_title: "预览",
       prev_empty: "工作流运行时，实时图表与图像输出会出现在这里。",
@@ -902,6 +908,9 @@
     // previews chart host above via the "runs" preview type
     const secRuns = el("div", "cdlapp-section cdlapp-sec-runs");
     secRuns.appendChild(el("div", "cdlapp-sec-title", t("runs_title")));
+    // B5: user callout - the ledger semantics were unclear (single runs
+    // never appear here, by design).  Say so on the tile itself.
+    secRuns.appendChild(el("div", "cdlapp-sec-hint", t("runs_ledger_hint")));
     secRuns.appendChild(el("div", "cdlapp-runs-chart-host"));
     secRuns.appendChild(el("div", "cdlapp-runs-list"));
     secRuns.appendChild(el("div", "cdlapp-empty", t("runs_empty")));
@@ -972,7 +981,10 @@
   // The CDL sections that ride INSIDE the official input panel (native look
   // guaranteed - it is the official element, we only append a sibling).
   function buildExtras() {
-    const extras = el("aside", "cdlapp-extras");
+    const extras = el("aside", "cdlapp-extras cdlapp-out-empty");
+    // B6: the dock starts in the out-empty state (the outputs tile claims
+    // its grid column only once a run produced something); renderOutputs
+    // toggles the class both ways.
     extras.id = OFFICIAL_SURFACE.layout.extrasId;
     const head = el("div", "cdlapp-head");
     head.appendChild(el("div", "cdlapp-title", t("panel_title")));
@@ -1376,6 +1388,12 @@
   // idempotent and only rebuilds its own section.)
   function renderOutputs() {
     if (!state.panel) return;
+    // B6: the outputs tile only claims its grid column once a run produced
+    // something - an empty outputs column was dead screen real estate.
+    if (state.extras) {
+      const hasOutputs = state.outputs.length > 0 || state.artifacts.length > 0;
+      state.extras.classList.toggle("cdlapp-out-empty", !hasOutputs);
+    }
     const list = state.panel.querySelector(".cdlapp-out-list");
     const empty = state.panel.querySelector(".cdlapp-sec-outputs .cdlapp-empty");
     if (!list) return;
@@ -1594,6 +1612,20 @@
       }
     });
     head.appendChild(stop);
+    // B7: fold toggle - hides the per-node rows (kept in the DOM) once a
+    // run settled; the total bar + label remain as a one-line summary.
+    const fold = el("button", btnCls("size-8", "cdlapp-btn-icon"));
+    fold.type = "button";
+    fold.classList.add("cdlapp-prog-fold");
+    fold.textContent = "▾";
+    fold.title = t("prog_fold");
+    fold.addEventListener("click", () => {
+      const collapsed = sec.classList.toggle("cdlapp-prog-collapsed");
+      fold.textContent = collapsed ? "▸" : "▾";
+      fold.title = collapsed ? t("prog_unfold") : t("prog_fold");
+      sec.__cdlProgManual = true; // the auto-fold never fights the user
+    });
+    head.appendChild(fold);
     sec.appendChild(head);
     const totalWrap = el("div", "cdlapp-total");
     totalWrap.appendChild(el("div", "cdlapp-total-bar"));
@@ -1617,7 +1649,7 @@
     if (!run || run.order.length === 0) {
       rowsEl.textContent = "";
       if (label) label.textContent = t("prog_idle");
-      if (bar) bar.style.width = "0%";
+      if (bar) bar.textContent = ""; // drop the previous run's segments
       return;
     }
     // INCREMENTAL row update (batch 17 fix, user callout: "every progress
@@ -1633,9 +1665,11 @@
     });
     const alive = new Set();
     let done = 0;
+    let failed = 0;
     run.order.forEach((key) => {
       const r = run.nodes.get(key);
       if (r.state === "done" || r.state === "cached") done++;
+      if (r.state === "error") failed++;
       alive.add(key);
       let row = existing.get(key);
       if (!row) {
@@ -1686,7 +1720,51 @@
     const pct = total ? Math.round(100 * done / total) : 0;
     if (label) label.textContent = t("prog_node_fmt",
       { done: done, total: total, pct: pct });
-    if (bar) bar.style.width = pct + "%";
+    if (bar) {
+      // Segmented total bar (user callout 2026-11-07): one segment per node
+      // in run order, so a node error turns ITS segment red instead of just
+      // tinting a single fill.  Segments are reused via dataset.nodeKey
+      // (batch-17 incremental rule - no per-tick rebuild flicker).
+      const segs = new Map();
+      Array.from(bar.children).forEach((s) => {
+        if (s.dataset && s.dataset.nodeKey) segs.set(s.dataset.nodeKey, s);
+        else s.remove();
+      });
+      run.order.forEach((key) => {
+        const r = run.nodes.get(key);
+        let seg = segs.get(key);
+        if (!seg) {
+          seg = el("div", "cdlapp-total-seg");
+          seg.dataset.nodeKey = key;
+          seg.appendChild(el("div", "cdlapp-total-seg-fill"));
+          bar.appendChild(seg);
+        }
+        seg.className = "cdlapp-total-seg cdlapp-st-" + r.state;
+        const fill = seg.firstChild;
+        fill.style.width = (r.state === "done" || r.state === "cached")
+          ? "100%" : (r.percent !== null ? r.percent + "%" : "0%");
+      });
+      segs.forEach((seg, key) => {
+        if (!run.order.includes(key)) seg.remove();
+      });
+    }
+    // B7: auto-fold once the run settled (every node terminal, nothing
+    // running).  Fires once; a manual toggle afterwards wins, and a new run
+    // re-expands.  Contents stay in the DOM - only the rows are hidden.
+    const secEl = rowsEl.closest(".cdlapp-sec-progress");
+    const foldBtn = secEl ? secEl.querySelector(".cdlapp-prog-fold") : null;
+    if (secEl) {
+      const settled = total > 0 && done + failed >= total && !state.runActive;
+      if (state.runActive) {
+        secEl.__cdlAutoFolded = false;
+        secEl.classList.remove("cdlapp-prog-collapsed");
+        if (foldBtn) foldBtn.textContent = "▾";
+      } else if (settled && !secEl.__cdlAutoFolded && !secEl.__cdlProgManual) {
+        secEl.__cdlAutoFolded = true;
+        secEl.classList.add("cdlapp-prog-collapsed");
+        if (foldBtn) foldBtn.textContent = "▸";
+      }
+    }
   }
 
   function renderErrors() {
