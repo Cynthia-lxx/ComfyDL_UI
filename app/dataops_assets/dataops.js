@@ -237,8 +237,9 @@
       // The frontend's extension-service store may not be bootstrapped yet
       // (same race the crashsite/motion loaders gate on) — throwing here
       // would poison the host's bootstrap chain.  Bail and let the startup
-      // interval retry once the stores exist.
-      console.warn(TAG, "registerExtension too early, retrying:", e && e.message);
+      // interval retry once the stores exist. Expected on every cold boot,
+      // so this is a debug-level note, not a warning worth alarming on.
+      console.debug(TAG, "registerExtension too early, retrying:", e && e.message);
       return false;
     }
     console.log(TAG, "registered (Pack/Unpack dynamic column ports)");

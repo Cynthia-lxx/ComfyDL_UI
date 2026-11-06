@@ -385,7 +385,15 @@
         state.caps.builderStore = !!state.builderStore;
         state.caps.appModeStore = !!state.appModeStore;
         state.caps.workflowStore = !!state.workflowStore;
-        if (state.caps.appModeStore && state.caps.builderStore) {
+        // One print per distinct capability set: the probe runs on
+        // several startup ticks as stores come online, and repeated
+        // identical logs for the same final state is noise, not signal.
+        const capsKey = "builder=" + state.caps.builderStore
+          + ",appMode=" + state.caps.appModeStore
+          + ",workflow=" + state.caps.workflowStore;
+        if (state.caps.appModeStore && state.caps.builderStore
+          && capsKey !== state.capsKeyPrinted) {
+          state.capsKeyPrinted = capsKey;
           console.info(TAG, "official stores probed OK (builder + appMode"
             + (state.caps.workflowStore ? " + workflow" : "") + ")",
             {

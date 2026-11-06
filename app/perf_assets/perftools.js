@@ -179,6 +179,18 @@
     app.registerExtension({
       name: "ComfyDL.PerfTools",
       async setup() {
+
+        // Consume the spine's periodic system snapshot (CPU/RAM/GPU every
+        // few seconds). Registering a handler both silences the host's
+        // "Unknown message type" warning for every broadcast and keeps
+        // the latest sample around for a future system-resource card.
+        const apiForSpine = getApi(app);
+        if (apiForSpine && typeof apiForSpine.addEventListener === "function") {
+          apiForSpine.addEventListener("cdl.spine", (event) => {
+            lastSpineSnapshot = event?.detail ?? event?.data ?? null;
+          });
+        }
+
         try {
           const v = app.extensionManager.setting.get("Comfy.Locale");
           if (typeof v === "string" && v) locale = v.split("-")[0];
@@ -246,7 +258,8 @@
   // Retry until the app object exists AND the settings store is ready (the
   // store may still be bootstrapping long after window.comfyAPI appears -
   // that window is exactly where the blank-UI crash lives).
-  let tries = 0;
+  let lastSpineSnapshot = null;
+let tries = 0;
   const timer = setInterval(() => {
     tries += 1;
     if (boot() || tries > 200) clearInterval(timer);

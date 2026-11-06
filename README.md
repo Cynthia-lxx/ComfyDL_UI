@@ -63,7 +63,7 @@ You already know deep learning (don't you?) — here, most of it is a node away.
 linear / conv / norm / attention layers, losses, optimizers with gradient clipping, LR
 schedulers, training loops with early stopping, dataset readers and writers (CSV / Excel /
 DB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and
-visualization — 140 nodes across 23 categories, wired instead of written.
+visualization — 141 nodes across 23 categories, wired instead of written.
 
 The catalog at a glance:
 
