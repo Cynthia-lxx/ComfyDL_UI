@@ -411,11 +411,16 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   border-radius: 8px;
   cursor: pointer;
 }
-.cdlapp-collapsed .cdlapp-head,
-.cdlapp-collapsed .cdlapp-section {
+/* 2026-11-06 hardening: these MUST stay scoped to the legacy overlay panel.
+   As bare class selectors they also matched the native dock extras the
+   moment something toggled .cdlapp-collapsed on it, hiding the whole head
+   nav (Node graph / Inputs / Outputs) and stranding the user inside app
+   mode with no exit - the dock has no expand rail to come back. */
+#cdl-app-panel.cdlapp-collapsed .cdlapp-head,
+#cdl-app-panel.cdlapp-collapsed .cdlapp-section {
   display: none;
 }
-.cdlapp-collapsed .cdlapp-rail {
+#cdl-app-panel.cdlapp-collapsed .cdlapp-rail {
   display: block;
 }
 

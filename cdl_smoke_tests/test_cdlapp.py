@@ -553,7 +553,7 @@ def main() -> int:
           "function cancelPendingDockLeave" in js
           and "function fadeArrangeIn" in js
           and "function dockArrangePanel" in js
-          and "__cdlDockLeaveTimer" in js
+          and "state.dockLeaveTimer" in js
           and "__cdlDockAnim" in js
           and 'classList.remove("cdlapp-active")' in js
           and "cdlapp-dock-leaving" in css
@@ -567,6 +567,26 @@ def main() -> int:
         ".arrange-panel.cdlapp-dock-leaving", _media)
     check("A8 dock hand-off covered by the reduced-motion exemption",
           _media != -1 and _dock_media > _media)
+    # 2026-11-06 user report: the collapse rules were bare class selectors,
+    # so toggling .cdlapp-collapsed on the native dock extras hid the whole
+    # head nav (Node graph / Inputs / Outputs) with NO way back (the expand
+    # rail only exists on the legacy overlay).  The rules must stay scoped
+    # to #cdl-app-panel, the dock nav must not render a collapse button, and
+    # setCollapsed must no-op in the docked path.
+    _bare_collapsed = 0
+    _pos = css.find(".cdlapp-collapsed .cdlapp-head")
+    while _pos != -1:
+        if css[max(0, _pos - 14):_pos] != "#cdl-app-panel":
+            _bare_collapsed += 1
+        _pos = css.find(".cdlapp-collapsed .cdlapp-head", _pos + 1)
+    check("A8 collapse rules scoped to the legacy overlay panel only",
+          _bare_collapsed == 0
+          and "#cdl-app-panel.cdlapp-collapsed .cdlapp-head" in css
+          and "function buildNav(withCollapse)" in js
+          and "head.appendChild(buildNav(false));" in js
+          and "head.appendChild(buildNav(true));" in js
+          and "collapse is legacy-overlay-only" in js
+          and "if (state.extras && state.panel === state.extras) return;" in js)
 
     # --- B: artifacts routes integration (aiohttp TestServer) ----------------
     import asyncio

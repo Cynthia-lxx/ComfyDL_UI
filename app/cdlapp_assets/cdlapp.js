@@ -848,7 +848,7 @@
     return s;
   }
 
-  function buildNav() {
+  function buildNav(withCollapse) {
     const nav = el("div", "cdlapp-nav");
     const mkBtn = (key, label, title_, fn, size, extra, icon) => {
       const b = el("button", btnCls(size || "h-10 px-4", extra));
@@ -872,8 +872,14 @@
       () => locateOnGraph("inputs"), "size-8", "cdlapp-btn-icon", "log-in"));
     nav.appendChild(mkBtn("locate-outputs", null, t("locate_outputs"),
       () => locateOnGraph("outputs"), "size-8", "cdlapp-btn-icon", "log-out"));
-    nav.appendChild(mkBtn("collapse", null, t("collapse"),
-      () => setCollapsed(true), "size-8", "cdlapp-btn-icon"));
+    // Collapse is a legacy-overlay-only affordance: the native dock fills
+    // the whole screen and has NO expand rail, so a collapse here would
+    // hide the head nav and strand the user inside app mode with no exit
+    // (2026-11-06 user report).  Only the floating overlay offers it.
+    if (withCollapse) {
+      nav.appendChild(mkBtn("collapse", null, t("collapse"),
+        () => setCollapsed(true), "size-8", "cdlapp-btn-icon"));
+    }
     return nav;
   }
 
@@ -910,7 +916,7 @@
     const head = el("div", "cdlapp-head");
     const title = el("div", "cdlapp-title", t("panel_title"));
     head.appendChild(title);
-    head.appendChild(buildNav());
+    head.appendChild(buildNav(true));
     panel.appendChild(head);
 
     // collapsed rail (hidden until collapsed): just an expand button
@@ -954,6 +960,10 @@
   }
 
   function setCollapsed(v) {
+    // Belt-and-braces guard: collapse is legacy-overlay-only.  In the docked
+    // path state.panel IS state.extras (no expand rail exists there), so a
+    // collapse would hide the nav head with no way back.
+    if (state.extras && state.panel === state.extras) return;
     state.collapsed = v;
     if (state.panel) state.panel.classList.toggle("cdlapp-collapsed", v);
     try { localStorage.setItem(COLLAPSE_KEY, v ? "1" : "0"); } catch (e) { /* optional */ }
@@ -966,7 +976,7 @@
     extras.id = OFFICIAL_SURFACE.layout.extrasId;
     const head = el("div", "cdlapp-head");
     head.appendChild(el("div", "cdlapp-title", t("panel_title")));
-    head.appendChild(buildNav());
+    head.appendChild(buildNav(false));
     extras.appendChild(head);
 
     // outputs section
@@ -1264,12 +1274,20 @@
   }
 
   function cancelPendingDockLeave() {
-    const arrange = dockArrangePanel();
-    if (!arrange || !arrange.__cdlDockLeaveTimer) return;
-    clearTimeout(arrange.__cdlDockLeaveTimer);
-    delete arrange.__cdlDockLeaveTimer;
-    arrange.classList.remove("cdlapp-dock-leaving");
-    document.body.classList.remove("cdlapp-active");
+    // The leave timer is MODULE-level, not parked on the arrange-panel
+    // element: the official splitter REMOUNTS on every drawer toggle, so a
+    // timer parked on the element would survive into the re-mount and fire
+    // under a freshly re-docked panel, stripping body.cdlapp-active out
+    // from under it (2026-11-06 user report: dock never came back after
+    // closing the drawer in a built app - the legacy overlay path does not
+    // depend on the class, which is why only the docked case broke).
+    if (state.dockLeaveTimer) {
+      clearTimeout(state.dockLeaveTimer);
+      state.dockLeaveTimer = null;
+    }
+    document
+      .querySelectorAll(".arrange-panel.cdlapp-dock-leaving")
+      .forEach((p) => p.classList.remove("cdlapp-dock-leaving"));
   }
 
   function fadeArrangeIn(arrange) {
@@ -1321,11 +1339,24 @@
     const arrange = dockArrangePanel();
     if (leaving && arrange && document.body.classList.contains("cdlapp-active")) {
       arrange.classList.add("cdlapp-dock-leaving");
-      arrange.__cdlDockLeaveTimer = setTimeout(() => {
-        delete arrange.__cdlDockLeaveTimer;
-        arrange.classList.remove("cdlapp-dock-leaving");
+      if (state.dockLeaveTimer) clearTimeout(state.dockLeaveTimer);
+      state.dockLeaveTimer = setTimeout(() => {
+        state.dockLeaveTimer = null;
+        // Guard the race: a fast drawer close re-mounts the official
+        // splitter and may have re-docked the panel while this was pending
+        // (mountPanel also cancels us, this is belt-and-braces).  Never
+        // strip the body class out from under a live dock.
+        if (state.mounted
+            || !document.body.classList.contains("cdlapp-active")) {
+          return;
+        }
+        document
+          .querySelectorAll(".arrange-panel.cdlapp-dock-leaving")
+          .forEach((p) => p.classList.remove("cdlapp-dock-leaving"));
         document.body.classList.remove("cdlapp-active");
-        fadeArrangeIn(arrange);
+        // Fade the CURRENT panel in (the element queried at unmount time
+        // may have been replaced by the official splitter remount).
+        fadeArrangeIn(dockArrangePanel());
       }, 180);
     } else {
       document.body.classList.remove("cdlapp-active");
