@@ -2204,6 +2204,35 @@
     wrap.classList.toggle("cdlp-overlay-open", state.displayMode === "overlay");
   }
 
+  // 2026-11-07 UXD round 3: official custom tabs are PRE-RENDERED while
+  // hidden at boot, so a "panel built from empty" flag gets consumed before
+  // the user ever opens the tab (live-probed).  Watch the host's VISIBILITY
+  // instead: entering the view adds a short-lived class on the PERSISTENT
+  // host (not the per-tick innerHTML), so tick re-renders inside its 420ms
+  // window do not replay anything, and a later tab open plays it again.
+  function playEntrance(el) {
+    if (!el || document.documentElement.classList.contains("cdl-motion-off")) return;
+    el.classList.remove("cdlp-entrance-host");
+    void el.offsetWidth; // restart on a fast close/open
+    el.classList.add("cdlp-entrance-host");
+    clearTimeout(state.entranceTimer);
+    state.entranceTimer = setTimeout(
+      () => el.classList.remove("cdlp-entrance-host"), 420);
+  }
+
+  function installEntranceObserver(el) {
+    if (state.entranceObserver || typeof IntersectionObserver === "undefined") return;
+    try {
+      const ob = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) playEntrance(el);
+        }
+      }, { threshold: 0.05 });
+      ob.observe(el);
+      state.entranceObserver = ob;
+    } catch (e) { /* no observer: render() still triggers the entrance */ }
+  }
+
   function registerSidebar() {
     const em = getApp() && getApp().extensionManager;
     if (!em || typeof em.registerSidebarTab !== "function") return;
@@ -2217,6 +2246,11 @@
         el.innerHTML = "";
         el.classList.add("cdlp-host");
         state.panelEl = el;
+        installEntranceObserver(el);
+        // Official tab implementations differ: some re-call render() on
+        // every open, others only reveal a boot-time DOM.  Trigger here for
+        // the former, IntersectionObserver covers the latter.
+        playEntrance(el);
         renderPanel();
         requestEstimate(true);
         if (state.bursts === null) fetchBursts();

@@ -606,3 +606,55 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 
 /* B3: call-to-action hint on an all-unknown per-node table */
 .cdlp-hint-cta { color: var(--input-text-read-only, #9a9a9a); border: 1px dashed rgba(154, 154, 154, 0.35); border-radius: 6px; padding: 6px 8px; }
+
+
+
+
+/* ---- UXD round 3 (2026-11-07): cards used to have NO motion at all -----
+   Official custom tabs are pre-rendered HIDDEN at boot, and renderPanel
+   replaces innerHTML on every tick.  profiler.js therefore watches the
+   persistent host's visibility (IntersectionObserver) and adds
+   .cdlp-entrance-host for 420ms; a per-tick rebuild cannot replay it, and
+   reopening the tab plays it again.  backwards fill (NOT both) so hover /
+   :active keep their transform when the animation is done. */
+@keyframes cdlp-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.cdlp-entrance-host .cdlp-card,
+.cdlp-entrance-host .cdlp-verdict {
+  animation: cdlp-card-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.cdlp-entrance-host .cdlp-panel > :nth-child(2) { animation-delay: 0.000s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(3) { animation-delay: 0.035s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(4) { animation-delay: 0.070s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(5) { animation-delay: 0.105s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(6) { animation-delay: 0.140s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(7) { animation-delay: 0.175s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(8) { animation-delay: 0.210s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(9) { animation-delay: 0.245s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(10) { animation-delay: 0.280s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(11) { animation-delay: 0.315s; }
+.cdlp-entrance-host .cdlp-panel > :nth-child(12) { animation-delay: 0.350s; }
+.cdlp-card {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
+}
+.cdlp-card:hover {
+  border-color: rgba(26, 188, 156, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(26, 188, 156, 0.12);
+}
+.cdlp-card:active { transform: translateY(1px); }
+/* gates: the UI motion master switch, the App Panel motion switch, and an
+   unconditional reduced-motion exemption (same discipline as cdlapp.css) */
+html.cdl-motion-off .cdlp-entrance-host .cdlp-card,
+html.cdl-motion-off .cdlp-entrance-host .cdlp-verdict,
+body.cdlapp-motion-off .cdlp-entrance-host .cdlp-card,
+body.cdlapp-motion-off .cdlp-entrance-host .cdlp-verdict {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cdlp-entrance-host .cdlp-card, .cdlp-entrance-host .cdlp-verdict {
+    animation: none !important;
+  }
+  .cdlp-card { transition: none !important; }
+}

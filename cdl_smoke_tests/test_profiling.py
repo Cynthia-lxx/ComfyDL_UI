@@ -374,6 +374,22 @@ async def _route_checks() -> None:
               and 'if (state.logLevel === "off")' in _pjs
               and 't("logs_off_hint")' in _pjs
               and "ansiToHtml(esc(state.serverLog))" in _pjs)
+        # UXD round 3: the profile cards used to have zero motion.  Entrance
+        # only on from-empty rebuild (no per-tick flicker), plus gates.
+        _pcss = (REPO_ROOT / "app" / "profiling_assets" / "profiler.css").read_text(
+            encoding="utf-8")
+        check("T9f4 staged card entrance + gates (motion round 3)",
+              "function installEntranceObserver" in _pjs
+              and "IntersectionObserver" in _pjs
+              and "cdlp-entrance-host" in _pjs
+              and "installEntranceObserver(el);" in _pjs
+              and ".cdlp-entrance-host .cdlp-card" in _pcss
+              and "@keyframes cdlp-card-in" in _pcss
+              and "backwards;" in _pcss  # no fill:'both' transform leak
+              and "html.cdl-motion-off" in _pcss
+              and "body.cdlapp-motion-off" in _pcss
+              and "@media (prefers-reduced-motion: reduce)" in _pcss
+              and ".cdlp-card:hover" in _pcss)
         # use renderPanel-only anchors (some comment strings also appear in
         # the helper functions earlier in the file)
         _order = [

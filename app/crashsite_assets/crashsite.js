@@ -342,17 +342,21 @@
   function renderPanel() {
     const el = state.panelEl;
     if (!el) return;
+    // 2026-11-07 UXD round 3: staged entrance ONLY when the panel is
+    // (re)built from empty (renderPanel replaces innerHTML on every tick).
+    const entrance = !el.querySelector(".cs-panel");
+    const panelCls = 'class="cs-panel' + (entrance ? " cs-entrance" : "") + '"';
     // Master switch: a loud, unmissable disabled state instead of the
     // library - the tab stays open (browsing is harmless) but loads nothing.
     if (!state.masterEnabled) {
-      el.innerHTML = '<div class="cs-panel">'
+      el.innerHTML = '<div ' + panelCls + '>'
         + '<div class="cs-disabled-banner">'
         + '<div class="cs-disabled-title">&#9888; ' + esc(t("disabled_title")) + "</div>"
         + '<div class="cs-disabled-body">' + esc(t("disabled_body")) + "</div>"
         + "</div></div>";
       return;
     }
-    const html = '<div class="cs-panel">'
+    const html = '<div ' + panelCls + '>'
       + '<div class="cs-hint cs-incremental">' + esc(t("incremental")) + "</div>"
       + renderExportSection()
       + '<div class="cs-title-row"><span class="cs-title">' + esc(t("title"))

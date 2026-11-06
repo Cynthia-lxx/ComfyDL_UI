@@ -590,12 +590,33 @@ def _route_checks() -> None:
         SpikeBoom.boom["on"] = True
 
 
+def _frontend_motion_checks() -> None:
+    # 2026-11-07 UXD round 3: the snapshot panel had no motion at all.
+    # Entrance must be gated to the from-empty rebuild (renderPanel replaces
+    # innerHTML on every tick), with the full motion-switch / reduced-motion
+    # exemption set.
+    import io
+    base = REPO_ROOT / "app" / "crashsite_assets"
+    js = io.open(str(base / "crashsite.js"), encoding="utf-8").read()
+    css = io.open(str(base / "crashsite.css"), encoding="utf-8").read()
+    check("F1 crash site entrance gated to panel rebuild",
+          'const entrance = !el.querySelector(".cs-panel");' in js
+          and "cs-entrance" in js
+          and "@keyframes cs-card-in" in css)
+    check("F2 crash site motion gates + hover/press feedback",
+          "html.cdl-motion-off" in css
+          and "body.cdlapp-motion-off" in css
+          and "@media (prefers-reduced-motion: reduce)" in css
+          and ".cs-card:hover" in css and ".cs-card:active" in css)
+
+
 def main() -> int:
     _serialize_checks()
     _store_checks()
     _export_checks()
     _provider_checks()
     _route_checks()
+    _frontend_motion_checks()
     return report()
 
 
