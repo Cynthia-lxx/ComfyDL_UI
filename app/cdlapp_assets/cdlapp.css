@@ -1094,6 +1094,28 @@ body:not(.cdlapp-motion-off) .cdlapp-running .cdlapp-title::before {
   pointer-events: none;
 }
 
+/* ---- soft dock hand-off (⑦ user callout) -------------------------------
+   Opening a sidebar drawer / modal used to hard-snap the screen: the docked
+   arrange-panel lost its fixed full-bleed layout the instant
+   body.cdlapp-active was removed.  Choreography (opacity only):
+   unmountPanel fades the arrange-panel WITH the extras, drops
+   body.cdlapp-active only once it is transparent (the official reflow lands
+   invisibly), then the revealed official layout fades back in via a one-shot
+   WAAPI from mountPanel/unmountPanel.  The leaving class is added/removed by
+   cdlapp.js under the motion switch; the reduced-motion block below is the
+   unconditional belt-and-braces exemption. */
+@keyframes cdlapp-dock-out-k {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+body.cdlapp-active .comfyui-body .arrange-panel.cdlapp-dock-leaving {
+  animation: cdlapp-dock-out-k 0.16s ease both;
+  pointer-events: none;
+}
+body.cdlapp-motion-off .arrange-panel.cdlapp-dock-leaving {
+  animation: none !important;
+}
+
 /* global off switch: kill every animation/transition we ship */
 body.cdlapp-motion-off .cdlapp-section,
 body.cdlapp-motion-off .cdlapp-head,
@@ -1113,5 +1135,8 @@ body.cdlapp-motion-off .cdlapp-title::before {
   #cdl-app-extras *, #cdl-app-panel *, #cdl-builder-back * {
     animation: none !important;
     transition: none !important;
+  }
+  body.cdlapp-active .comfyui-body .arrange-panel.cdlapp-dock-leaving {
+    animation: none !important;
   }
 }

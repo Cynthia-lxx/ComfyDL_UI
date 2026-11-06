@@ -1202,6 +1202,10 @@
     if (state.mounted || !state.enabled) return;
     if (!state.caps.anchorsSeen) probeCapabilities();
     purgeStaleSurfaces();
+    // A fast drawer close can re-mount while the leave choreography is still
+    // pending (fade timer on the arrange-panel); finish it synchronously so
+    // the old timer cannot strip body.cdlapp-active out from under us.
+    cancelPendingDockLeave();
     document.documentElement.style.setProperty(
       "--cdl-dock-left", dockLeft() + "px");
     const col = extrasColumn();
@@ -1213,6 +1217,9 @@
       mountSplitters();
       state.panel = state.extras; // render* roots
       document.body.classList.add("cdlapp-active");
+      // Soft return: the just-docked panel fades in over the official view
+      // (opacity only; motion-switch + reduced-motion gated).
+      fadeArrangeIn(dockArrangePanel());
       console.log(TAG, "docked into the official input panel (app mode)");
     } else {
       // legacy fallback: workflow without app selections - overlay panel,
@@ -1239,6 +1246,53 @@
     refreshRuns();
   }
 
+  // Soft dock hand-off (⑦ user callout: opening a sidebar drawer / modal
+  // used to hard-snap the screen - the docked arrange-panel lost its fixed
+  // full-bleed layout the instant body.cdlapp-active was removed, so the
+  // official empty state popped in with zero transition).  Choreography,
+  // opacity only (motion discipline):
+  //   leave: extras fade (existing .cdlapp-leaving) AND the arrange-panel
+  //     fades with it (.cdlapp-dock-leaving); body.cdlapp-active is removed
+  //     only AFTER the fade, so the official reflow lands on a fully
+  //     transparent panel;
+  //   return: the revealed official layout fades back in via a one-shot WAAPI
+  //     (fill:'none' - self-cleaning, no cdlCancelAfter needed); mountPanel
+  //     fades the docked panel in the same way.
+  // Both legs are gated by the motion switch AND prefers-reduced-motion.
+  function dockArrangePanel() {
+    return document.querySelector(OFFICIAL_SURFACE.layout.arrangePanel);
+  }
+
+  function cancelPendingDockLeave() {
+    const arrange = dockArrangePanel();
+    if (!arrange || !arrange.__cdlDockLeaveTimer) return;
+    clearTimeout(arrange.__cdlDockLeaveTimer);
+    delete arrange.__cdlDockLeaveTimer;
+    arrange.classList.remove("cdlapp-dock-leaving");
+    document.body.classList.remove("cdlapp-active");
+  }
+
+  function fadeArrangeIn(arrange) {
+    // Called from BOTH legs: mountPanel (state.mounted already true) and the
+    // unmount choreography timer (state.mounted already false by then), so
+    // mounted-ness must NOT gate this - the motion switch alone decides.
+    if (!arrange) return;
+    if (!state.motion
+        || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    if (arrange.__cdlDockAnim) {
+      try { arrange.__cdlDockAnim.cancel(); } catch (e) { /* finished */ }
+    }
+    try {
+      arrange.__cdlDockAnim = arrange.animate(
+        [{ opacity: 0 }, { opacity: 1 }],
+        { duration: 160, easing: "ease-out" });
+      arrange.__cdlDockAnim.finished?.catch(() => { /* superseded */ })
+        ?.then(() => { delete arrange.__cdlDockAnim; });
+    } catch (e) { /* WAAPI unavailable: instant snap stays the fallback */ }
+  }
+
   function unmountPanel() {
     if (!state.mounted) return;
     const leaving = state.motion
@@ -1261,7 +1315,21 @@
       state.extras = null;
       delayedRemove(extrasEl);
     }
-    document.body.classList.remove("cdlapp-active");
+    // Dock hand-off: fade the docked arrange-panel out FIRST and only drop
+    // body.cdlapp-active once it is transparent - the official reflow then
+    // happens invisibly (see the soft dock hand-off note above).
+    const arrange = dockArrangePanel();
+    if (leaving && arrange && document.body.classList.contains("cdlapp-active")) {
+      arrange.classList.add("cdlapp-dock-leaving");
+      arrange.__cdlDockLeaveTimer = setTimeout(() => {
+        delete arrange.__cdlDockLeaveTimer;
+        arrange.classList.remove("cdlapp-dock-leaving");
+        document.body.classList.remove("cdlapp-active");
+        fadeArrangeIn(arrange);
+      }, 180);
+    } else {
+      document.body.classList.remove("cdlapp-active");
+    }
     // In the docked path state.panel IS state.extras (already handled above);
     // only the legacy overlay panel needs its own removal here.
     if (state.panel && state.panel !== extrasEl && state.panel.parentNode) {

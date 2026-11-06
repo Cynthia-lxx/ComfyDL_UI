@@ -549,6 +549,24 @@ def main() -> int:
           and "cdlapp-leaving" in js
           and "cdlapp-pop" in js
           and "prefers-reduced-motion" in css)
+    check("A8 soft dock hand-off: choreography + gates (2026-11-06)",
+          "function cancelPendingDockLeave" in js
+          and "function fadeArrangeIn" in js
+          and "function dockArrangePanel" in js
+          and "__cdlDockLeaveTimer" in js
+          and "__cdlDockAnim" in js
+          and 'classList.remove("cdlapp-active")' in js
+          and "cdlapp-dock-leaving" in css
+          and "@keyframes cdlapp-dock-out-k" in css
+          and "body.cdlapp-active .comfyui-body .arrange-panel.cdlapp-dock-leaving" in css
+          and "body.cdlapp-motion-off .arrange-panel.cdlapp-dock-leaving" in css)
+    # the unconditional reduced-motion exemption must also cover the dock
+    # hand-off rule (belt-and-braces on top of the JS gate)
+    _media = css.find("@media (prefers-reduced-motion: reduce)")
+    _dock_media = css.find(
+        ".arrange-panel.cdlapp-dock-leaving", _media)
+    check("A8 dock hand-off covered by the reduced-motion exemption",
+          _media != -1 and _dock_media > _media)
 
     # --- B: artifacts routes integration (aiohttp TestServer) ----------------
     import asyncio
