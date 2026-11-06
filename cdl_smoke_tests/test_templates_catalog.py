@@ -134,6 +134,7 @@ check(
         "hyperparameter_exploration",
         "data_list_demo",
         "dataops_demo",
+        "dataset_eda",
     },
     str(sorted(comfydl_names)),
 )

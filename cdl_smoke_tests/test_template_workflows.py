@@ -165,6 +165,7 @@ def main() -> int:
         "hyperparameter_exploration",
         "data_list_demo",
         "dataops_demo",
+        "dataset_eda",
     ):
         wf = json.loads((workflows_dir / f"{name}.json").read_text(encoding="utf-8-sig"))
         types = {n["type"] for n in wf["nodes"]}
@@ -366,6 +367,26 @@ def main() -> int:
           str(packed_j.meta.get("pack")))
     check("J: preview is a table string",
           isinstance(preview_j, str) and "x0" in preview_j, preview_j[:80])
+
+    # --- Template K: dataset_eda (histogram + Convert) ------------------------- #
+    # The EDA story: a 500-row synthetic table fans out to the in-node
+    # histogram (rich widget payload), the head preview, and an unpacked
+    # column cast to STRING via the universal Convert node (the graph-level
+    # fix for `write() argument must be str, not int`).
+    out_k = _run_workflow(workflows_dir / "dataset_eda.json")
+    hist_k = out_k[4][0]
+    preview_k = out_k[5][0]
+    converted_k = out_k[7][0]
+    check("K: histogram passthrough returns the SAME dataset object",
+          hist_k.n_samples == 500 and hist_k.n_features == 4,
+          f"{getattr(hist_k, 'n_samples', '?')}x{getattr(hist_k, 'n_features', '?')}")
+    check("K: preview is a table string",
+          isinstance(preview_k, str) and "x0" in preview_k, preview_k[:80])
+    check("K: convert cast the column tensor to a compact text summary",
+          isinstance(converted_k, str) and converted_k.startswith("Tensor(shape=(500,"),
+          str(converted_k)[:80])
+    check("K: both SaveText outputs are strings",
+          isinstance(out_k[8][0], str) and isinstance(out_k[9][0], str))
 
     return _report()
 

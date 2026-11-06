@@ -77,6 +77,7 @@ _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "hyperparameter_exploration": "tabular_regression_production-1.png",
     "data_list_demo": "tabular_regression_production-1.png",
     "dataops_demo": "tabular_regression_production-1.png",
+    "dataset_eda": "tabular_regression_production-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -301,6 +302,23 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-11-02",
             "openSource": True,
         },
+        {
+            "name": "dataset_eda",
+            "title": "Dataset EDA (histogram + Convert)",
+            "description": (
+                "One-glance dataset inspection: Dataset Histogram aggregates "
+                "every numeric column into in-node canvas charts with hover "
+                "bin read-outs (switch the plotted column without re-running), "
+                "Dataset Preview shows the head, and Convert casts an unpacked "
+                "column tensor to STRING so text consumers like SaveText never "
+                "crash on raw tensors."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "png",
+            "tags": ["dataset", "histogram", "eda", "convert"],
+            "date": "2026-11-07",
+            "openSource": True,
+        },
     ],
 }
 
@@ -368,6 +386,12 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "DATASET 的列→端口动态绑定：Dataset Unpack 把表拆成每列一个输出端口（x0..x3 加 "
             "target），Dataset Pack 把逐列张量端口堆叠回完整表——端口名就是列名，"
             "特征工程分支可以直接消费单列。跑一次后端口按真实 schema 自动生成并随工作流保存。"
+        ),
+        "dataset_eda": (
+            "数据集一键体检：Dataset Histogram 把每列数值分布聚合成节点内画布直方图"
+            "（悬停读 bin 区间与计数，无需重跑即可切换展示列），Dataset Preview 输出表头预览，"
+            "Convert 把拆出的列张量安全转为 STRING——文本消费者（如 SaveText）"
+            "再也不会被裸张量炸掉。"
         ),
     },
 }
