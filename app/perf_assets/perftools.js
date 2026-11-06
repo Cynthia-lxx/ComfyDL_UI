@@ -61,6 +61,18 @@
         zh: "缓存读取节点解析出的 DataFrame（键 = 路径 + mtime + 解析参数的 md5，512 MB 字节预算，FIFO 淘汰）。热关闭后每次执行都重新解析文件。",
       },
     },
+    {
+      settingId: "ComfyDL.Perf.Notebook",
+      switchId: "comfydl.notebook",
+      name: {
+        en: "ComfyDL notebook cells",
+        zh: "ComfyDL 笔记本单元格",
+      },
+      tooltip: {
+        en: "Enables the Notebook Cell node, which executes user Python WITHOUT a sandbox. Tier-2 feature, off by default: only turn it on if you trust the workflows you run.",
+        zh: "启用 Notebook Cell 节点——它执行用户 Python 代码且无沙箱。Tier-2 功能，默认关闭：仅在信任所运行工作流时开启。",
+      },
+    },
   ];
 
   let locale = "en";
@@ -72,10 +84,17 @@
 
   function getApi(app) {
     try {
-      return app.extensionManager?.api || null;
-    } catch (e) {
-      return null;
-    }
+      if (app.extensionManager?.api) return app.extensionManager.api;
+    } catch (e) { /* fall through to the legacy instance below */ }
+    // This frontend build does not expose extensionManager.api; the
+    // ComfyApp instance carries the same fetchApi/event surface (used by
+    // every other ComfyDL extension). Without this fallback the switch
+    // list never syncs and the settings toggles would show defaults.
+    try {
+      const api = app.api;
+      if (api && typeof api.fetchApi === "function") return api;
+    } catch (e) { /* not ready yet; callers retry */ }
+    return null;
   }
 
   async function fetchSwitches(app) {
@@ -168,21 +187,36 @@
         // Pull the backend truth once and sync the local store. The guard
         // flag keeps this sync from re-entering onChange (which would PATCH
         // the value we just read - harmless but noisy).
-        const payload = await fetchSwitches(app);
-        if (!payload || !Array.isArray(payload.switches)) return;
-        const store = app.extensionManager.setting;
-        const states = Object.fromEntries(
-          payload.switches.map((s) => [s.id, s]));
-        for (const def of PERF_SWITCHES) {
-          const desc = states[def.switchId];
-          if (!desc) continue;
-          try {
-            if (store.get(def.settingId) !== desc.enabled) {
-              store.set(def.settingId, desc.enabled);
-            }
-          } catch (e) { /* store not writable: leave the default */ }
+        const syncOnce = async () => {
+          const payload = await fetchSwitches(app);
+          if (!payload || !Array.isArray(payload.switches)) return false;
+          const store = app.extensionManager.setting;
+          const states = Object.fromEntries(
+            payload.switches.map((s) => [s.id, s]));
+          for (const def of PERF_SWITCHES) {
+            const desc = states[def.switchId];
+            if (!desc) continue;
+            try {
+              if (store.get(def.settingId) !== desc.enabled) {
+                store.set(def.settingId, desc.enabled);
+              }
+            } catch (e) { /* store not writable: leave the default */ }
+          }
+          logCacheStats(getApi(app));
+          return true;
+        };
+        if (!(await syncOnce())) {
+          // app.api can late-bind well after setup; retry a few times
+          // before giving up, otherwise the toggles keep showing the
+          // (possibly wrong) defaultValue.
+          let left = 4;
+          const retryTimer = setInterval(() => {
+            left -= 1;
+            syncOnce().then((ok) => {
+              if (ok || left <= 0) clearInterval(retryTimer);
+            });
+          }, 3000);
         }
-        logCacheStats(app.extensionManager?.api ?? getApi(app));
       },
       settings: PERF_SWITCHES.map((def) => ({
         id: def.settingId,

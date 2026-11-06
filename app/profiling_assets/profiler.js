@@ -234,7 +234,6 @@
       datacache_empty: "No cached tables yet - run a read node (CSV/JSON/XLSX/DB).",
       datacache_unavailable: "cache module unavailable on the server",
       datacache_never: "never",
-      datacache_of: "{used} of {total}",
     },
     zh: {
       sidebar_title: "性能分析",
@@ -426,7 +425,6 @@
       datacache_empty: "还没有缓存的数据表——先跑一次读取节点（CSV/JSON/XLSX/DB）。",
       datacache_unavailable: "服务端缓存模块不可用",
       datacache_never: "从未",
-      datacache_of: "{used} / {total}",
     },
   };
 
@@ -547,6 +545,39 @@
     let i = 0;
     while (Math.abs(v) >= 1024 && i < units.length - 1) { v /= 1024; i++; }
     return (i === 0 ? v.toFixed(0) : v.toFixed(2)) + " " + units[i];
+  }
+
+  function _trimTrailingZeros(text) {
+    return text.includes(".") ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
+  }
+
+  // "used / total" pair for the Data cache card: the unit prints once on
+  // the total and the used value is expressed in the total's unit with a
+  // scale-appropriate number of decimals (0 / 512MB, 1.5 / 512MB,
+  // 1536 / 512MB) — bytes are always integral, so no decimals there.
+  function fmtBytesPair(used, total) {
+    if (used === null || used === undefined || isNaN(used)
+      || total === null || total === undefined || isNaN(total)) {
+      return fmtBytes(used) + " / " + fmtBytes(total);
+    }
+    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let t = Number(total);
+    let ti = 0;
+    while (Math.abs(t) >= 1024 && ti < units.length - 1) { t /= 1024; ti++; }
+    const totalText = _trimTrailingZeros(
+      ti === 0 ? t.toFixed(0) : t.toFixed(2)) + units[ti];
+    let u = Number(used);
+    for (let i = 0; i < ti; i++) u /= 1024;
+    let usedText;
+    if (ti === 0) {
+      usedText = String(Math.round(u));
+    } else {
+      const rounded = Math.abs(u - Math.round(u)) < 1e-9
+        ? u.toFixed(0) : u.toFixed(2);
+      usedText = Number(rounded) === 0 && u > 0
+        ? "<0.01" : _trimTrailingZeros(rounded);
+    }
+    return usedText + " / " + totalText;
   }
 
   function fmtFlops(n) {
@@ -1895,7 +1926,7 @@
         const pct = budgetB ? Math.min(100, Math.round((usedB / budgetB) * 100)) : 0;
         html.push('<div class="cdlp-budget">');
         html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("budget_used"))
-          + '</div><div class="cdlp-v">' + esc(t("datacache_of", { used: fmtBytes(usedB), total: fmtBytes(budgetB) })) + "</div></div>");
+          + '</div><div class="cdlp-v">' + esc(fmtBytesPair(usedB, budgetB)) + "</div></div>");
         html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("datacache_hits"))
           + '</div><div class="cdlp-v">' + esc(String(cstats.hits ?? 0)) + "</div></div>");
         html.push('<div class="cdlp-budget-cell"><div class="cdlp-k">' + esc(t("datacache_misses"))
