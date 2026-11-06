@@ -147,24 +147,43 @@
   async function fetchSnapshots() {
     // Master switch: a disabled crash site loads NOTHING - the library
     // request itself is a per-execution cost the switch is meant to remove.
-    if (!state.masterEnabled) return;
+    // 2026-11-07 M-D-0: a stale `loading = true` used to pin the list on the
+    // "..." placeholder forever (every later call took the "already loading"
+    // branch and returned). Every early exit now clears the flag, the request
+    // is bounded, and the cleanup lives in a finally block.
+    const clearLoading = () => {
+      state.loading = false;
+      state.refreshQueued = false;
+    };
+    if (!state.masterEnabled) { clearLoading(); return; }
     const api = getApi();
-    if (!api || typeof api.fetchApi !== "function") return;
+    if (!api || typeof api.fetchApi !== "function") { clearLoading(); return; }
     if (state.loading) { state.refreshQueued = true; return; }
+    let timer = null;
     state.loading = true;
-    renderPanel();
     try {
-      const resp = await api.fetchApi(SNAPSHOTS_URL);
+      renderPanel();
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("snapshots timeout")), 10000);
+      });
+      const resp = await Promise.race([api.fetchApi(SNAPSHOTS_URL), timeout]);
+      if (timer !== null) { clearTimeout(timer); timer = null; }
       if (resp.ok) {
         const body = await resp.json();
         state.snapshots = body.snapshots || [];
       }
     } catch (e) { /* silent: the panel is a courtesy */ }
-    state.loading = false;
-    renderPanel();
-    // A refresh was requested while this one was in flight - run once more
-    // so the panel always reflects the latest state.
-    if (state.refreshQueued) { state.refreshQueued = false; fetchSnapshots(); }
+    finally {
+      if (timer !== null) clearTimeout(timer);
+      state.loading = false;
+      try { renderPanel(); } catch (e) { /* never leave a stale UI */ }
+      // A refresh was requested while this one was in flight - run once more
+      // so the panel always reflects the latest state.
+      if (state.refreshQueued) {
+        state.refreshQueued = false;
+        fetchSnapshots();
+      }
+    }
   }
 
   async function resume(id, btn) {

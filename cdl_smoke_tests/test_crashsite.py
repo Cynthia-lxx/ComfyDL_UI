@@ -610,6 +610,23 @@ def _frontend_motion_checks() -> None:
           and ".cs-card:hover" in css and ".cs-card:active" in css)
 
 
+def _frontend_loading_checks() -> None:
+    # 2026-11-07 M-D-0: the snapshot list could stay on the "..." placeholder
+    # forever. Every early return must clear the loading flag, and the library
+    # request must be bounded so a hung fetch cannot pin the UI.
+    import io
+    js = io.open(str(REPO_ROOT / "app" / "crashsite_assets" / "crashsite.js"),
+                 encoding="utf-8").read()
+    check("F3 crash site loading flag cleared on every early return",
+          "const clearLoading = () => {" in js
+          and js.count("clearLoading(); return;") >= 2
+          and "state.loading = false;" in js)
+    check("F4 crash site library request bounded + finally cleanup",
+          "Promise.race([api.fetchApi(SNAPSHOTS_URL), timeout]" in js
+          and "clearTimeout(timer)" in js
+          and "finally {" in js)
+
+
 def main() -> int:
     _serialize_checks()
     _store_checks()
@@ -617,6 +634,7 @@ def main() -> int:
     _provider_checks()
     _route_checks()
     _frontend_motion_checks()
+    _frontend_loading_checks()
     return report()
 
 
