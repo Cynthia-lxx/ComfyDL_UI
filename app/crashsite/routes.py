@@ -108,7 +108,19 @@ async def enabled_post(request: web.Request) -> web.Response:
 
 @routes.get("/comfydl/crashsite/snapshots")
 async def snapshots_list(request: web.Request) -> web.Response:
-    return web.json_response({"snapshots": store.list_snapshots()})
+    """List captured scenes without stalling the server event loop.
+
+    ``store.list_snapshots()`` opens two SQLite connections per historical
+    snapshot and full-scans ``node_outputs`` twice; the library only grows.
+    Running it inline here used to block ``POST /prompt``, ``POST /interrupt``
+    and every WebSocket message (they all share this loop) for seconds on real
+    machines.  Same courtesy as ``export_route`` below.
+    """
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    snapshots = await loop.run_in_executor(None, store.list_snapshots)
+    return web.json_response({"snapshots": snapshots})
 
 
 @routes.get("/comfydl/crashsite/snapshots/{snapshot_id}/detail")

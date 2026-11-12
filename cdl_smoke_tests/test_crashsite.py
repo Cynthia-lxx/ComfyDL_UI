@@ -627,6 +627,19 @@ def _frontend_loading_checks() -> None:
           and "finally {" in js)
 
 
+def _route_offloop_checks() -> None:
+    # 2026-11-12 M-D-0b (P0-1): listing snapshots is O(number of snapshots)
+    # with two full table scans per snapshot, and the library never shrinks.
+    # It must not run inline in the aiohttp handler, or POST /prompt,
+    # POST /interrupt and all WebSocket messages stall behind it.
+    import io
+    src = io.open(str(REPO_ROOT / "app" / "crashsite" / "routes.py"),
+                  encoding="utf-8").read()
+    check("F5 snapshots list runs off the aiohttp event loop",
+          "run_in_executor(None, store.list_snapshots)" in src
+          and 'web.json_response({"snapshots": snapshots})' in src)
+
+
 def main() -> int:
     _serialize_checks()
     _store_checks()
@@ -635,6 +648,7 @@ def main() -> int:
     _route_checks()
     _frontend_motion_checks()
     _frontend_loading_checks()
+    _route_offloop_checks()
     return report()
 
 
