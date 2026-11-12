@@ -1,0 +1,111 @@
+/* ComfyDL Observation panel (M-D P6 CRAFT 1).
+ *
+ * Shares the profiler's card vocabulary so the new tab looks native. Host CSS
+ * variables only; no monospace fonts and no external assets.
+ */
+.obs-host.cdlp-panel {
+  font-family: "Roboto", "Noto Sans SC", sans-serif;
+  font-size: 13px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.obs-host .cdlp-card {
+  background: var(--comfy-input-bg, rgba(31, 31, 31, 0.85));
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+.obs-host .cdlp-card:hover { border-color: var(--border-color, #4a4a4a); }
+.obs-host .cdlp-card:active { transform: translateY(1px); }
+
+.obs-host .cdlp-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--input-text-read-only, #9a9a9a);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.obs-host .cdlp-collapse-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.obs-host .cdlp-title-right { display: flex; align-items: center; gap: 8px; }
+.obs-host .cdlp-hint {
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.obs-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #3a3a3a);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--input-text-read-only, #9a9a9a);
+}
+.obs-badge-on { color: #3ddc97; border-color: #2f7f61; }
+
+.obs-off { margin-bottom: 8px; }
+.obs-enable {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #3a3a3a);
+  background: var(--comfy-input-bg, rgba(45, 45, 45, 0.9));
+  color: var(--input-text, #ddd);
+  font: inherit;
+  cursor: pointer;
+}
+.obs-enable:hover { border-color: #4a9eff; }
+.obs-enable:disabled { opacity: 0.55; cursor: default; }
+.obs-enable[hidden], .obs-off[hidden], .obs-rows[hidden] { display: none; }
+
+.obs-rows { display: flex; flex-direction: column; gap: 6px; }
+.obs-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.obs-row span { color: var(--input-text-read-only, #9a9a9a); }
+.obs-row b { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.obs-chart-wrap {
+  margin-top: 4px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  height: 72px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+.obs-chart { display: block; width: 100%; height: 100%; }
+.obs-line { stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.obs-line-cpu { stroke: #4a9eff; }
+.obs-line-ram { stroke: #f5a524; }
+.obs-line-vram { stroke: #3ddc97; }
+
+@keyframes obs-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.obs-entrance { animation: obs-card-in 320ms ease-out backwards; }
+
+/* gates: UI motion master / App Panel motion / reduced-motion exemption */
+html.cdl-motion-off .obs-entrance,
+body.cdlapp-motion-off .obs-entrance { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .obs-entrance { animation: none !important; }
+  .obs-host .cdlp-card { transition: none !important; }
+}

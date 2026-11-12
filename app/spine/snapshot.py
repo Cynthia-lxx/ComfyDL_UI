@@ -7,8 +7,9 @@ complete old snapshot or a complete new one.  ``schema_version`` lets the
 frontend dispatch by contract revision instead of guessing field presence
 (the attention-benchmark ``benchmark_db.json`` lesson).
 
-First-phase fields are CPU/RAM only; ``gpu`` stays ``None`` until the NVML
-provider lands in P6 - consumers must treat it as optional from day one.
+``gpu`` is optional: the P6 ``GpuProvider`` fills it with a dict (or
+``{"available": false}`` on CPU-only machines), but hand-built snapshots and
+older producers may still leave it ``None``.  Consumers must tolerate both.
 """
 
 from __future__ import annotations
@@ -18,7 +19,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 #: Bump when the field set changes incompatibly; readers dispatch on this.
-SNAPSHOT_SCHEMA_VERSION = 1
+#: v2 (P6): ``gpu`` is now populated by ``GpuProvider``.  Every v1 field keeps
+#: its name and type, so older consumers remain compatible.
+SNAPSHOT_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -31,7 +34,7 @@ class CdlSnapshot:
     ram: Dict[str, Any] = field(default_factory=dict)
     #: This process's own CPU/RSS (the watchdog's primary signal).
     proc: Dict[str, Any] = field(default_factory=dict)
-    #: Filled by the NVML provider in P6; ``None`` until then.
+    #: Filled by ``GpuProvider`` in P6; ``None`` for hand-built/v1 snapshots.
     gpu: Optional[Dict[str, Any]] = None
 
     @classmethod

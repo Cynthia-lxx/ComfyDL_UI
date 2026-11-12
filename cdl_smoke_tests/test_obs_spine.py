@@ -49,7 +49,7 @@ def _snapshot_checks() -> None:
     snap = CdlSnapshot.now(cpu={"percent": 12.5}, ram={"used_mb": 1},
                            proc={"cpu_percent": 3.0})
     check("T1a snapshot: schema version constant exported and folded in",
-          snap.schema_version == SNAPSHOT_SCHEMA_VERSION == 1
+          snap.schema_version == SNAPSHOT_SCHEMA_VERSION == 2
           and isinstance(SNAPSHOT_SCHEMA_VERSION, int))
     check("T1b snapshot: frozen - attribute writes raise",
           _raises(lambda: setattr(snap, "cpu", {}), dataclasses.FrozenInstanceError))
@@ -202,11 +202,12 @@ def _spine_bus_checks() -> None:
     while time.perf_counter() < deadline and spine.snapshot() is None:
         time.sleep(0.02)
     snap = spine.snapshot()
-    check("T4c spine: first tick arrives and fills every section",
+    check("T4c spine: first tick fills every section incl. the P6 gpu dict",
           snap is not None and "percent" in snap.cpu and "used_mb" in snap.ram
-          and "cpu_percent" in snap.proc and snap.gpu is None)
-    check("T4d spine: listeners receive the same immutable snapshots",
-          len(got) >= 1 and all(s.schema_version == 1 for s in got))
+          and "cpu_percent" in snap.proc and isinstance(snap.gpu, dict)
+          and "available" in snap.gpu)
+    check("T4d spine: listeners receive the same immutable v2 snapshots",
+          len(got) >= 1 and all(s.schema_version == 2 for s in got))
     spine.remove_listener(got.append)
 
     class _Boom:
@@ -384,9 +385,57 @@ def _wait_true_sync(fn, timeout: float = 2.0) -> bool:
     return False
 
 
+# ------------------------------------------------------------------ T7 ----
+def _gpu_provider_checks() -> None:
+    import torch
+
+    from app.spine.providers import GpuProvider, default_providers
+    from app.spine.snapshot import SNAPSHOT_SCHEMA_VERSION
+
+    check("T7a P6: snapshot contract is v2 with v1 fields intact",
+          SNAPSHOT_SCHEMA_VERSION == 2)
+    check("T7b P6: gpu provider joins default_providers",
+          any(getattr(p, "fields", "") == "gpu" for p in default_providers()))
+    result = GpuProvider().poll()
+    check("T7c P6: gpu poll never raises and always reports availability",
+          isinstance(result, dict) and isinstance(result.get("available"), bool))
+    check("T7d P6: CPU-only boxes degrade to available=false",
+          torch.cuda.is_available() or result.get("available") is False)
+
+
+# ------------------------------------------------------------------ T8 ----
+def _obs_panel_checks() -> None:
+    """Static contract checks for the P6 CRAFT 1 independent sidebar tab."""
+    js_path = REPO_ROOT / "app" / "obs_assets" / "obs.js"
+    css_path = REPO_ROOT / "app" / "obs_assets" / "obs.css"
+    js = js_path.read_text(encoding="utf-8") if js_path.is_file() else ""
+    css = css_path.read_text(encoding="utf-8") if css_path.is_file() else ""
+    patch = (REPO_ROOT / "app" / "frontend_patch.py").read_text(encoding="utf-8")
+    server = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+
+    check("T8a P6: obs assets, loader and static route are wired",
+          bool(js) and bool(css)
+          and "OBS_LOADER_MARK" in patch and "_patch_obs_loader" in patch
+          and "web.static('/comfydl/obs', obs_assets)" in server)
+    check("T8b P6: independent sidebar tab with official fields + cleanup",
+          "registerSidebarTab" in js and 'type: "custom"' in js
+          and "comfydl-obs" in js and "return () =>" in js
+          and 'removeEventListener("cdl.spine"' in js)
+    check("T8c P6: one cdl.spine channel, off guidance, native card vocabulary",
+          'addEventListener("cdl.spine"' in js and "off_hint" in js
+          and "PATCH" in js and "cdlp-card" in js
+          and "setInterval" in js)
+    check("T8d P6: three motion gates honoured",
+          "html.cdl-motion-off" in css
+          and "body.cdlapp-motion-off" in css
+          and "prefers-reduced-motion" in css)
+
+
 # ------------------------------------------------------------------ main --
 def _main() -> int:
     _snapshot_checks()
+    _gpu_provider_checks()
+    _obs_panel_checks()
     _registry_checks()
     _signature_cache_checks()
     _spine_bus_checks()

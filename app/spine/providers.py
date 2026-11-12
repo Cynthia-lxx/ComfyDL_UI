@@ -13,7 +13,8 @@ one-thread-many-providers instead of a thread per provider):
   CPU call is non-blocking (interval=None compares against the previous
   invocation), RAM reads ``virtual_memory`` once.
 
-NVML/GPU arrives in P6 as another provider; no bus changes will be needed.
+GPU arrives in P6 as another provider (``GpuProvider``); no bus changes were
+needed - ``Spine._poll`` already routes a ``"gpu"`` section into CdlSnapshot.
 """
 
 from __future__ import annotations
@@ -123,7 +124,71 @@ class ProcessProvider(Provider):
         }
 
 
+class GpuProvider(Provider):
+    """Device-level VRAM snapshot for P6 (soft dependency, never raises).
+
+    The primary signal is the project's existing torch accounting
+    (``comfy.vram_manager.measure_device_usage``), which also covers HIP and
+    needs no native DLL.  ``pynvml`` is an OPTIONAL enrichment for GPU
+    utilisation / temperature - it is never installed at runtime and a failed
+    import simply skips that enrichment.
+
+    CPU-only machines get ``{"available": false, "reason": "no_cuda"}``: a
+    value, not an exception, so the bus keeps broadcasting complete snapshots.
+    """
+
+    fields = "gpu"
+
+    _MEASURE_KEYS = (
+        "device", "total_gib", "free_gib", "used_gib",
+        "torch_reserved_gib", "torch_allocated_gib", "external_gib",
+    )
+
+    def __init__(self) -> None:
+        self._nvml = None
+        self._nvml_tried = False
+
+    def poll(self) -> Dict[str, Any]:
+        try:
+            from comfy.vram_manager import measure_device_usage
+
+            usage = measure_device_usage() or {}
+        except Exception as exc:  # noqa: BLE001 - never kill the bus loop
+            return {"available": False, "reason": "measure_failed",
+                    "error": str(exc)}
+        if usage.get("device") is None:
+            return {"available": False, "reason": "no_cuda"}
+        out: Dict[str, Any] = {"available": True, "source": "torch"}
+        out.update({k: usage[k] for k in self._MEASURE_KEYS if k in usage})
+        nvml = self._nvml_state()
+        if nvml is not None:
+            try:
+                handle = nvml.nvmlDeviceGetHandleByIndex(0)
+                rates = nvml.nvmlDeviceGetUtilizationRates(handle)
+                out["nvml"] = {
+                    "gpu_percent": int(rates.gpu),
+                    "mem_percent": int(rates.memory),
+                    "temperature_c": int(nvml.nvmlDeviceGetTemperature(
+                        handle, nvml.NVML_TEMPERATURE_GPU)),
+                }
+            except Exception:  # noqa: BLE001 - best-effort enrichment only
+                pass
+        return out
+
+    def _nvml_state(self):
+        if self._nvml_tried:
+            return self._nvml
+        self._nvml_tried = True
+        try:
+            import pynvml
+
+            pynvml.nvmlInit()
+            self._nvml = pynvml
+        except Exception:  # noqa: BLE001 - soft dependency, no auto-install
+            self._nvml = None
+        return self._nvml
+
+
 def default_providers():
-    """The provider list the bus starts with (CPU + RAM + this-process;
-    system GPU joins in P6)."""
-    return [PsutilProvider(), RamProvider(), ProcessProvider()]
+    """The provider list the bus starts with (CPU + RAM + this-process + GPU)."""
+    return [PsutilProvider(), RamProvider(), ProcessProvider(), GpuProvider()]

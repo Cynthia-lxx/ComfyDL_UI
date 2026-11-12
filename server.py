@@ -1386,6 +1386,12 @@ class PromptServer():
         if os.path.isdir(dataops_assets):
             self.app.add_routes([web.static('/comfydl/dataops', dataops_assets)])
 
+        obs_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "obs_assets"
+        )
+        if os.path.isdir(obs_assets):
+            self.app.add_routes([web.static('/comfydl/obs', obs_assets)])
+
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True
         if installed_templates_version:

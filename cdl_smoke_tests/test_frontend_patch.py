@@ -27,8 +27,10 @@ if str(REPO_ROOT) not in sys.path:
 from app.frontend_patch import (  # noqa: E402
     DEFAULT_WORKFLOW_MARK,
     DEFAULT_WORKFLOW_TEMPLATE,
+    OBS_LOADER_MARK,
     STARTUP_WORKFLOW_MARK,
     _patch_default_workflow,
+    _patch_obs_loader,
     _patch_startup_workflow,
     _upgrade_baked_template_url,
     apply_frontend_patches,
@@ -98,6 +100,13 @@ def main() -> int:
             (p.name, p.stat().st_mtime) for p in assets.glob("settingStore-*.js")
         )
         check("real frontend: re-apply is a no-op", before == after)
+        # P6 observation panel: independent sidebar tab loader.
+        index_text = (web_root / "index.html").read_text(encoding="utf-8")
+        check("real frontend: obs panel loader injected exactly once",
+              index_text.count(OBS_LOADER_MARK) == 1
+              and "/comfydl/obs/obs.js" in index_text)
+        check("real frontend: obs loader re-apply is a no-op",
+              _patch_obs_loader(web_root) is False)
 
     # --- synthetic chunk: happy path ---------------------------------------- #
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_fepatch_"))

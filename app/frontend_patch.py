@@ -88,6 +88,14 @@ DATAOPS_LOADER_TAG = (
 )
 DATAOPS_LOADER_MARK = "<!--ComfyDL_UI:dataops-loader-->"
 
+# The Observation panel (M-D P6): an independent sidebar tab for live
+# CPU/RAM/VRAM sampling. Same loader pattern; inert until its tab is opened.
+OBS_LOADER_TAG = (
+    '<!--ComfyDL_UI:obs-loader-->'
+    '<script type="module" src="/comfydl/obs/obs.js"></script>'
+)
+OBS_LOADER_MARK = "<!--ComfyDL_UI:obs-loader-->"
+
 # The Motion module (staged entrance + ripple): a loader script before </body>
 # plus the entrance pre-hide CSS in the <head>. The CSS must ship in the head
 # (not be injected by motion.js at runtime) so it is already in the CSSOM when
@@ -389,6 +397,13 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("dataops loader")
     except Exception as exc:
         logging.warning(f"{TAG} dataops loader not applied: {exc}")
+
+    # The Observation panel (M-D P6): independent sidebar tab, same channel.
+    try:
+        if _patch_obs_loader(Path(web_root)):
+            applied.append("obs loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} obs loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -954,6 +969,26 @@ def _patch_crashsite_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", CRASHSITE_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} crashsite panel loader injected into {path.name}")
+    return True
+
+
+def _patch_obs_loader(web_root: Path) -> bool:
+    """Inject the Observation panel's module loader into ``index.html``.
+
+    Same pattern as :func:`_patch_profiling_loader`: the panel's JS/CSS are
+    repository assets served by ``server.py`` from ``/comfydl/obs/``; this
+    patch only adds the one ``<script>`` tag before ``</body>``.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if OBS_LOADER_MARK in text:
+        logging.debug(f"{TAG} obs loader already applied")
+        return False
+
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", OBS_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} observation panel loader injected into {path.name}")
     return True
 
 
