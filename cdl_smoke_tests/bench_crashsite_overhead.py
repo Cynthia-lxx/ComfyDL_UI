@@ -8,13 +8,25 @@ reduction can be measured on BOTH machines before and after the fix:
     P (CPU): penv\\Scripts\\python.exe cdl_smoke_tests\\bench_crashsite_overhead.py
     F (GPU): penv_new\\Scripts\\python.exe cdl_smoke_tests\\bench_crashsite_overhead.py
 
+SCOPE CAVEAT (2026-11-12, user-reported real-machine behaviour):
+    This benchmark measures ONLY the in-process executor path. It has no
+    aiohttp server, no browser, no WebSocket events, no prompt queue and no
+    interrupt path. The user's real-machine symptoms (5-15s delay after every
+    run starts, laggy interrupt, ~2x slower inference with Crash Site on) come
+    from paths this script cannot see - notably the synchronous full-library
+    scan in ``GET /comfydl/crashsite/snapshots`` blocking the server event
+    loop, and ``train_checkpoint.run_key`` hashing whole tensors. Therefore
+    the numbers here MUST NOT be used to accept or reject T6-1 on their own;
+    T6-1 acceptance needs an end-to-end server/queue benchmark. See
+    ``2026-10-31-dual-track-smallplans.md`` section 0.84.6.
+
 NOT part of the default smoke suite: wall-clock timing is noisy (especially
 on the USB CPU drive), so this is a hand-run benchmark, like
 ``bench_dataio_cache.py``. Each configuration gets one untimed warmup plus
 five timed runs; the median is reported. Configurations are sampled in a
-round-robin so machine drift cannot bias whole configuration blocks. Snapshot
-databases are written to
-a temporary user directory and removed on exit.
+round-robin so machine drift cannot bias whole configuration blocks.
+Snapshot databases are written to a temporary user directory and removed
+on exit.
 
 Method notes (keep these stable so the numbers stay comparable):
   * UI-format example workflow -> API prompt, widget values resolved against
