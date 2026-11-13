@@ -436,9 +436,54 @@ def _obs_panel_checks() -> None:
           and 'data-collapsed="1"]' in css and 'data-hidden="1"]' in css)
 
 
+# ------------------------------------------------------------------ T9 ----
+def _obs_craft2_checks() -> None:
+    """P6 CRAFT 2: drag / dock gap / execution badges / runs ledger contract."""
+    js_path = REPO_ROOT / "app" / "obs_assets" / "obs.js"
+    css_path = REPO_ROOT / "app" / "obs_assets" / "obs.css"
+    js = js_path.read_text(encoding="utf-8") if js_path.is_file() else ""
+    css = css_path.read_text(encoding="utf-8") if css_path.is_file() else ""
+    runs_routes = (REPO_ROOT / "app" / "runs_routes.py").read_text(
+        encoding="utf-8")
+
+    check("T9a CRAFT 2: pointer-capture drag writes only left/top and persists",
+          'POS_KEY = "ComfyDL.Obs.Position"' in js
+          and "setPointerCapture" in js and "pointerdown" in js
+          and "pointermove" in js and "pointerup" in js
+          and "pointercancel" in js
+          and 'root.style.left = left + "px"' in js
+          and 'root.style.top = top + "px"' in js
+          and "savePos(state.pos.left, state.pos.top)" in js
+          and "function loadPos()" in js
+          and "style.transform" not in js)
+    check("T9b CRAFT 2: default position keeps a 14px dock gap",
+          css.count("left: calc(var(--cdl-dock-left, 59px) + 14px);") == 2
+          and "--cdl-dock-left:" not in css
+          and "cursor: move" in css and "touch-action: none" in css
+          and "cdl-obs-dragging" in css)
+    check("T9c CRAFT 2: badges come from seven official exec events",
+          all(name in js for name in (
+              "execution_start", "executing", "execution_cached", "executed",
+              "execution_success", "execution_error", "execution_interrupted"))
+          and "EXEC_EVENTS" in js and "onExecEvent" in js
+          and "removeEventListener(name, handler)" in js
+          and 'typeof raw === "string"' in js
+          and all(("cdl-obs-badge-" + k) in css
+                  for k in ("ran", "cached", "blocked"))
+          and "send_sync" not in js)
+    check("T9d CRAFT 2: runs ledger is read-only, newest first, with empty state",
+          'RUNS_URL = "/comfydl/runs?limit=5"' in js
+          and '"/comfydl/runs"' in runs_routes
+          and "data.runs.slice(-5).reverse()" in js
+          and "runs_empty" in js and "cdl-obs-runs-empty" in css
+          and "No experiment runs yet" in js and "暂无实验 run" in js
+          and "refreshRuns()" in js)
+
+
 # ------------------------------------------------------------------ main --
 def _main() -> int:
     _snapshot_checks()
+    _obs_craft2_checks()
     _gpu_provider_checks()
     _obs_panel_checks()
     _registry_checks()

@@ -1,19 +1,17 @@
-/* ComfyDL Observation overlay (M-D P6, 2026-11-13 shape correction).
+/* ComfyDL Observation overlay (M-D P6, 2026-11-13 CRAFT 2).
  *
- * A minimap-sized FLOATING widget, not a sidebar tab: observation is a small
- * always-available readout and must not compete with the main canvas. It
- * supports collapse + hide, both persisted in localStorage, and defaults to
- * collapsed (same convention as the App Panel's legacy dock and the built-in
- * minimap).
+ * A minimap-sized FLOATING widget, draggable and collapsible/hidable. It is
+ * deliberately not a sidebar tab: observation is a small always-available
+ * readout and must not compete with the main canvas.
+ *
+ * Three data sources, all read-only, no new thread / WS channel / timer:
+ *   - `cdl.spine`            : 60-point CPU/RAM/VRAM trends + VRAM GiB + proc CPU
+ *   - official exec WS events: ran / cached / blocked badges
+ *   - GET /comfydl/runs      : recent experiment/scan ledger rows
  *
  * De-duplication: the Crystools status text at the bottom-left already shows
- * instantaneous CPU/RAM/VRAM percentages (and, from other sources, FPS). This
- * widget therefore shows what that text cannot: 60-point trends, absolute VRAM
- * GiB, this process's own CPU, and the spine schema / switch state.
- *
- * Data layer is unchanged from CRAFT 1: the single `cdl.spine` WS channel, the
- * two spine REST endpoints, no new thread / channel / polling timer, and the
- * switch stays OFF by default until the user opts in.
+ * instantaneous CPU/RAM/VRAM percentages, so this widget shows trends and
+ * absolute values instead.
  */
 (() => {
   "use strict";
@@ -23,10 +21,18 @@
   const REOPEN_ID = "cdl-obs-reopen";
   const SPINE_URL = "/comfydl/spine";
   const SNAPSHOT_URL = "/comfydl/spine/snapshot";
+  const RUNS_URL = "/comfydl/runs?limit=5";
   const COLLAPSE_KEY = "ComfyDL.Obs.Collapsed";
   const HIDDEN_KEY = "ComfyDL.Obs.Hidden";
+  const POS_KEY = "ComfyDL.Obs.Position";
   const MAX_POINTS = 60;
   const SVG_NS = "http://www.w3.org/2000/svg";
+
+  // Official execution events (execution.py), used for ran/cached/blocked.
+  const EXEC_EVENTS = [
+    "execution_start", "executing", "execution_cached", "executed",
+    "execution_success", "execution_error", "execution_interrupted",
+  ];
 
   // The official frontend only auto-loads .js files; CSS must be injected.
   if (!document.querySelector("link[data-cdl-obs-css]")) {
@@ -40,7 +46,7 @@
   const I18N = {
     en: {
       title: "Observation",
-      tooltip: "Live resource trends (ComfyDL spine)",
+      tooltip: "Live resource trends, execution badges and experiment runs",
       off_hint: "Monitoring is off. The sampling thread starts only when enabled.",
       enable: "Enable monitoring",
       enabling: "enabling...",
@@ -53,10 +59,13 @@
       proc: "Process CPU", vram: "VRAM", no_gpu: "No CUDA device",
       schema: "schema v",
       dedup: "Instantaneous values are in the bottom-left status text.",
+      exec_title: "Execution", runs_title: "Experiment runs",
+      ran: "ran", cached: "cached", blocked: "blocked",
+      runs_empty: "No experiment runs yet - only experiment/scan nodes write here.",
     },
     zh: {
       title: "观测",
-      tooltip: "实时资源趋势（ComfyDL spine）",
+      tooltip: "实时资源趋势、执行徽章与实验 runs",
       off_hint: "监控未开启。采样线程只会在启用后启动。",
       enable: "启用监控",
       enabling: "正在启用...",
@@ -69,6 +78,9 @@
       proc: "进程 CPU", vram: "显存", no_gpu: "无 CUDA 设备",
       schema: "协议 v",
       dedup: "瞬时数值见左下角状态栏，此处显示趋势与绝对值。",
+      exec_title: "执行", runs_title: "实验 runs",
+      ran: "执行", cached: "缓存", blocked: "受阻",
+      runs_empty: "暂无实验 run——只有实验 / 扫描节点会写入。",
     },
   };
 
@@ -107,6 +119,10 @@
     }[c]));
   }
 
+  function clamp(value, lo, hi) {
+    return Math.max(lo, Math.min(hi, value));
+  }
+
   function loadBool(key, fallback) {
     try {
       const raw = localStorage.getItem(key);
@@ -118,16 +134,38 @@
     try { localStorage.setItem(key, value ? "1" : "0"); } catch (e) { /* private mode */ }
   }
 
+  function loadPos() {
+    try {
+      const raw = localStorage.getItem(POS_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (Number.isFinite(p?.left) && Number.isFinite(p?.top)) return p;
+    } catch (e) { /* corrupt payload -> use the CSS default */ }
+    return null;
+  }
+
+  function savePos(left, top) {
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ left, top })); }
+    catch (e) { /* private mode */ }
+  }
+
   const state = {
     overlayEl: null,
     reopenEl: null,
     refs: null,
     eventApi: null,
     handler: null,
+    execHandlers: {},
     enabled: false,
     sample: null,
     collapsed: loadBool(COLLAPSE_KEY, true),
     hidden: loadBool(HIDDEN_KEY, false),
+    pos: loadPos(),
+    exec: {
+      ran: 0, cached: 0, blocked: 0, active: false,
+      cachedNodes: new Set(), ranNodes: new Set(),
+    },
+    runs: [],
     hist: { cpu: [], ram: [], vram: [] },
   };
 
@@ -148,7 +186,7 @@
     root.className = "cdl-obs-overlay obs-entrance";
     root.title = t("tooltip");
     root.innerHTML =
-      '<div class="cdl-obs-head">' +
+      '<div class="cdl-obs-head" data-obs="head">' +
         '<span class="cdl-obs-title">' + esc(t("title")) + "</span>" +
         '<span class="cdl-obs-badge" data-obs="badge">' + esc(t("badge_off")) + "</span>" +
         '<button type="button" class="cdl-obs-btn" data-obs="collapse">+</button>' +
@@ -170,6 +208,16 @@
           '<div class="cdl-obs-meta" data-obs="vram"></div>' +
           '<div class="cdl-obs-dedup">' + esc(t("dedup")) + "</div>" +
           '<div class="cdl-obs-schema" data-obs="meta"></div>' +
+        "</div>" +
+        '<div class="cdl-obs-extra">' +
+          '<div class="cdl-obs-section-title">' + esc(t("exec_title")) + "</div>" +
+          '<div class="cdl-obs-badges">' +
+            '<span class="cdl-obs-badge-item cdl-obs-badge-ran" data-obs="badge-ran"></span>' +
+            '<span class="cdl-obs-badge-item cdl-obs-badge-cached" data-obs="badge-cached"></span>' +
+            '<span class="cdl-obs-badge-item cdl-obs-badge-blocked" data-obs="badge-blocked"></span>' +
+          "</div>" +
+          '<div class="cdl-obs-section-title">' + esc(t("runs_title")) + "</div>" +
+          '<div class="cdl-obs-runs" data-obs="runs"></div>' +
         "</div>" +
       "</div>";
     document.body.appendChild(root);
@@ -198,6 +246,7 @@
     root.querySelector('[data-obs="hide"]').addEventListener("click", hideOverlay);
     root.querySelector('[data-obs="enable"]').addEventListener("click", enableSpine);
     reopen.addEventListener("click", showOverlay);
+    setupDrag(root, root.querySelector('[data-obs="head"]'));
 
     state.overlayEl = root;
     state.reopenEl = reopen;
@@ -210,6 +259,12 @@
       proc: root.querySelector('[data-obs="proc"]'),
       vram: root.querySelector('[data-obs="vram"]'),
       meta: root.querySelector('[data-obs="meta"]'),
+      runs: root.querySelector('[data-obs="runs"]'),
+      badges: {
+        ran: root.querySelector('[data-obs="badge-ran"]'),
+        cached: root.querySelector('[data-obs="badge-cached"]'),
+        blocked: root.querySelector('[data-obs="badge-blocked"]'),
+      },
       lines: {
         cpu: root.querySelector('[data-obs="cpu-line"]'),
         ram: root.querySelector('[data-obs="ram-line"]'),
@@ -217,6 +272,70 @@
       },
     };
     applyShape();
+    applyPosition();
+    renderBadges();
+    renderRuns();
+  }
+
+  function setupDrag(root, handle) {
+    if (!handle) return;
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || (event.target.closest && event.target.closest("button"))) return;
+      const rect = root.getBoundingClientRect();
+      const start = {
+        x: event.clientX, y: event.clientY, left: rect.left, top: rect.top,
+      };
+      handle.setPointerCapture(event.pointerId);
+      root.classList.add("cdl-obs-dragging");
+      event.preventDefault();
+
+      const onMove = (ev) => {
+        const width = root.offsetWidth || 240;
+        const height = root.offsetHeight || 44;
+        const left = clamp(start.left + ev.clientX - start.x, 0,
+          Math.max(0, window.innerWidth - width));
+        const top = clamp(start.top + ev.clientY - start.y, 0,
+          Math.max(0, window.innerHeight - height));
+        root.style.left = left + "px";
+        root.style.top = top + "px";
+        state.pos = { left, top };
+      };
+      const onUp = (ev) => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        if (handle.hasPointerCapture?.(ev.pointerId)) {
+          handle.releasePointerCapture(ev.pointerId);
+        }
+        root.classList.remove("cdl-obs-dragging");
+        if (state.pos) {
+          if (state.reopenEl) {
+            state.reopenEl.style.left = state.pos.left + "px";
+            state.reopenEl.style.top = state.pos.top + "px";
+          }
+          savePos(state.pos.left, state.pos.top);
+        }
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  function applyPosition() {
+    const root = state.overlayEl;
+    if (!root || !state.pos) return;
+    const left = clamp(state.pos.left, 0,
+      Math.max(0, window.innerWidth - root.offsetWidth));
+    const top = clamp(state.pos.top, 0,
+      Math.max(0, window.innerHeight - root.offsetHeight));
+    root.style.left = left + "px";
+    root.style.top = top + "px";
+    state.pos = { left, top }; // the viewport may have shrunk since the save
+    if (state.reopenEl) {
+      state.reopenEl.style.left = left + "px";
+      state.reopenEl.style.top = top + "px";
+    }
   }
 
   function applyShape() {
@@ -238,6 +357,7 @@
     state.collapsed = !state.collapsed;
     saveBool(COLLAPSE_KEY, state.collapsed);
     applyShape();
+    applyPosition(); // the expanded body is taller - keep it on screen
   }
 
   function hideOverlay() {
@@ -252,6 +372,7 @@
     saveBool(HIDDEN_KEY, false);
     saveBool(COLLAPSE_KEY, false);
     applyShape();
+    applyPosition();
   }
 
   function linePoints(values) {
@@ -317,6 +438,107 @@
     r.meta.textContent = t("schema") + (s.schema_version ?? "?");
   }
 
+  function renderBadges() {
+    if (!state.refs) return;
+    for (const [key, el] of Object.entries(state.refs.badges)) {
+      el.textContent = t(key) + " " + state.exec[key];
+      el.classList.toggle("cdl-obs-badge-zero", state.exec[key] === 0);
+    }
+  }
+
+  function renderRuns() {
+    if (!state.refs) return;
+    const host = state.refs.runs;
+    if (!state.runs.length) {
+      host.innerHTML = '<div class="cdl-obs-runs-empty">' +
+        esc(t("runs_empty")) + "</div>";
+      return;
+    }
+    host.innerHTML = state.runs.map((run) => {
+      const name = String(run.experiment || run.run_id || "run");
+      const status = String(run.status || "");
+      const cls = status === "failed"
+        ? "cdl-obs-run-failed" : "cdl-obs-run-completed";
+      return '<div class="cdl-obs-run"><span class="cdl-obs-run-name">' +
+        esc(name) + '</span><span class="cdl-obs-run-status ' + cls + '">' +
+        esc(status) + "</span></div>";
+    }).join("");
+  }
+
+  function onExecEvent(name, payload) {
+    // Official frontend events are CustomEvents whose `detail` is the raw WS
+    // payload. `executing` carries a BARE node id string (see cdlapp.js
+    // onExecuting, live-verified 2026-10-30) and null when the queue idles;
+    // the other execution events carry objects.
+    const raw = payload?.detail ?? payload?.data;
+    const d = raw && typeof raw === "object" ? raw : {};
+    const bareId = typeof raw === "string" ? raw : null;
+    const ex = state.exec;
+    switch (name) {
+      case "execution_start":
+        ex.ran = 0; ex.cached = 0; ex.blocked = 0;
+        ex.cachedNodes = new Set(); ex.ranNodes = new Set();
+        ex.active = true;
+        break;
+      case "execution_cached":
+        (d.nodes || []).forEach((n) => ex.cachedNodes.add(String(n)));
+        ex.cached = ex.cachedNodes.size;
+        break;
+      case "executing":
+        if (raw === null || raw === undefined) { ex.active = false; break; }
+        {
+          const nodeId = bareId ?? d.display_node ?? d.node ?? d.node_id;
+          if (nodeId !== null && nodeId !== undefined &&
+              !ex.cachedNodes.has(String(nodeId))) {
+            ex.ranNodes.add(String(nodeId));
+          }
+        }
+        ex.ran = ex.ranNodes.size;
+        break;
+      case "executed":
+        if (bareId !== null && !ex.cachedNodes.has(bareId)) {
+          ex.ranNodes.add(bareId);
+        }
+        if (d.node != null && !ex.cachedNodes.has(String(d.node))) {
+          ex.ranNodes.add(String(d.node));
+        }
+        ex.ran = ex.ranNodes.size;
+        break;
+      case "execution_error":
+        // "ExecutionBlocked" (execution.py:528-542) and ordinary failures both
+        // mean the node never produced an output -> count as blocked.
+        ex.blocked += 1;
+        ex.active = false;
+        break;
+      case "execution_interrupted":
+        ex.blocked += 1;
+        ex.active = false;
+        break;
+      case "execution_success":
+        ex.active = false;
+        refreshRuns();
+        break;
+      default:
+        break;
+    }
+    renderBadges();
+  }
+
+  async function refreshRuns() {
+    const api = getApi(getApp());
+    if (!api || typeof api.fetchApi !== "function") return;
+    try {
+      const resp = await api.fetchApi(RUNS_URL);
+      if (resp.ok) {
+        const data = await resp.json();
+        // read_index() already keeps the newest N, oldest first.
+        state.runs = Array.isArray(data?.runs)
+          ? data.runs.slice(-5).reverse() : [];
+      }
+    } catch (e) { state.runs = []; }
+    renderRuns();
+  }
+
   async function refreshState() {
     const api = getApi(getApp());
     if (!api || typeof api.fetchApi !== "function") return;
@@ -374,9 +596,15 @@
         renderPanel();
       };
       eventApi.addEventListener("cdl.spine", state.handler);
+      for (const name of EXEC_EVENTS) {
+        const handler = (event) => onExecEvent(name, event);
+        state.execHandlers[name] = handler;
+        eventApi.addEventListener(name, handler);
+      }
     }
     renderPanel();
     refreshState();
+    refreshRuns();
     return true;
   }
 
@@ -384,15 +612,24 @@
     if (state.eventApi && state.handler &&
         typeof state.eventApi.removeEventListener === "function") {
       state.eventApi.removeEventListener("cdl.spine", state.handler);
+      for (const [name, handler] of Object.entries(state.execHandlers)) {
+        state.eventApi.removeEventListener(name, handler);
+      }
     }
     state.eventApi = null;
     state.handler = null;
+    state.execHandlers = {};
     if (state.overlayEl?.parentNode) state.overlayEl.parentNode.removeChild(state.overlayEl);
     if (state.reopenEl?.parentNode) state.reopenEl.parentNode.removeChild(state.reopenEl);
     state.overlayEl = null;
     state.reopenEl = null;
     state.refs = null;
     state.sample = null;
+    state.runs = [];
+    state.exec = {
+      ran: 0, cached: 0, blocked: 0, active: false,
+      cachedNodes: new Set(), ranNodes: new Set(),
+    };
     for (const key of Object.keys(state.hist)) state.hist[key] = [];
   }
 
