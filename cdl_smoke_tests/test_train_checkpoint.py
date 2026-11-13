@@ -206,10 +206,66 @@ def _training_loop_checks() -> None:
             f.unlink(missing_ok=True)
 
 
+# ------------------------------- P0-3: cheap tensor identity --------------
+def _p03_checks() -> None:
+    """M-D T6-1 P0-3: bounded digest cost, content sensitivity, K1 intact."""
+    import hashlib
+
+    import comfy.train_checkpoint as tc
+
+    # Small tensors stay byte-exact - this is what K1's payload check relies on.
+    small = torch.arange(3, dtype=torch.float32)
+    d = tc._digest(small)["__tensor__"]
+    check("P3-a small tensors keep a full byte-exact digest",
+          d["numel"] == 3 and d["sampled"] == 3 and d["stride"] == [1],
+          str(d))
+
+    # A 4M-element float32 tensor is 16 MiB.  The old code copied and hashed
+    # all of it; the bounded sampler must never hash more than a few tens of KiB.
+    big = torch.zeros(4_000_000, dtype=torch.float32)
+    seen: list = []
+    original = hashlib.sha256
+
+    def spy(data):
+        seen.append(len(data))
+        return original(data)
+
+    hashlib.sha256 = spy
+    try:
+        key_big = tc.run_key({"node": "P3", "x": big})
+    finally:
+        hashlib.sha256 = original
+    check("P3-b digest cost is O(1) in tensor size",
+          len(key_big) == 32 and bool(seen)
+          and max(seen) <= 64 * 1024, str(seen))
+
+    d_big = tc._digest(big)["__tensor__"]
+    check("P3-c large tensors report a fixed sample budget",
+          d_big["numel"] == 4_000_000
+          and d_big["sampled"] <= tc.TENSOR_SAMPLE_ELEMS + 5,
+          str(d_big.get("sampled")))
+
+    # Head / quarter / middle / tail anchors must all change the key, even
+    # when they fall between evenly spaced sample points.
+    base_key = tc.run_key({"node": "P3", "x": big})
+    for label, pos in (("head", 0), ("quarter", 1_000_000),
+                       ("middle", 2_000_000), ("tail", 3_999_999)):
+        edited = big.clone()
+        edited[pos] = 1.0
+        check(f"P3-d key stays sensitive to a {label} edit",
+              tc.run_key({"node": "P3", "x": edited}) != base_key, label)
+
+    # Metadata is part of the identity too: same bytes, different shape.
+    check("P3-e shape/dtype metadata is part of the identity",
+          tc.run_key({"x": torch.zeros(2, 3)})
+          != tc.run_key({"x": torch.zeros(6)}))
+
+
 def main() -> int:
     _helper_checks()
     _roundtrip_checks()
     _training_loop_checks()
+    _p03_checks()
     return report()
 
 

@@ -36,11 +36,27 @@ site's lazy capture).
 
 Master switch (2026-10-28): the whole helper consults
 ``comfy.crashsite_switch.is_master_enabled()``.  When the crash site is
-disabled every entry point short-circuits *before* doing any work - most
-importantly ``run_key`` skips the tensor SHA256 digests (a CPU copy +
-hash of the full training tensors, done once per training execution), and
+disabled every entry point short-circuits *before* doing any work -
+``run_key`` returns ``""`` without touching a single tensor, and
 ``save`` / ``load`` / ``discard`` become no-ops.  The trainer nodes need no
 changes: they hold an empty run key and every helper answers "nothing to do".
+
+Cheap tensor identity (M-D T6-1 P0-3, 2026-11-13)
+-------------------------------------------------
+The original ``_digest`` copied every training tensor to CPU and SHA256'd
+its entire byte buffer on each execution - a GPU->CPU sync plus an O(numel)
+hash, the second main suspect behind the user-measured ~2x inference
+slowdown with crash site enabled.  ``_digest`` now hashes a FIXED-BUDGET
+sample instead: tensors up to ``TENSOR_SAMPLE_ELEMS`` are still hashed in
+full (so small inputs keep byte-exact identity), larger ones contribute
+evenly spaced samples plus head / middle / tail anchors, together with
+shape / dtype / stride / numel.  The CPU transfer is bounded to a few tens
+of KiB regardless of tensor size, and the 5 training callers stay untouched.
+
+This changes the key scheme: checkpoints written by older builds no longer
+match a resumed run's ``run_key``.  ``load()`` already treats a mismatched
+key as a foreign file and discards it, so an old interrupted checkpoint is
+safely ignored (training restarts from step 0) rather than mis-restored.
 """
 
 from __future__ import annotations
@@ -53,6 +69,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 PRUNE_DAYS = 7
+
+#: Max number of tensor ELEMENTS hashed per tensor in ``run_key``.  Small
+#: tensors keep a byte-exact digest; larger ones are sampled so the digest
+#: cost is O(1) in tensor size instead of O(numel).  See module docstring.
+TENSOR_SAMPLE_ELEMS = 4096
 
 
 def _master_on() -> bool:
@@ -96,15 +117,56 @@ def current_node_id() -> str:
         return ""
 
 
+def _tensor_digest(value: Any) -> Dict[str, Any]:
+    """Bounded, content-sensitive identity for one tensor.
+
+    What: a JSON-able fingerprint whose cost does not grow with tensor size.
+          Small tensors are hashed byte-for-byte; large ones contribute at
+          most ``TENSOR_SAMPLE_ELEMS`` evenly spaced elements plus five
+          anchors (head / quarter / middle / three-quarter / tail), avoiding
+          a full GPU->CPU copy and a full-buffer SHA256.
+    In:   any torch tensor (CPU or CUDA, contiguous or not).
+    Out:  dict with shape / dtype / stride / numel / sampled / sha256.
+    Note: ``reshape(-1)`` materialises non-contiguous tensors once - the
+          same cost the old full-tensor digest paid for every tensor.
+    """
+    import torch
+
+    flat = value.detach().reshape(-1)
+    n = int(flat.numel())
+    if n <= TENSOR_SAMPLE_ELEMS:
+        sample = flat
+    else:
+        device = value.device
+        idx = torch.linspace(0, n - 1, steps=TENSOR_SAMPLE_ELEMS,
+                             device=device).to(torch.int64)
+        anchors = torch.tensor([0, n // 4, n // 2, (3 * n) // 4, n - 1],
+                               dtype=torch.int64, device=device)
+        idx = torch.unique(torch.cat((idx, anchors)))
+        sample = flat[idx]
+    if sample.device.type != "cpu":
+        sample = sample.cpu()
+    sample = sample.contiguous()
+    try:
+        payload = sample.numpy().tobytes()
+    except (TypeError, RuntimeError):  # e.g. bfloat16 has no numpy dtype
+        payload = sample.view(torch.uint8).numpy().tobytes()
+    return {
+        "shape": list(value.shape),
+        "dtype": str(value.dtype),
+        "stride": list(value.stride()),
+        "numel": n,
+        "sampled": int(sample.numel()),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
 def _digest(value: Any) -> Any:
-    """JSON-able canonical form; tensors become (shape, dtype, sha256)."""
+    """JSON-able canonical form; tensors become a bounded fingerprint."""
     import torch
 
     if isinstance(value, torch.Tensor):
-        t = value.detach().cpu().contiguous()
-        return {"__tensor__": [list(t.shape), str(t.dtype),
-                               hashlib.sha256(t.numpy().tobytes())
-                               .hexdigest()]}
+        return {"__tensor__": _tensor_digest(value)}
     if isinstance(value, dict):
         return {str(k): _digest(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
