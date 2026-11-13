@@ -622,21 +622,24 @@ def _frontend_loading_checks() -> None:
           and js.count("clearLoading(); return;") >= 2
           and "state.loading = false;" in js)
     check("F4 crash site library request bounded + finally cleanup",
-          "Promise.race([api.fetchApi(SNAPSHOTS_URL), timeout]" in js
+          "Promise.race([api.fetchApi(" in js
+          and "timeout]" in js
           and "clearTimeout(timer)" in js
           and "finally {" in js)
 
 
 def _route_offloop_checks() -> None:
-    # 2026-11-12 M-D-0b (P0-1): listing snapshots is O(number of snapshots)
-    # with two full table scans per snapshot, and the library never shrinks.
-    # It must not run inline in the aiohttp handler, or POST /prompt,
-    # POST /interrupt and all WebSocket messages stall behind it.
+    # 2026-11-12 M-D-0b (P0-1): listing snapshots used to be O(number of
+    # snapshots) with two full table scans per snapshot, and the library
+    # never shrinks.  It must not run inline in the aiohttp handler, or
+    # POST /prompt, POST /interrupt and all WebSocket messages stall behind
+    # it.  P0-4 passes a paged call through a partial, same executor guard.
     import io
     src = io.open(str(REPO_ROOT / "app" / "crashsite" / "routes.py"),
                   encoding="utf-8").read()
     check("F5 snapshots list runs off the aiohttp event loop",
-          "run_in_executor(None, store.list_snapshots)" in src
+          "functools.partial(store.list_snapshots" in src
+          and "run_in_executor(None, paged)" in src
           and 'web.json_response({"snapshots": snapshots})' in src)
 
 
@@ -737,6 +740,32 @@ def _p02_checks() -> None:
           and "BEGIN IMMEDIATE" in src)
 
 
+def _p04_checks() -> None:
+    """T6-1 P0-4: paged endpoint, coalesced refreshes, hidden-panel gate."""
+    js = (REPO_ROOT / "app" / "crashsite_assets" / "crashsite.js").read_text(
+        encoding="utf-8")
+    routes = (REPO_ROOT / "app" / "crashsite" / "routes.py").read_text(
+        encoding="utf-8")
+    check("P0-4a list endpoint exposes clamped limit/offset",
+          'request.query.get("limit")' in routes
+          and 'request.query.get("offset")' in routes
+          and "MAX_LIST_LIMIT" in routes
+          and "functools.partial(store.list_snapshots" in routes
+          and 'web.json_response({"snapshots": snapshots})' in routes)
+    check("P0-4b page size / debounce constants and load-more UI",
+          "const PAGE_SIZE = 20;" in js
+          and "REFRESH_DEBOUNCE_MS = 150" in js
+          and "state.limit += PAGE_SIZE" in js
+          and "cs-load-more" in js and "snapshotListUrl()" in js)
+    check("P0-4c WS event burst is coalesced and hidden panel skips network",
+          "function scheduleRefresh()" in js
+          and "state.debounceTimer" in js
+          and "if (state.panelEl) fetchSnapshots();" in js
+          and js.count("scheduleRefresh();") >= 2
+          and "if (state.snapshots === null || state.dirty) fetchSnapshots();"
+              in js)
+
+
 def main() -> int:
     _serialize_checks()
     _store_checks()
@@ -747,6 +776,7 @@ def main() -> int:
     _frontend_loading_checks()
     _route_offloop_checks()
     _p02_checks()
+    _p04_checks()
     return report()
 
 

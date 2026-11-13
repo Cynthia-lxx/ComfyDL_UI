@@ -108,18 +108,30 @@ async def enabled_post(request: web.Request) -> web.Response:
 
 @routes.get("/comfydl/crashsite/snapshots")
 async def snapshots_list(request: web.Request) -> web.Response:
-    """List captured scenes without stalling the server event loop.
+    """List a page of captured scenes off the aiohttp event loop.
 
-    ``store.list_snapshots()`` opens two SQLite connections per historical
-    snapshot and full-scans ``node_outputs`` twice; the library only grows.
-    Running it inline here used to block ``POST /prompt``, ``POST /interrupt``
-    and every WebSocket message (they all share this loop) for seconds on real
-    machines.  Same courtesy as ``export_route`` below.
+    P0-1 moved the (then O(N) per snapshot) listing into an executor so it
+    could not block ``POST /prompt`` / ``POST /interrupt`` / WebSocket traffic;
+    P0-2 replaced the full scans with one manifest-row read.  P0-4 adds
+    ``?limit=`` / ``?offset=`` so the panel can page through a library that
+    only grows instead of loading every snapshot on every refresh.
     """
     import asyncio
+    import functools
 
+    def _clamp(raw, default, low, high):
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return default
+        return max(low, min(value, high))
+
+    limit = _clamp(request.query.get("limit"), store.DEFAULT_LIST_LIMIT,
+                   1, store.MAX_LIST_LIMIT)
+    offset = _clamp(request.query.get("offset"), 0, 0, 1_000_000_000)
     loop = asyncio.get_running_loop()
-    snapshots = await loop.run_in_executor(None, store.list_snapshots)
+    paged = functools.partial(store.list_snapshots, limit, offset)
+    snapshots = await loop.run_in_executor(None, paged)
     return web.json_response({"snapshots": snapshots})
 
 

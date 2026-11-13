@@ -25,9 +25,15 @@
   const SETTING_ENABLED = "ComfyDL.CrashSite.Enabled";
   const ENABLED_URL = "/comfydl/crashsite/enabled";
 
+  // P0-4 (M-D T6-1): page the library instead of loading every snapshot on
+  // each refresh, and coalesce the burst of execution WS events into one call.
+  const PAGE_SIZE = 20;
+  const REFRESH_DEBOUNCE_MS = 150;
+
   const state = {
     snapshots: null, loading: false, refreshQueued: false, resuming: null,
     initialized: false, topbarButton: null, masterEnabled: true,
+    limit: PAGE_SIZE, hasMore: false, dirty: false, debounceTimer: null,
     // Scene export (git-fire M2): the summary table for one snapshot.
     exportFor: null, exportDetail: null, exportBusy: false,
     exportSel: {}, exportFormats: {}, promptSel: true,
@@ -144,6 +150,22 @@
   const csTrace = (msg) => { try { console.log("[CrashSite] " + msg); } catch (e) { /* */ } };
   csTrace("module evaluated");
 
+  function snapshotListUrl() {
+    return SNAPSHOTS_URL + "?limit=" + state.limit;
+  }
+
+  function scheduleRefresh() {
+    // P0-4: execution_start / success / error / interrupted arrive as a
+    // burst.  Coalesce them, and never touch the network for a panel that is
+    // not visible - opening the panel later performs the single pending load.
+    state.dirty = true;
+    if (state.debounceTimer !== null) return;
+    state.debounceTimer = setTimeout(() => {
+      state.debounceTimer = null;
+      if (state.panelEl) fetchSnapshots();
+    }, REFRESH_DEBOUNCE_MS);
+  }
+
   async function fetchSnapshots() {
     // Master switch: a disabled crash site loads NOTHING - the library
     // request itself is a per-execution cost the switch is meant to remove.
@@ -166,11 +188,13 @@
       const timeout = new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error("snapshots timeout")), 10000);
       });
-      const resp = await Promise.race([api.fetchApi(SNAPSHOTS_URL), timeout]);
+      const resp = await Promise.race([api.fetchApi(snapshotListUrl()), timeout]);
       if (timer !== null) { clearTimeout(timer); timer = null; }
       if (resp.ok) {
         const body = await resp.json();
         state.snapshots = body.snapshots || [];
+        state.hasMore = state.snapshots.length >= state.limit;
+        state.dirty = false;
       }
     } catch (e) { /* silent: the panel is a courtesy */ }
     finally {
@@ -436,6 +460,10 @@
                 : "")
               + "</div>";
           }).join(""))
+      + (state.hasMore
+          ? '<button class="cs-button" id="cs-load-more">'
+            + esc(locale === "zh" ? "加载更多" : "Load more") + "</button>"
+          : "")
       + "</div></div>";
     el.innerHTML = html;
     wirePanel(el);
@@ -444,6 +472,11 @@
   function wirePanel(el) {
     const refresh = el.querySelector("#cs-refresh");
     if (refresh) refresh.addEventListener("click", () => fetchSnapshots());
+    const more = el.querySelector("#cs-load-more");
+    if (more) more.addEventListener("click", () => {
+      state.limit += PAGE_SIZE;
+      fetchSnapshots();
+    });
     el.querySelectorAll(".cs-resume").forEach((btn) => {
       btn.addEventListener("click", () => resume(btn.getAttribute("data-id"), btn));
     });
@@ -492,7 +525,9 @@
         el.classList.add("cs-host");
         state.panelEl = el;
         renderPanel();
-        fetchSnapshots();
+        // P0-4: the panel is the only consumer of this request - load once
+        // on open, or replay a refresh that was deferred while hidden.
+        if (state.snapshots === null || state.dirty) fetchSnapshots();
         return () => { state.panelEl = null; };
       },
     });
@@ -559,14 +594,15 @@
     registerSidebar();
     mountTopbarButton();
     await syncEnabledState(); // badge/panel state before the first paint
-    fetchSnapshots();
+    scheduleRefresh();
     // M2: refresh the library as executions start and end (a new snapshot
     // opens as "running", the resume statistics note lands on completion)
-    // so nobody has to click Refresh to see the result.
+    // so nobody has to click Refresh to see the result.  P0-4 coalesces the
+    // event burst and skips the request entirely while the panel is hidden.
     const api = getApi();
     if (api && typeof api.addEventListener === "function") {
       const onExecEvent = (ev) => {
-        fetchSnapshots();
+        scheduleRefresh();
         // git-fire M2 auto-nudge: failures/interrupts open the scene-export
         // summary automatically (user decision 2026-10-13).
         if (ev === "execution_error" || ev === "execution_interrupted") {

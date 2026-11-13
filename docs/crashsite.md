@@ -78,6 +78,17 @@ columns: they are still listed through the historical full scan and are never
 migrated in bulk, so no `FORMAT_VERSION` bump is needed and resume keeps
 working. The resume, detail and export response contracts are unchanged.
 
+## Panel paging and request coalescing (M-D T6-1 P0-4, 2026-11-13)
+
+`GET /comfydl/crashsite/snapshots` accepts `?limit=` (clamped to
+`1..MAX_LIST_LIMIT`, default `DEFAULT_LIST_LIMIT`) and `?offset=`; the response
+body is still `{"snapshots": [...]}` and the store call still runs in an
+executor (P0-1). The panel requests `limit=PAGE_SIZE` (20) and grows the page
+via a **Load more** button; four execution-start/end WebSocket events are
+coalesced into one debounced refresh, and no request is made at all while the
+sidebar panel is hidden (the pending refresh is replayed when it opens).
+Manual Refresh, resume and export completion still refresh immediately.
+
 ## Scene export (git-fire M2, 2026-10-13)
 
 After an interrupt (or any time, via the per-card button on interrupted
