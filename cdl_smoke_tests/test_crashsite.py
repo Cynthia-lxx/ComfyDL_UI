@@ -640,6 +640,103 @@ def _route_offloop_checks() -> None:
           and 'web.json_response({"snapshots": snapshots})' in src)
 
 
+def _p02_checks() -> None:
+    """T6-1 P0-2: list aggregates, legacy databases and bounded listing."""
+    import sqlite3
+
+    # --- aggregates stay in lockstep with node_outputs, incl. REPLACE ----
+    path = store.create_snapshot({"1": {"class_type": "X"}},
+                                 prompt_id="p02-agg")
+    store.upsert_node_output(path, "h-a", "1", 0, "X", "Tensor",
+                             "st", b"\x01\x02", "{}")
+    store.upsert_node_output(path, "h-b", "2", 0, "Y", "dict",
+                             "dict-st", b"\x01\x02\x03\x04\x05", "{}")
+    store.upsert_node_output(path, "h-a", "1", 0, "X", "Tensor",
+                             "st", b"\x01", "{}")  # REPLACE: 2 -> 1 byte
+    conn = sqlite3.connect(str(path))
+    truth = conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM node_outputs"
+    ).fetchone()
+    conn.close()
+    listed = [s for s in store.list_snapshots() if s["id"] == path.stem]
+    check("P0-2a aggregates match COUNT/SUM after INSERT OR REPLACE",
+          len(listed) == 1 and listed[0]["nodes"] == truth[0] == 2
+          and listed[0]["size_bytes"] == truth[1] == 6,
+          str((listed[0] if listed else None, truth)))
+
+    captured = listed[0]["captured"] if listed else []
+    check("P0-2b captured summary keeps the size-descending contract",
+          len(captured) == 2
+          and captured[0]["size_bytes"] >= captured[1]["size_bytes"]
+          and captured[0]["node_id"] == "2" and captured[0]["slots"] == 1,
+          str(captured))
+
+    # --- one connection per listed snapshot; newest-K page is bounded -----
+    original_connect = store._connect
+    calls = []
+
+    def counting_connect(p):
+        calls.append(p)
+        return original_connect(p)
+
+    store._connect = counting_connect
+    try:
+        page = store.list_snapshots(limit=3)
+    finally:
+        store._connect = original_connect
+    check("P0-2c listing opens one connection per snapshot and honours limit",
+          len(page) == 3 and len(calls) == 3,
+          str((len(page), len(calls))))
+    check("P0-2d offset skips the newest snapshots",
+          len(store.list_snapshots(limit=2, offset=1)) == 2)
+
+    # --- legacy db (no aggregate columns) is listed, not swallowed --------
+    original_root = store.snapshots_root
+    with tempfile.TemporaryDirectory(prefix="cdl_p02_legacy_") as tmp:
+        root = Path(tmp)
+        store.snapshots_root = lambda: root
+        try:
+            legacy = root / "20200101-000000-legacy.db"
+            conn = sqlite3.connect(str(legacy))
+            conn.executescript(
+                "CREATE TABLE snapshots (id TEXT PRIMARY KEY,"
+                " created_at INTEGER, updated_at INTEGER, prompt_id TEXT,"
+                " prompt_json TEXT, note TEXT, status TEXT,"
+                " format_version INTEGER, skipped_nodes INTEGER);"
+                "CREATE TABLE node_outputs (cache_key_hash TEXT, slot INTEGER,"
+                " node_id TEXT, class_type TEXT, output_type TEXT, format TEXT,"
+                " size_bytes INTEGER, sha256 TEXT, meta_json TEXT, data BLOB,"
+                " PRIMARY KEY (cache_key_hash, slot));"
+                "INSERT INTO snapshots VALUES"
+                " ('20200101-000000-legacy', 1, 1, 'legacy', '{}', '',"
+                " 'interrupted', 2, 0);"
+                "INSERT INTO node_outputs (cache_key_hash, slot, node_id,"
+                " class_type, size_bytes) VALUES ('h', 0, '7', 'Z', 11),"
+                " ('h2', 0, '8', 'W', 7);")
+            conn.commit()
+            conn.close()
+            rows = store.list_snapshots()
+            check("P0-2e legacy db without aggregate columns is still listed",
+                  len(rows) == 1 and rows[0]["id"] == "20200101-000000-legacy"
+                  and rows[0]["nodes"] == 2 and rows[0]["size_bytes"] == 18
+                  and rows[0]["captured"][0]["node_id"] == "7", str(rows))
+            store.upsert_node_output(legacy, "h3", "9", 0, "Q", "Tensor",
+                                     "st", b"\x01", "{}")
+            rows2 = store.list_snapshots()
+            check("P0-2f writes to a legacy db keep the full-scan fallback",
+                  len(rows2) == 1 and rows2[0]["nodes"] == 3
+                  and rows2[0]["size_bytes"] == 19, str(rows2))
+        finally:
+            store.snapshots_root = original_root
+
+    src = (REPO_ROOT / "app" / "crashsite" / "store.py").read_text(
+        encoding="utf-8")
+    check("P0-2g list API is bounded and the write path is transactional",
+          "DEFAULT_LIST_LIMIT = 100" in src
+          and "def list_snapshots(limit" in src
+          and "BEGIN IMMEDIATE" in src)
+
+
 def main() -> int:
     _serialize_checks()
     _store_checks()
@@ -649,6 +746,7 @@ def main() -> int:
     _frontend_motion_checks()
     _frontend_loading_checks()
     _route_offloop_checks()
+    _p02_checks()
     return report()
 
 

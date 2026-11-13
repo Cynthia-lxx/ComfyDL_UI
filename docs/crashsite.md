@@ -64,6 +64,20 @@ The panel now answers "what did resume actually do":
 
 The resume toast also points at the new snapshot card for the statistics.
 
+## Listing cost (M-D T6-1 P0-2, 2026-11-13)
+
+The library lists the newest `DEFAULT_LIST_LIMIT` snapshots (100 by default;
+`store.list_snapshots(limit, offset)` also accepts an explicit page). The
+`nodes`, `size_bytes` and `captured` readouts are maintained in the single
+`snapshots` row by `upsert_node_output`, inside the same write transaction as
+the captured output row, using a delta that accounts for `INSERT OR REPLACE`
+overwriting an existing `(cache_key_hash, slot)`. Listing one snapshot now
+costs one connection and one row read instead of two connections plus two
+full scans of `node_outputs`. Databases written by older builds lack those
+columns: they are still listed through the historical full scan and are never
+migrated in bulk, so no `FORMAT_VERSION` bump is needed and resume keeps
+working. The resume, detail and export response contracts are unchanged.
+
 ## Scene export (git-fire M2, 2026-10-13)
 
 After an interrupt (or any time, via the per-card button on interrupted
