@@ -1,29 +1,30 @@
-/* ComfyDL Observation panel (M-D P6, CRAFT 1).
+/* ComfyDL Observation overlay (M-D P6, 2026-11-13 shape correction).
  *
- * An INDEPENDENT sidebar tab, deliberately outside the App Panel: advanced
- * observation is opt-in and the main canvas stays lean for everyday users.
- * This craft delivers the resource monitor only; execution badges / the runs
- * ledger come in CRAFT 2.
+ * A minimap-sized FLOATING widget, not a sidebar tab: observation is a small
+ * always-available readout and must not compete with the main canvas. It
+ * supports collapse + hide, both persisted in localStorage, and defaults to
+ * collapsed (same convention as the App Panel's legacy dock and the built-in
+ * minimap).
  *
- * Data path: the existing single `cdl.spine` WS channel + the two spine REST
- * endpoints. No new thread, no new WS channel, no client-side polling timer:
- * the spine switch stays OFF by default and is started only when the user
- * opts in from this tab.
+ * De-duplication: the Crystools status text at the bottom-left already shows
+ * instantaneous CPU/RAM/VRAM percentages (and, from other sources, FPS). This
+ * widget therefore shows what that text cannot: 60-point trends, absolute VRAM
+ * GiB, this process's own CPU, and the spine schema / switch state.
  *
- * Conventions reused from the mature panels (never invent a second UI language):
- *   - registerSidebarTab + render() cleanup   (crashsite.js:476-500)
- *   - cdlp-card / cdlp-card-title vocabulary (profiler.css)
- *   - JS-local en/zh dictionary              (official /i18n is never fetched)
- *   - three motion gates                    (profiler.css:647-660)
- *   - SVG skeleton built once, only polyline `points` updated per tick
+ * Data layer is unchanged from CRAFT 1: the single `cdl.spine` WS channel, the
+ * two spine REST endpoints, no new thread / channel / polling timer, and the
+ * switch stays OFF by default until the user opts in.
  */
 (() => {
   "use strict";
 
   const CSS_URL = "/comfydl/obs/obs.css";
-  const TAB_ID = "comfydl-obs";
+  const OVERLAY_ID = "cdl-obs-overlay";
+  const REOPEN_ID = "cdl-obs-reopen";
   const SPINE_URL = "/comfydl/spine";
   const SNAPSHOT_URL = "/comfydl/spine/snapshot";
+  const COLLAPSE_KEY = "ComfyDL.Obs.Collapsed";
+  const HIDDEN_KEY = "ComfyDL.Obs.Hidden";
   const MAX_POINTS = 60;
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -38,30 +39,36 @@
 
   const I18N = {
     en: {
-      tab_title: "Observation",
-      tab_tooltip: "Live CPU / RAM / VRAM monitor (ComfyDL spine)",
-      card_title: "System resources",
-      cpu: "CPU", ram: "RAM", vram: "VRAM",
-      off_hint: "Monitoring is off. The sampling thread only starts when you enable it.",
+      title: "Observation",
+      tooltip: "Live resource trends (ComfyDL spine)",
+      off_hint: "Monitoring is off. The sampling thread starts only when enabled.",
       enable: "Enable monitoring",
       enabling: "enabling...",
       badge_on: "live", badge_off: "off",
       waiting: "Waiting for the first sample...",
-      no_gpu: "No CUDA device - VRAM unavailable.",
+      collapse: "Collapse", expand: "Expand", hide: "Hide",
+      reopen: "Observation",
+      trend: "60-sample trend",
+      cpu_trend: "CPU", ram_trend: "RAM", vram_trend: "VRAM",
+      proc: "Process CPU", vram: "VRAM", no_gpu: "No CUDA device",
       schema: "schema v",
+      dedup: "Instantaneous values are in the bottom-left status text.",
     },
     zh: {
-      tab_title: "观测",
-      tab_tooltip: "实时 CPU / 内存 / 显存监控（ComfyDL spine）",
-      card_title: "系统资源",
-      cpu: "CPU", ram: "内存", vram: "显存",
-      off_hint: "监控未开启。采样线程只会在你启用后启动。",
+      title: "观测",
+      tooltip: "实时资源趋势（ComfyDL spine）",
+      off_hint: "监控未开启。采样线程只会在启用后启动。",
       enable: "启用监控",
       enabling: "正在启用...",
       badge_on: "运行中", badge_off: "已关闭",
       waiting: "正在等待第一个采样...",
-      no_gpu: "无 CUDA 设备，显存数据不可用。",
+      collapse: "收起", expand: "展开", hide: "隐藏",
+      reopen: "观测",
+      trend: "60 点趋势",
+      cpu_trend: "CPU", ram_trend: "内存", vram_trend: "显存",
+      proc: "进程 CPU", vram: "显存", no_gpu: "无 CUDA 设备",
       schema: "协议 v",
+      dedup: "瞬时数值见左下角状态栏，此处显示趋势与绝对值。",
     },
   };
 
@@ -100,12 +107,27 @@
     }[c]));
   }
 
+  function loadBool(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? fallback : raw === "1";
+    } catch (e) { return fallback; }
+  }
+
+  function saveBool(key, value) {
+    try { localStorage.setItem(key, value ? "1" : "0"); } catch (e) { /* private mode */ }
+  }
+
   const state = {
-    panelEl: null,
+    overlayEl: null,
+    reopenEl: null,
+    refs: null,
     eventApi: null,
     handler: null,
     enabled: false,
     sample: null,
+    collapsed: loadBool(COLLAPSE_KEY, true),
+    hidden: loadBool(HIDDEN_KEY, false),
     hist: { cpu: [], ram: [], vram: [] },
   };
 
@@ -120,62 +142,116 @@
     return node;
   }
 
-  function buildSkeleton(el) {
-    el.innerHTML = "";
-    el.classList.add("cdlp-panel", "obs-host");
-    const card = document.createElement("div");
-    card.className = "cdlp-card obs-entrance";
-    card.innerHTML =
-      '<div class="cdlp-card-title">' +
-        '<span class="cdlp-collapse-label">' + esc(t("card_title")) + "</span>" +
-        '<span class="cdlp-title-right"><span class="obs-badge" data-obs="badge">' +
-          esc(t("badge_off")) + "</span></span>" +
+  function buildOverlay() {
+    const root = document.createElement("div");
+    root.id = OVERLAY_ID;
+    root.className = "cdl-obs-overlay obs-entrance";
+    root.title = t("tooltip");
+    root.innerHTML =
+      '<div class="cdl-obs-head">' +
+        '<span class="cdl-obs-title">' + esc(t("title")) + "</span>" +
+        '<span class="cdl-obs-badge" data-obs="badge">' + esc(t("badge_off")) + "</span>" +
+        '<button type="button" class="cdl-obs-btn" data-obs="collapse">+</button>' +
+        '<button type="button" class="cdl-obs-btn" data-obs="hide">×</button>' +
       "</div>" +
-      '<div class="cdlp-card-body">' +
-        '<div class="cdlp-hint obs-off" data-obs="hint">' + esc(t("off_hint")) + "</div>" +
-        '<button type="button" class="obs-enable" data-obs="enable">' +
+      '<div class="cdl-obs-body">' +
+        '<div class="cdl-obs-off" data-obs="hint">' + esc(t("off_hint")) + "</div>" +
+        '<button type="button" class="cdl-obs-enable" data-obs="enable">' +
           esc(t("enable")) + "</button>" +
-        '<div class="obs-rows" data-obs="rows" hidden>' +
-          '<div class="obs-row"><span>' + esc(t("cpu")) +
-            '</span><b data-obs="cpu">0%</b></div>' +
-          '<div class="obs-row"><span>' + esc(t("ram")) +
-            '</span><b data-obs="ram">0%</b></div>' +
-          '<div class="obs-row"><span>' + esc(t("vram")) +
-            '</span><b data-obs="vram">—</b></div>' +
-          '<div class="obs-chart-wrap" data-obs="chart-wrap"></div>' +
-          '<div class="cdlp-hint" data-obs="meta"></div>' +
+        '<div class="cdl-obs-rows" data-obs="rows" hidden>' +
+          '<div class="cdl-obs-trend">' + esc(t("trend")) + "</div>" +
+          '<div class="cdl-obs-chart-wrap" data-obs="chart-wrap"></div>' +
+          '<div class="cdl-obs-legend">' +
+            '<span><i class="cdl-obs-dot cdl-obs-cpu"></i>' + esc(t("cpu_trend")) + "</span>" +
+            '<span><i class="cdl-obs-dot cdl-obs-ram"></i>' + esc(t("ram_trend")) + "</span>" +
+            '<span><i class="cdl-obs-dot cdl-obs-vram"></i>' + esc(t("vram_trend")) + "</span>" +
+          "</div>" +
+          '<div class="cdl-obs-meta" data-obs="proc"></div>' +
+          '<div class="cdl-obs-meta" data-obs="vram"></div>' +
+          '<div class="cdl-obs-dedup">' + esc(t("dedup")) + "</div>" +
+          '<div class="cdl-obs-schema" data-obs="meta"></div>' +
         "</div>" +
       "</div>";
-    el.appendChild(card);
+    document.body.appendChild(root);
+
+    const reopen = document.createElement("button");
+    reopen.id = REOPEN_ID;
+    reopen.type = "button";
+    reopen.className = "cdl-obs-reopen";
+    reopen.textContent = t("reopen");
+    reopen.title = t("tooltip");
+    document.body.appendChild(reopen);
 
     const chart = svg("svg", {
-      class: "obs-chart", viewBox: "0 0 100 40",
+      class: "cdl-obs-chart", viewBox: "0 0 100 40",
       preserveAspectRatio: "none", "aria-hidden": "true",
     });
     for (const key of ["cpu", "ram", "vram"]) {
       chart.appendChild(svg("polyline", {
-        "data-obs": key + "-line", class: "obs-line obs-line-" + key,
+        "data-obs": key + "-line", class: "cdl-obs-line cdl-obs-" + key,
         points: "", fill: "none", "vector-effect": "non-scaling-stroke",
       }));
     }
-    el.querySelector('[data-obs="chart-wrap"]').appendChild(chart);
+    root.querySelector('[data-obs="chart-wrap"]').appendChild(chart);
 
-    el.querySelector('[data-obs="enable"]').addEventListener("click", enableSpine);
-    el.__cdlObsRefs = {
-      badge: el.querySelector('[data-obs="badge"]'),
-      hint: el.querySelector('[data-obs="hint"]'),
-      enable: el.querySelector('[data-obs="enable"]'),
-      rows: el.querySelector('[data-obs="rows"]'),
-      cpu: el.querySelector('[data-obs="cpu"]'),
-      ram: el.querySelector('[data-obs="ram"]'),
-      vram: el.querySelector('[data-obs="vram"]'),
-      meta: el.querySelector('[data-obs="meta"]'),
+    root.querySelector('[data-obs="collapse"]').addEventListener("click", toggleCollapse);
+    root.querySelector('[data-obs="hide"]').addEventListener("click", hideOverlay);
+    root.querySelector('[data-obs="enable"]').addEventListener("click", enableSpine);
+    reopen.addEventListener("click", showOverlay);
+
+    state.overlayEl = root;
+    state.reopenEl = reopen;
+    state.refs = {
+      badge: root.querySelector('[data-obs="badge"]'),
+      hint: root.querySelector('[data-obs="hint"]'),
+      enable: root.querySelector('[data-obs="enable"]'),
+      rows: root.querySelector('[data-obs="rows"]'),
+      collapse: root.querySelector('[data-obs="collapse"]'),
+      proc: root.querySelector('[data-obs="proc"]'),
+      vram: root.querySelector('[data-obs="vram"]'),
+      meta: root.querySelector('[data-obs="meta"]'),
       lines: {
-        cpu: el.querySelector('[data-obs="cpu-line"]'),
-        ram: el.querySelector('[data-obs="ram-line"]'),
-        vram: el.querySelector('[data-obs="vram-line"]'),
+        cpu: root.querySelector('[data-obs="cpu-line"]'),
+        ram: root.querySelector('[data-obs="ram-line"]'),
+        vram: root.querySelector('[data-obs="vram-line"]'),
       },
     };
+    applyShape();
+  }
+
+  function applyShape() {
+    const root = state.overlayEl;
+    if (!root) return;
+    root.dataset.collapsed = state.collapsed ? "1" : "0";
+    root.dataset.hidden = state.hidden ? "1" : "0";
+    if (state.reopenEl) state.reopenEl.hidden = !state.hidden;
+    const btn = state.refs?.collapse;
+    if (btn) {
+      btn.textContent = state.collapsed ? "+" : "−";
+      btn.title = state.collapsed ? t("expand") : t("collapse");
+      btn.setAttribute("aria-label",
+        state.collapsed ? t("expand") : t("collapse"));
+    }
+  }
+
+  function toggleCollapse() {
+    state.collapsed = !state.collapsed;
+    saveBool(COLLAPSE_KEY, state.collapsed);
+    applyShape();
+  }
+
+  function hideOverlay() {
+    state.hidden = true;
+    saveBool(HIDDEN_KEY, true);
+    applyShape();
+  }
+
+  function showOverlay() {
+    state.hidden = false;
+    state.collapsed = false;
+    saveBool(HIDDEN_KEY, false);
+    saveBool(COLLAPSE_KEY, false);
+    applyShape();
   }
 
   function linePoints(values) {
@@ -206,11 +282,10 @@
   }
 
   function renderPanel() {
-    const el = state.panelEl;
-    if (!el || !el.__cdlObsRefs) return;
-    const r = el.__cdlObsRefs;
+    if (!state.refs) return;
+    const r = state.refs;
     r.badge.textContent = state.enabled ? t("badge_on") : t("badge_off");
-    r.badge.classList.toggle("obs-badge-on", state.enabled);
+    r.badge.classList.toggle("cdl-obs-badge-on", state.enabled);
     if (!state.enabled) {
       r.rows.hidden = true;
       r.hint.hidden = false;
@@ -229,17 +304,17 @@
     r.rows.hidden = false;
     const s = state.sample;
     const gpu = s.gpu;
-    r.cpu.textContent = clampPct(s.cpu?.percent).toFixed(0) + "%";
-    r.ram.textContent = clampPct(s.ram?.percent).toFixed(0) + "%";
-    r.vram.textContent = gpu && gpu.available && Number(gpu.total_gib) > 0
-      ? Number(gpu.used_gib).toFixed(1) + " / " +
-        Number(gpu.total_gib).toFixed(1) + " GiB"
-      : "—";
+    r.proc.textContent = t("proc") + "  " +
+      clampPct(s.proc?.cpu_percent).toFixed(1) + "%";
+    r.vram.textContent = t("vram") + "  " + (
+      gpu && gpu.available && Number(gpu.total_gib) > 0
+        ? Number(gpu.used_gib).toFixed(1) + " / " +
+          Number(gpu.total_gib).toFixed(1) + " GiB"
+        : t("no_gpu"));
     for (const key of Object.keys(r.lines)) {
       r.lines[key].setAttribute("points", linePoints(state.hist[key]));
     }
-    r.meta.textContent = t("schema") + (s.schema_version ?? "?") +
-      (gpu && gpu.available ? "" : " · " + t("no_gpu"));
+    r.meta.textContent = t("schema") + (s.schema_version ?? "?");
   }
 
   async function refreshState() {
@@ -252,7 +327,7 @@
         state.enabled = !!(
           data?.switch?.enabled === true || data?.running === true);
       }
-    } catch (e) { /* keep the last known state; the tab is a courtesy */ }
+    } catch (e) { /* keep the last known state; the widget is a courtesy */ }
     if (!state.enabled) {
       state.sample = null;
       renderPanel();
@@ -263,8 +338,8 @@
       const resp = await api.fetchApi(SNAPSHOT_URL);
       if (!resp.ok) return;
       const data = await resp.json();
-      // The endpoint returns the snapshot itself (older builds wrapped it).
-      const snap = data?.snapshot ?? (typeof data?.schema_version === "number" ? data : null);
+      const snap = data?.snapshot ??
+        (typeof data?.schema_version === "number" ? data : null);
       if (snap) { pushSample(snap); renderPanel(); }
     } catch (e) { /* the first WS tick will fill it */ }
   }
@@ -272,7 +347,7 @@
   async function enableSpine() {
     const api = getApi(getApp());
     if (!api || typeof api.fetchApi !== "function") return;
-    const btn = state.panelEl?.__cdlObsRefs?.enable;
+    const btn = state.refs?.enable;
     if (btn) { btn.disabled = true; btn.textContent = t("enabling"); }
     try {
       await api.fetchApi(SPINE_URL, {
@@ -288,55 +363,45 @@
     }
   }
 
-  function registerSidebar() {
-    const app = getApp();
-    const em = app && app.extensionManager;
-    if (!em || typeof em.registerSidebarTab !== "function") return false;
-    em.registerSidebarTab({
-      id: TAB_ID,
-      icon: "pi pi-chart-line",
-      title: t("tab_title"),
-      tooltip: t("tab_tooltip"),
-      type: "custom",
-      render: (el) => {
-        state.panelEl = el;
-        buildSkeleton(el);
-        const eventApi = getEventApi(app);
-        if (eventApi) {
-          state.eventApi = eventApi;
-          state.handler = (event) => {
-            pushSample(event?.detail ?? event?.data ?? null);
-            renderPanel();
-          };
-          eventApi.addEventListener("cdl.spine", state.handler);
-        }
+  function mountOverlay() {
+    if (document.getElementById(OVERLAY_ID)) return true; // idempotent
+    buildOverlay();
+    const eventApi = getEventApi(getApp());
+    if (eventApi) {
+      state.eventApi = eventApi;
+      state.handler = (event) => {
+        pushSample(event?.detail ?? event?.data ?? null);
         renderPanel();
-        refreshState();
-        // Official contract: render() may return a cleanup function.
-        return () => {
-          if (state.eventApi && state.handler &&
-              typeof state.eventApi.removeEventListener === "function") {
-            state.eventApi.removeEventListener("cdl.spine", state.handler);
-          }
-          state.eventApi = null;
-          state.handler = null;
-          state.panelEl = null;
-          state.sample = null;
-          for (const key of Object.keys(state.hist)) state.hist[key] = [];
-        };
-      },
-    });
+      };
+      eventApi.addEventListener("cdl.spine", state.handler);
+    }
+    renderPanel();
+    refreshState();
     return true;
+  }
+
+  function destroyOverlay() {
+    if (state.eventApi && state.handler &&
+        typeof state.eventApi.removeEventListener === "function") {
+      state.eventApi.removeEventListener("cdl.spine", state.handler);
+    }
+    state.eventApi = null;
+    state.handler = null;
+    if (state.overlayEl?.parentNode) state.overlayEl.parentNode.removeChild(state.overlayEl);
+    if (state.reopenEl?.parentNode) state.reopenEl.parentNode.removeChild(state.reopenEl);
+    state.overlayEl = null;
+    state.reopenEl = null;
+    state.refs = null;
+    state.sample = null;
+    for (const key of Object.keys(state.hist)) state.hist[key] = [];
   }
 
   function boot() {
     const app = getApp();
     if (!app || typeof app.registerExtension !== "function") return false;
-    const em = app.extensionManager;
-    if (!em || typeof em.registerSidebarTab !== "function") return false;
     // Registering before the settings store is ready blanks the host UI.
     try {
-      const setting = em.setting;
+      const setting = app.extensionManager?.setting;
       if (setting && typeof setting.isReady === "function" &&
           !setting.isReady()) return false;
     } catch (e) { /* no readiness gate in this frontend build */ }
@@ -344,10 +409,10 @@
       name: "ComfyDL.Observation",
       async setup() {
         try {
-          const v = em.setting.get("Comfy.Locale");
+          const v = app.extensionManager.setting.get("Comfy.Locale");
           if (typeof v === "string" && v) locale = v.split("-")[0];
         } catch (e) { /* keep the default locale */ }
-        registerSidebar();
+        mountOverlay();
       },
     });
     return true;
@@ -356,4 +421,9 @@
   const bootTimer = setInterval(() => {
     if (boot()) clearInterval(bootTimer);
   }, 250);
+
+  // Exposed for host-side teardown / tests; the overlay normally lives for
+  // the whole page lifetime.
+  window.ComfyDL = window.ComfyDL || {};
+  window.ComfyDL.destroyObservation = destroyOverlay;
 })();

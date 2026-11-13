@@ -1,64 +1,89 @@
-/* ComfyDL Observation panel (M-D P6 CRAFT 1).
+/* ComfyDL Observation overlay (M-D P6, 2026-11-13 shape correction).
  *
- * Shares the profiler's card vocabulary so the new tab looks native. Host CSS
- * variables only; no monospace fonts and no external assets.
+ * Minimap-sized floating widget. Position follows the App Panel's legacy dock
+ * (upper-left, below the topbar) so it never covers the built-in minimap
+ * (bottom-right, z-index 1000) or the bottom-left status text. z-index 2100
+ * sits above the topbar (1001) and below full-screen overlays (9999).
  */
-.obs-host.cdlp-panel {
-  font-family: "Roboto", "Noto Sans SC", sans-serif;
-  font-size: 13px;
-  padding: 8px;
+#cdl-obs-overlay {
+  position: fixed;
+  left: var(--cdl-dock-left, 59px);
+  top: calc(var(--comfy-topbar-height, 48px) + 12px);
+  width: 240px;
+  z-index: 2100;
   box-sizing: border-box;
-}
-
-.obs-host .cdlp-card {
-  background: var(--comfy-input-bg, rgba(31, 31, 31, 0.85));
-  border: 1px solid var(--border-color, #2a2a2a);
-  border-radius: 8px;
-  padding: 10px 12px;
-  transition: border-color 150ms ease, transform 150ms ease;
-}
-.obs-host .cdlp-card:hover { border-color: var(--border-color, #4a4a4a); }
-.obs-host .cdlp-card:active { transform: translateY(1px); }
-
-.obs-host .cdlp-card-title {
+  font-family: "Roboto", "Noto Sans SC", sans-serif;
   font-size: 12px;
+  color: var(--fg-color, #ddd);
+  background: var(--comfy-menu-bg, rgba(30, 30, 30, 0.94));
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+#cdl-obs-overlay:hover { border-color: var(--border-color, #5a5a5a); }
+#cdl-obs-overlay[data-hidden="1"] { display: none; }
+
+.cdl-obs-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  min-height: 30px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+#cdl-obs-overlay[data-collapsed="1"] .cdl-obs-head { border-bottom: none; }
+#cdl-obs-overlay[data-collapsed="1"] .cdl-obs-body { display: none; }
+
+.cdl-obs-title {
+  flex: 1 1 auto;
   font-weight: 700;
+  font-size: 11px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--input-text-read-only, #9a9a9a);
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.obs-host .cdlp-collapse-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.obs-host .cdlp-title-right { display: flex; align-items: center; gap: 8px; }
-.obs-host .cdlp-hint {
-  color: var(--input-text-read-only, #9a9a9a);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.obs-badge {
-  display: inline-block;
-  padding: 1px 7px;
+.cdl-obs-badge {
+  flex: none;
+  padding: 1px 6px;
   border-radius: 999px;
   border: 1px solid var(--border-color, #3a3a3a);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.4px;
   color: var(--input-text-read-only, #9a9a9a);
 }
-.obs-badge-on { color: #3ddc97; border-color: #2f7f61; }
+.cdl-obs-badge-on { color: #3ddc97; border-color: #2f7f61; }
 
-.obs-off { margin-bottom: 8px; }
-.obs-enable {
+.cdl-obs-btn {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.cdl-obs-btn:hover { border-color: #4a9eff; }
+.cdl-obs-btn:active { transform: translateY(1px); }
+
+.cdl-obs-body { padding: 8px; }
+.cdl-obs-off {
+  color: var(--input-text-read-only, #9a9a9a);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.cdl-obs-enable, .cdl-obs-reopen {
   width: 100%;
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border-color, #3a3a3a);
   background: var(--comfy-input-bg, rgba(45, 45, 45, 0.9));
@@ -66,46 +91,73 @@
   font: inherit;
   cursor: pointer;
 }
-.obs-enable:hover { border-color: #4a9eff; }
-.obs-enable:disabled { opacity: 0.55; cursor: default; }
-.obs-enable[hidden], .obs-off[hidden], .obs-rows[hidden] { display: none; }
+.cdl-obs-enable:hover, .cdl-obs-reopen:hover { border-color: #4a9eff; }
+.cdl-obs-enable:disabled { opacity: 0.55; cursor: default; }
+.cdl-obs-off[hidden], .cdl-obs-enable[hidden], .cdl-obs-rows[hidden],
+.cdl-obs-reopen[hidden] { display: none; }
 
-.obs-rows { display: flex; flex-direction: column; gap: 6px; }
-.obs-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
+.cdl-obs-rows { display: flex; flex-direction: column; gap: 6px; }
+.cdl-obs-trend {
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
-.obs-row span { color: var(--input-text-read-only, #9a9a9a); }
-.obs-row b { font-weight: 700; font-variant-numeric: tabular-nums; }
-
-.obs-chart-wrap {
-  margin-top: 4px;
+.cdl-obs-chart-wrap {
   border: 1px solid var(--border-color, #2a2a2a);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.18);
-  height: 72px;
+  height: 60px;
   padding: 4px;
   box-sizing: border-box;
 }
-.obs-chart { display: block; width: 100%; height: 100%; }
-.obs-line { stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
-.obs-line-cpu { stroke: #4a9eff; }
-.obs-line-ram { stroke: #f5a524; }
-.obs-line-vram { stroke: #3ddc97; }
+.cdl-obs-chart { display: block; width: 100%; height: 100%; }
+.cdl-obs-line { stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.cdl-obs-cpu { stroke: #4a9eff; }
+.cdl-obs-ram { stroke: #f5a524; }
+.cdl-obs-vram { stroke: #3ddc97; }
 
-@keyframes obs-card-in {
+.cdl-obs-legend {
+  display: flex;
+  gap: 10px;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+}
+.cdl-obs-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.cdl-obs-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.cdl-obs-dot.cdl-obs-cpu { background: #4a9eff; }
+.cdl-obs-dot.cdl-obs-ram { background: #f5a524; }
+.cdl-obs-dot.cdl-obs-vram { background: #3ddc97; }
+
+.cdl-obs-meta { font-variant-numeric: tabular-nums; }
+.cdl-obs-dedup, .cdl-obs-schema {
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+#cdl-obs-reopen {
+  position: fixed;
+  left: var(--cdl-dock-left, 59px);
+  top: calc(var(--comfy-topbar-height, 48px) + 12px);
+  z-index: 2100;
+  width: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--comfy-menu-bg, rgba(30, 30, 30, 0.94));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes obs-overlay-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-.obs-entrance { animation: obs-card-in 320ms ease-out backwards; }
+.obs-entrance { animation: obs-overlay-in 320ms ease-out backwards; }
 
 /* gates: UI motion master / App Panel motion / reduced-motion exemption */
 html.cdl-motion-off .obs-entrance,
 body.cdlapp-motion-off .obs-entrance { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .obs-entrance { animation: none !important; }
-  .obs-host .cdlp-card { transition: none !important; }
+  #cdl-obs-overlay { transition: none !important; }
 }

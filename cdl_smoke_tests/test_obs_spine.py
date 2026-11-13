@@ -417,18 +417,23 @@ def _obs_panel_checks() -> None:
           bool(js) and bool(css)
           and "OBS_LOADER_MARK" in patch and "_patch_obs_loader" in patch
           and "web.static('/comfydl/obs', obs_assets)" in server)
-    check("T8b P6: independent sidebar tab with official fields + cleanup",
-          "registerSidebarTab" in js and 'type: "custom"' in js
-          and "comfydl-obs" in js and "return () =>" in js
+    check("T8b P6: minimap-sized overlay with collapse/hide persistence",
+          "registerSidebarTab" not in js
+          and "cdl-obs-overlay" in js
+          and "document.body.appendChild" in js
+          and "COLLAPSE_KEY" in js and "HIDDEN_KEY" in js
           and 'removeEventListener("cdl.spine"' in js)
-    check("T8c P6: one cdl.spine channel, off guidance, native card vocabulary",
+    check("T8c P6: one cdl.spine channel, off guidance, de-duplicated readouts",
           'addEventListener("cdl.spine"' in js and "off_hint" in js
-          and "PATCH" in js and "cdlp-card" in js
+          and "PATCH" in js and "s.proc?.cpu_percent" in js
           and "setInterval" in js)
     check("T8d P6: three motion gates honoured",
           "html.cdl-motion-off" in css
           and "body.cdlapp-motion-off" in css
           and "prefers-reduced-motion" in css)
+    check("T8e P6: fixed overlay with collapsed/hidden states",
+          "position: fixed" in css and "z-index: 2100" in css
+          and 'data-collapsed="1"]' in css and 'data-hidden="1"]' in css)
 
 
 # ------------------------------------------------------------------ main --
