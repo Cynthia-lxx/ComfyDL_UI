@@ -96,6 +96,29 @@ OBS_LOADER_TAG = (
 )
 OBS_LOADER_MARK = "<!--ComfyDL_UI:obs-loader-->"
 
+# VERBOSE diagnostics (repair R0): inert unless /comfydl/verbose is enabled.
+VERBOSE_LOADER_TAG = (
+    '<!--ComfyDL_UI:verbose-loader-->'
+    '<script type="module" src="/comfydl/vassets/verbose.js"></script>'
+)
+VERBOSE_LOADER_MARK = "<!--ComfyDL_UI:verbose-loader-->"
+
+
+def _patch_verbose_loader(web_root: Path) -> bool:
+    """Inject the VERBOSE loader exactly once; return True when it changed.
+
+    Same idempotent contract as ``_patch_obs_loader`` - the real frontend test
+    asserts a single marker and that re-applying is a no-op.
+    """
+    path = web_root / "index.html"
+    text = path.read_text(encoding="utf-8")
+    if VERBOSE_LOADER_MARK in text:
+        return False
+    if text.count("</body>") != 1:
+        raise ValueError("index.html must contain exactly one </body>")
+    _write(path, text.replace("</body>", VERBOSE_LOADER_TAG + "</body>"))
+    return True
+
 # The Motion module (staged entrance + ripple): a loader script before </body>
 # plus the entrance pre-hide CSS in the <head>. The CSS must ship in the head
 # (not be injected by motion.js at runtime) so it is already in the CSSOM when
@@ -397,6 +420,13 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("dataops loader")
     except Exception as exc:
         logging.warning(f"{TAG} dataops loader not applied: {exc}")
+
+    # VERBOSE diagnostics (repair R0): inert unless the switch is enabled.
+    try:
+        if _patch_verbose_loader(Path(web_root)):
+            applied.append("verbose loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} verbose loader not applied: {exc}")
 
     # The Observation panel (M-D P6): independent sidebar tab, same channel.
     try:

@@ -215,11 +215,17 @@ def save(run_key: str, payload: Dict[str, Any]) -> bool:
     execution cannot be resumed, so there is nothing to save for.  Also False
     when the crash site is master-disabled (nothing is ever resumed then).
     """
+    from comfy import verbose_log as _vl
     if not _master_on():
+        _vl.log("ckpt", "save-skip", reason="master-off", run_key=run_key)
         return False
     prompt_id = current_prompt_id()
     if prompt_id is None:
+        _vl.log("ckpt", "save-skip", reason="no-host-context", run_key=run_key)
         return False
+    step = payload.get("step", -1) if isinstance(payload, dict) else -1
+    _vl.log("ckpt", "save-begin", run_key=run_key,
+            prompt_id=prompt_id, step=step)
     import torch
 
     root = checkpoints_root()
@@ -229,6 +235,7 @@ def save(run_key: str, payload: Dict[str, Any]) -> bool:
                 "saved_at": int(time.time()), "payload": payload}, tmp)
     os.replace(tmp, target)
     _prune()
+    _vl.log("ckpt", "save-done", run_key=run_key, step=step)
     return True
 
 
@@ -240,14 +247,19 @@ def load(run_key: str) -> Optional[Dict[str, Any]]:
     so the caller trains from scratch.  None also when the crash site is
     master-disabled - no resume, no lookup, no disk touch.
     """
+    from comfy import verbose_log as _vl
     if not _master_on():
+        _vl.log("ckpt", "load-skip", reason="master-off", run_key=run_key)
         return None
     prompt_id = current_prompt_id()
     if prompt_id is None:
+        _vl.log("ckpt", "load-skip", reason="no-host-context", run_key=run_key)
         return None
     path = _path(run_key)
     if not path.is_file():
+        _vl.log("ckpt", "load-miss", run_key=run_key, prompt_id=prompt_id)
         return None
+    _vl.log("ckpt", "load-begin", run_key=run_key, prompt_id=prompt_id)
     try:
         import torch
 
@@ -256,14 +268,20 @@ def load(run_key: str) -> Optional[Dict[str, Any]]:
             raise ValueError("foreign checkpoint file")
         if data.get("prompt_id") != prompt_id:
             path.unlink(missing_ok=True)
+            _vl.log("ckpt", "load-stale", run_key=run_key,
+                    prompt_id=prompt_id)
             return None
         payload = data.get("payload")
-        return payload if isinstance(payload, dict) else None
+        ok = isinstance(payload, dict)
+        _vl.log("ckpt", "load-done", run_key=run_key, ok=ok,
+                start_step=(payload or {}).get("step", -1) if ok else -1)
+        return payload if ok else None
     except Exception:  # noqa: BLE001 - a broken file must not kill training
         try:
             path.unlink(missing_ok=True)
         except OSError:
             pass
+        _vl.log("ckpt", "load-error", run_key=run_key)
         return None
 
 

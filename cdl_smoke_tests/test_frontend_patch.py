@@ -107,6 +107,13 @@ def main() -> int:
               and "/comfydl/obs/obs.js" in index_text)
         check("real frontend: obs loader re-apply is a no-op",
               _patch_obs_loader(web_root) is False)
+        # Repair R0: VERBOSE diagnostics loader (inert unless enabled).
+        from app import frontend_patch as _fp
+        check("real frontend: verbose loader injected exactly once",
+              index_text.count(_fp.VERBOSE_LOADER_MARK) == 1
+              and "/comfydl/vassets/verbose.js" in index_text)
+        check("real frontend: verbose loader re-apply is a no-op",
+              _fp._patch_verbose_loader(web_root) is False)
 
     # --- synthetic chunk: happy path ---------------------------------------- #
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_fepatch_"))

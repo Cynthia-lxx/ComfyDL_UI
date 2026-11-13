@@ -104,6 +104,39 @@ async def deprecation_warning(request: web.Request, handler):
 
 
 @web.middleware
+async def verbose_http(request: web.Request, handler):
+    """VERBOSE (repair R0): one timestamped line per API request.
+
+    OFF path = a single bool read.  Static assets and the front-end log
+    ingestion endpoint are excluded so enabling the switch cannot flood the
+    log or recurse into itself.
+    """
+    from comfy import verbose_log
+
+    if not verbose_log.enabled():
+        return await handler(request)
+    path = request.path
+    if (not (path.startswith("/comfydl/") or path in
+             ("/prompt", "/interrupt", "/queue", "/history")
+             or path.startswith("/api/"))
+            or path == "/comfydl/verbose/fe"):
+        return await handler(request)
+    import time
+    start = time.perf_counter()
+    try:
+        response = await handler(request)
+    except Exception as exc:
+        verbose_log.log("http", "error", method=request.method, path=path,
+                        error=type(exc).__name__,
+                        duration_ms=round((time.perf_counter() - start) * 1000, 3))
+        raise
+    verbose_log.log("http", "response", method=request.method, path=path,
+                    status=response.status,
+                    duration_ms=round((time.perf_counter() - start) * 1000, 3))
+    return response
+
+
+@web.middleware
 async def compress_body(request: web.Request, handler):
     accept_encoding = request.headers.get("Accept-Encoding", "")
     response: web.Response = await handler(request)
@@ -233,7 +266,7 @@ class PromptServer():
         self.client_session:Optional[aiohttp.ClientSession] = None
         self.number = 0
 
-        middlewares = [cache_control, deprecation_warning]
+        middlewares = [cache_control, deprecation_warning, verbose_http]
         if args.enable_compress_response_body:
             middlewares.append(compress_body)
 
@@ -250,6 +283,9 @@ class PromptServer():
 
         max_upload_size = round(args.max_upload_size * 1024 * 1024)
         self.app = web.Application(client_max_size=max_upload_size, middlewares=middlewares)
+        # Repair R0: VERBOSE switch / front-end ingest routes (OFF by default).
+        from app import verbose_routes
+        self.app.add_routes(verbose_routes.routes)
         self.sockets = dict()
         self.sockets_metadata = dict()
         self.web_root = (
@@ -1392,6 +1428,13 @@ class PromptServer():
         if os.path.isdir(obs_assets):
             self.app.add_routes([web.static('/comfydl/obs', obs_assets)])
 
+        # Repair R0: front-end VERBOSE diagnostics assets (default off).
+        verbose_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "verbose_assets"
+        )
+        if os.path.isdir(verbose_assets):
+            self.app.add_routes([web.static('/comfydl/vassets', verbose_assets)])
+
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True
         if installed_templates_version:
@@ -1549,6 +1592,10 @@ class PromptServer():
             await send_socket_catch_exception(self.sockets[sid].send_json, message)
 
     def send_sync(self, event, data, sid=None):
+        # Repair R0: one central hook covers every execution_* WS event.
+        # Never touch the (event, data, sid) tuple - publish_loop unpacks it.
+        from comfy import verbose_log
+        verbose_log.ws_event(event, data)
         self.loop.call_soon_threadsafe(
             self.messages.put_nowait, (event, data, sid))
 
