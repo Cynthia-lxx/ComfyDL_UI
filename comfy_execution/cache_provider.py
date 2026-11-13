@@ -2,6 +2,7 @@ from typing import Any, Optional, Tuple, List
 import hashlib
 import json
 import logging
+import sys
 import threading
 
 # Public types — source of truth is comfy_api.latest._caching
@@ -81,6 +82,12 @@ def _canonicalize(obj: Any) -> Any:
     # Frozensets have non-deterministic iteration order between Python sessions.
     # Raises ValueError for non-cacheable types (Unhashable, unknown) so that
     # _serialize_cache_key returns None and external caching is skipped.
+    # P-α (M-D T6-1): a tensor is never a serializable key component.  Fail
+    # at the tensor instead of walking/serializing the whole nested structure
+    # on every node just to reach the same ValueError.
+    _torch = sys.modules.get("torch")
+    if _torch is not None and isinstance(obj, _torch.Tensor):
+        raise ValueError("Cannot canonicalize type: Tensor")
     if isinstance(obj, frozenset):
         return ("__frozenset__", sorted(
             [_canonicalize(item) for item in obj],
@@ -123,6 +130,12 @@ def _serialize_cache_key(cache_key: Any) -> Optional[str]:
 def _contains_self_unequal(obj: Any) -> bool:
     # Local cache matches by ==. Values where not (x == x) (NaN, etc.) will
     # never hit locally, but serialized form would match externally. Skip these.
+    # P-α (M-D T6-1): `tensor == tensor` is an O(numel) elementwise compare
+    # whose boolean cast then raises anyway; such a key is never externally
+    # cacheable, so reject it before doing that work.
+    _torch = sys.modules.get("torch")
+    if _torch is not None and isinstance(obj, _torch.Tensor):
+        return True
     try:
         if not (obj == obj):
             return True

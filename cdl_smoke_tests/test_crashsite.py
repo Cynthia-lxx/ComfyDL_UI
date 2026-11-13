@@ -766,6 +766,26 @@ def _p04_checks() -> None:
               in js)
 
 
+def _alpha_checks() -> None:
+    """T6-1 P-α: tensor cache keys short-circuit, no elementwise ==."""
+    import torch
+    from comfy_execution import cache_provider as cp
+
+    big = torch.arange(2_000_000, dtype=torch.float32)
+    check("P-α-a tensor key is rejected without an elementwise compare",
+          cp._contains_self_unequal(big) is True
+          and cp._contains_self_unequal((1, "x", big)) is True)
+    check("P-α-b canonicalize fails fast but keeps the ValueError contract",
+          cp._serialize_cache_key((1, big)) is None
+          and cp._serialize_cache_key({"a": 1}) is not None)
+    src = (REPO_ROOT / "comfy_execution" / "cache_provider.py").read_text(
+        encoding="utf-8")
+    check("P-α-c short-circuits are guarded by sys.modules (no hard torch dep)",
+          'sys.modules.get("torch")' in src
+          and "isinstance(obj, _torch.Tensor)" in src
+          and "import sys" in src)
+
+
 def main() -> int:
     _serialize_checks()
     _store_checks()
@@ -777,6 +797,7 @@ def main() -> int:
     _route_offloop_checks()
     _p02_checks()
     _p04_checks()
+    _alpha_checks()
     return report()
 
 
