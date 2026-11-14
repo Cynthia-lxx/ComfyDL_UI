@@ -250,6 +250,7 @@
 
     state.overlayEl = root;
     state.reopenEl = reopen;
+    ensureDockGap(); // must run before the first paint / applyPosition
     state.refs = {
       badge: root.querySelector('[data-obs="badge"]'),
       hint: root.querySelector('[data-obs="hint"]'),
@@ -320,6 +321,26 @@
       handle.addEventListener("pointerup", onUp);
       handle.addEventListener("pointercancel", onUp);
     });
+  }
+
+  function ensureDockGap() {
+    // Repair R5 (issue 1.1): in Node Graph mode --cdl-dock-left is NEVER
+    // set, so obs.css falls back to 59px + 14px.  The VERBOSE log proved it
+    // (left=73px, dock=-, inline_left=-, saved=-): newer builds have a wider
+    // rail, so 73px lands exactly ON its right edge and the 14px gap looks
+    // gone.  Derive the variable from the LIVE rail width, but only when
+    // nobody else defined it - the App Panel owns that variable when open.
+    try {
+      const dock = getComputedStyle(document.documentElement)
+        .getPropertyValue("--cdl-dock-left").trim();
+      if (dock) return;
+      const rail = document.querySelector(".side-tool-bar-container");
+      const width = rail ? rail.getBoundingClientRect().width : 59;
+      if (Number.isFinite(width) && width > 0) {
+        document.documentElement.style.setProperty(
+          "--cdl-dock-left", Math.round(width) + "px");
+      }
+    } catch (e) { /* courtesy: keep the CSS fallback */ }
   }
 
   function applyPosition() {

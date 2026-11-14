@@ -461,6 +461,13 @@ def _obs_craft2_checks() -> None:
           and "--cdl-dock-left:" not in css
           and "cursor: move" in css and "touch-action: none" in css
           and "cdl-obs-dragging" in css)
+    check("T9e R5: default gap derives from the live rail, never overrides App Panel",
+          "function ensureDockGap" in js
+          and "ensureDockGap();" in js
+          and 'getPropertyValue("--cdl-dock-left")' in js
+          and ".side-tool-bar-container" in js
+          and "getBoundingClientRect().width" in js
+          and "if (dock) return;" in js)
     check("T9c CRAFT 2: badges come from seven official exec events",
           all(name in js for name in (
               "execution_start", "executing", "execution_cached", "executed",
