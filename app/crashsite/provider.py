@@ -13,7 +13,10 @@ Registered once at server startup; the host then drives everything:
   prompts (lazy gating) - normal runs never scan the snapshot library.
 * ``should_cache`` - rejects what cannot round-trip (ModelPatcher,
   DataLoaders) before it ever reaches the store.
-* ``on_prompt_start/end`` - opens/closes the per-prompt snapshot database.
+* ``on_prompt_start/end`` - open/close the per-prompt snapshot lifecycle;
+  since P-β (2026-11-14) the SQLite build itself is DEFERRED to the first
+  write demand (rescue/store) or the run-close hooks - the empty snapshot
+  a zero-write run leaves behind is still produced, just off the hot path.
 * ``on_prompt_error`` - optional host "error" lifecycle event; marks the
   snapshot "interrupted" instead of "completed" when the run died mid-flight.
 * ``on_node_cached`` - optional host notification when a node is served from
@@ -63,6 +66,11 @@ class SnapshotProvider(CacheProvider):
         # are only answered for RESUMED prompts - normal runs never scan the
         # library, which used to crawl first-run start-up as it grew.
         self._lookup_active = False
+        # P-β (2026-11-14): deferred snapshot open - set by on_prompt_start,
+        # consumed by the FIRST write demand or the run-close hooks via
+        # _activate_pending().  Kills the per-run SQLite spike on the
+        # "Run -> first executing" critical path.
+        self._pending_open: Optional[Dict[str, Any]] = None
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ api
@@ -85,13 +93,24 @@ class SnapshotProvider(CacheProvider):
 
     # ------------------------------------------------- prompt lifecycle ----
     def on_prompt_start(self, prompt_id: str) -> None:
+        """P-β (2026-11-14): DEFER the snapshot-db build.
+
+        The old code called ``store.create_snapshot`` right here - a SQLite
+        file build + schema init on the "Run -> first executing" critical
+        path of EVERY run (issue P-β, §0.85.5).  This hook now only records
+        the pending-open state (prompt JSON + resume bookkeeping, all
+        in-memory); the database is built lazily on the FIRST write demand
+        (:meth:`on_store` / :meth:`on_scene_rescue`) or at run close
+        (:meth:`on_prompt_end` / :meth:`on_prompt_error`, which still
+        produce the same empty snapshot for zero-write runs - product
+        semantics unchanged, the spike just moved off the hot path).
+        """
         if not self._enabled:
             return
         try:
             prompt = self._grab_prompt(prompt_id)
-            path = store.create_snapshot(prompt=prompt, prompt_id=prompt_id)
             with self._lock:
-                self._active = path
+                self._active = None  # P-β: built lazily, see _activate_pending
                 self._active_prompt_id = prompt_id
                 self._skipped = 0
                 self._cached_nodes = {}
@@ -103,11 +122,48 @@ class SnapshotProvider(CacheProvider):
                     else None)
                 self._pending_resume = None
                 self._lookup_active = self._resume_source is not None
-            _logger.info("crash site: snapshot %s opened (prompt %s)%s",
-                         path.stem, prompt_id,
+                self._pending_open = {"prompt_id": prompt_id,
+                                      "prompt": prompt}
+            _logger.info("crash site: snapshot deferred (prompt %s)%s",
+                         prompt_id,
                          " [resume]" if self._resume_source else "")
         except Exception as exc:  # noqa: BLE001 - capture must never break runs
             _logger.warning("crash site: failed to open snapshot (%s)", exc)
+
+    def _activate_pending(self) -> Optional[Any]:
+        """P-β: build the snapshot db on first demand, exactly once per run.
+
+        What: converts the pending-open state (set by on_prompt_start) into
+              a real snapshot database.
+        In:   nothing (uses ``self._pending_open``).
+        Out:  the snapshot db path, or None when there is nothing pending /
+              the build failed (capture must never break runs).
+        Note: claim-and-build - the pending pointer is consumed under the
+              lock before the (file) IO happens, so concurrent callers can
+              never build the run's library twice.
+        """
+        with self._lock:
+            if self._active is not None:
+                return self._active
+            pending = self._pending_open
+            if pending is None:
+                return None
+            self._pending_open = None  # claim: exactly one builder
+            prompt = pending["prompt"]
+            activated_for = pending["prompt_id"]
+        try:
+            path = store.create_snapshot(prompt=prompt,
+                                         prompt_id=activated_for)
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("crash site: failed to open snapshot (%s)", exc)
+            return None
+        with self._lock:
+            if self._active is None and self._active_prompt_id == activated_for:
+                self._active = path
+        _logger.info("crash site: snapshot %s opened lazily (prompt %s)%s",
+                     path.stem, activated_for,
+                     " [resume]" if self._resume_source else "")
+        return path
 
     def _grab_prompt(self, prompt_id: str) -> Dict[str, Any]:
         """The prompt JSON from the running queue item (host gives us only
@@ -123,8 +179,12 @@ class SnapshotProvider(CacheProvider):
         return {}
 
     def on_prompt_end(self, prompt_id: str) -> None:
+        # P-β: build the (usually empty) snapshot at close time instead of
+        # at start - same product semantics, spike off the hot path.
+        path = self._activate_pending()
         with self._lock:
-            path = self._active
+            if path is None:
+                path = self._active
             self._active = None
             self._active_prompt_id = ""
             skipped = self._skipped
@@ -136,6 +196,7 @@ class SnapshotProvider(CacheProvider):
             self._rehydrated = set()
             self._resume_source = None
             self._lookup_active = False
+            self._pending_open = None
         if path is not None:
             try:
                 store.mark_status(path, "completed", skipped=skipped)
@@ -153,12 +214,21 @@ class SnapshotProvider(CacheProvider):
         active snapshot "interrupted" instead of letting the subsequent
         on_prompt_end file it under "completed" - a crashed scene labelled
         as a finished run misled users during the 2026-10-09 resume
-        debugging.  on_prompt_end afterwards becomes a no-op (path None).
+        debugging.          on_prompt_end afterwards becomes a no-op (path None).
         """
+        # P-β: rescue_scene ran BEFORE this event (execution.py:906-911), so
+        # a failed run already built its snapshot on the first rescue write;
+        # a run that died with nothing to rescue builds the empty snapshot
+        # here instead.  The ownership guard must accept the pending state.
+        path = self._activate_pending()
         with self._lock:
-            if self._active is None or self._active_prompt_id != prompt_id:
+            mine = ((self._active_prompt_id == prompt_id)
+                    or (self._pending_open is not None
+                        and self._pending_open["prompt_id"] == prompt_id))
+            if not mine:
                 return  # not ours (missed start / late event): ignore
-            path = self._active
+            if path is None:
+                path = self._active
             skipped = self._skipped
             self._active = None
             self._active_prompt_id = ""
@@ -170,6 +240,7 @@ class SnapshotProvider(CacheProvider):
             self._rehydrated = set()
             self._resume_source = None
             self._lookup_active = False
+            self._pending_open = None
         try:
             store.mark_status(path, "interrupted", skipped=skipped)
         except Exception as exc:  # noqa: BLE001 - never break execution
@@ -189,7 +260,10 @@ class SnapshotProvider(CacheProvider):
         non-active prompts are ignored (same pattern as on_prompt_error).
         """
         with self._lock:
-            if self._active is None or self._active_prompt_id != prompt_id:
+            mine = ((self._active_prompt_id == prompt_id)
+                    or (self._pending_open is not None
+                        and self._pending_open["prompt_id"] == prompt_id))
+            if not mine:
                 return
             self._cached_nodes[node_id] = class_type
 
@@ -251,7 +325,10 @@ class SnapshotProvider(CacheProvider):
             return False
         if value is None:
             with self._lock:
-                return self._lookup_active and self._active is not None
+                # P-β: the lookup scans the SOURCE snapshot library, not this
+                # run's (not-yet-built) db - the pending state counts.
+                return self._lookup_active and (
+                    self._active is not None or self._pending_open is not None)
         try:
             if serialize.has_exotic_leaves(value.outputs):
                 with self._lock:
@@ -263,11 +340,12 @@ class SnapshotProvider(CacheProvider):
     # ------------------------------------------------------ store/lookup ---
     async def on_store(self, context: CacheContext,
                        value: CacheValue) -> None:
-        with self._lock:
-            path = self._active
+        loop = asyncio.get_running_loop()
+        # P-β: first write demand builds the run's snapshot db (off the
+        # event loop, same executor as the serialization itself).
+        path = await loop.run_in_executor(None, self._activate_pending)
         if path is None:
             return  # no active snapshot (missed start / disabled): skip
-        loop = asyncio.get_running_loop()
         # GB-scale serialization must happen OFF the event loop.
         await loop.run_in_executor(
             None, self._store_sync, path, context, value)
@@ -276,7 +354,8 @@ class SnapshotProvider(CacheProvider):
         if not self._enabled:
             return None
         with self._lock:
-            active = self._lookup_active and self._active is not None
+            active = self._lookup_active and (
+                self._active is not None or self._pending_open is not None)
         if not active:
             return None  # lazy capture: only resumed prompts scan the library
         loop = asyncio.get_running_loop()
@@ -291,12 +370,17 @@ class SnapshotProvider(CacheProvider):
         Reuses the regular row writer; exotic slots are skipped as usual.
         Stray events for non-active prompts are ignored.
         """
+        loop = asyncio.get_running_loop()
+        # P-β: this is normally the FIRST write of a failed run - the
+        # snapshot db is built right here (execution.py:906-911 guarantees
+        # rescue runs BEFORE the error/end lifecycle event closes it).
+        path = await loop.run_in_executor(None, self._activate_pending)
         with self._lock:
-            path = self._active
-            mine = self._active_prompt_id == prompt_id
+            mine = ((self._active_prompt_id == prompt_id)
+                    or (self._pending_open is not None
+                        and self._pending_open["prompt_id"] == prompt_id))
         if path is None or not mine:
             return
-        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None, self._store_sync, path, context, value)
         proflog("medium", "crash site: rescued node %s (%s) from cache",

@@ -228,6 +228,39 @@ def _export_checks() -> None:
           json.dumps(res3)[:160])
 
 
+# ------------------------------------------------- P-β: deferred open -----
+def _pbeta_checks() -> None:
+    """T6-1 P-β: the SQLite snapshot build is deferred off the run-start
+    critical path - start records pending state only; the db is built on
+    the first write demand (store/rescue) or at close (end/error), and a
+    zero-write run still yields the same empty snapshot (semantics kept)."""
+    import asyncio
+    from unittest import mock
+    from app.crashsite import store as cs_store
+    from app.crashsite.provider import SnapshotProvider
+
+    before = len(cs_store.list_snapshots())
+    prov = SnapshotProvider()
+    with mock.patch.object(cs_store, "create_snapshot",
+                           wraps=cs_store.create_snapshot) as spy:
+        prov.on_prompt_start("pid-pbeta")
+        check("P-β-a start defers the build (no db, pending armed)",
+              prov._active is None
+              and prov._pending_open is not None
+              and prov._pending_open["prompt_id"] == "pid-pbeta"
+              and spy.call_count == 0
+              and len(cs_store.list_snapshots()) == before)
+        prov.on_prompt_end("pid-pbeta")
+        check("P-β-b close builds the zero-write run's empty snapshot",
+              spy.call_count == 1
+              and prov._active is None and prov._pending_open is None
+              and len(cs_store.list_snapshots()) == before + 1)
+    listed = cs_store.list_snapshots()
+    mine = [s for s in listed if s["prompt_id"] == "pid-pbeta"]
+    check("P-β-c deferred snapshot is completed and queryable",
+          bool(mine) and mine[0]["status"] == "completed")
+
+
 # --------------------------------------------------------- T3: provider ----
 def _provider_checks() -> None:
     provider = SnapshotProvider()
@@ -808,6 +841,7 @@ def main() -> int:
     _store_checks()
     _export_checks()
     _provider_checks()
+    _pbeta_checks()
     _route_checks()
     _frontend_motion_checks()
     _frontend_loading_checks()
