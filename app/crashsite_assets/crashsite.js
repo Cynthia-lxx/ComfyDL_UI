@@ -575,11 +575,31 @@
   }
 
   function openSidebarPanel() {
+    // R8 (2026-11-14): newer ComfyUI frontends moved the sidebar state into
+    // the `extensionManager.sidebarTab` pinia store - `toggleSidebarTab` and
+    // `activeSidebarTabId` no longer exist on `em` itself, so the nudge's
+    // panel auto-open silently no-op'd (toast fired, data loaded, panel
+    // never popped).  Mirror profiler.js openSidebar(): try the store first
+    // (it may be a Vue ref - unwrap .value), then the legacy em API, then a
+    // DOM fallback click on the toolbar item.
+    const em = getApp() && getApp().extensionManager;
+    const tryTab = (obj) => {
+      try {
+        if (obj && typeof obj.toggleSidebarTab === "function") {
+          if (obj.activeSidebarTabId !== TAB_ID) obj.toggleSidebarTab(TAB_ID);
+          return true;
+        }
+      } catch (e) { /* next */ }
+      return false;
+    };
+    if (em) {
+      if (em.sidebarTab && tryTab(em.sidebarTab.value ? em.sidebarTab.value : em.sidebarTab)) return;
+      if (tryTab(em.sidebarTab)) return;
+      if (tryTab(em)) return;
+    }
     try {
-      const em = getApp() && getApp().extensionManager;
-      if (em && typeof em.toggleSidebarTab === "function") {
-        if (em.activeSidebarTabId !== TAB_ID) em.toggleSidebarTab(TAB_ID);
-      }
+      const el = document.querySelector('[data-toolbar-side-item="' + TAB_ID + '"]');
+      if (el) el.click();
     } catch (e) { /* silent */ }
   }
 

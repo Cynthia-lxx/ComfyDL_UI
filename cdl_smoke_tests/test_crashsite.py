@@ -772,6 +772,15 @@ def _p04_checks() -> None:
     check("P0-4d R6-1 post-action refreshes are coalesced",
           js.count("scheduleRefresh();") >= 5
           and js.count("await fetchSnapshots();") == 1)
+    # R8 (2026-11-14): newer frontends moved the sidebar state into the
+    # em.sidebarTab pinia store; the nudge's auto-open must try the store
+    # first (Vue ref unwrap), then the legacy em API, then a DOM fallback -
+    # same proven pattern as profiler.js openSidebar().
+    check("R8 openSidebarPanel adapts to em.sidebarTab + legacy + DOM fallback",
+          "em.sidebarTab && tryTab(em.sidebarTab.value ? em.sidebarTab.value : em.sidebarTab)"
+          in js
+          and "if (tryTab(em)) return;" in js
+          and 'data-toolbar-side-item="' in js)
 
 
 def _alpha_checks() -> None:
