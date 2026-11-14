@@ -103,6 +103,14 @@ VERBOSE_LOADER_TAG = (
 )
 VERBOSE_LOADER_MARK = "<!--ComfyDL_UI:verbose-loader-->"
 
+# M-D P6b Optimizer panel: thin rendering layer over the switch/status
+# endpoints.  Same loader pattern; the panel is collapsed by default.
+P6B_LOADER_TAG = (
+    '<!--ComfyDL_UI:p6b-loader-->'
+    '<script type="module" src="/comfydl/p6b/p6b.js"></script>'
+)
+P6B_LOADER_MARK = "<!--ComfyDL_UI:p6b-loader-->"
+
 
 def _patch_verbose_loader(web_root: Path) -> bool:
     """Inject the VERBOSE loader exactly once; return True when it changed.
@@ -434,6 +442,14 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("obs loader")
     except Exception as exc:
         logging.warning(f"{TAG} obs loader not applied: {exc}")
+
+    # The P6b Optimizer panel (M-D): same channel, after obs so the dock-gap
+    # CSS variable is already repaired when both windows paint.
+    try:
+        if _patch_p6b_loader(Path(web_root)):
+            applied.append("p6b loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} p6b loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -1063,6 +1079,20 @@ def _patch_cdlapp_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", CDLAPP_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} cdlapp panel loader injected into {path.name}")
+    return True
+
+
+def _patch_p6b_loader(web_root: Path) -> bool:
+    """Inject the P6b Optimizer panel's loader exactly once."""
+    path = web_root / "index.html"
+    text = _text(path)
+    if P6B_LOADER_MARK in text:
+        logging.debug(f"{TAG} p6b loader already applied")
+        return False
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", P6B_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} p6b optimizer loader injected into {path.name}")
     return True
 
 

@@ -1,0 +1,143 @@
+/* ComfyDL Optimizer panel (M-D P6b).  Own prefix so it never collides with
+ * the P6 Observation overlay; z-index 2100 matches the P6 overlay band
+ * (above the topbar, below full-screen surfaces, clear of the minimap).
+ * Default position is horizontally offset from obs.css's 240px window so
+ * both windows can be open at once without stacking. */
+#cdl-p6b-overlay {
+  position: fixed;
+  left: calc(var(--cdl-dock-left, 59px) + 270px);
+  top: calc(var(--comfy-topbar-height, 48px) + 12px);
+  width: 280px;
+  max-height: calc(100vh - 80px);
+  z-index: 2100;
+  display: flex;
+  flex-direction: column;
+  background: var(--comfy-menu-bg, #353535);
+  color: var(--input-text, #ddd);
+  border: 1px solid var(--border-color, #4a4a4a);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  font-family: var(--font-family, sans-serif);
+  font-size: 11px;
+  overflow: hidden;
+}
+#cdl-p6b-overlay[data-hidden="1"] { display: none; }
+#cdl-p6b-overlay[data-collapsed="1"] .cdl-p6b-body { display: none; }
+
+.cdl-p6b-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  cursor: move;
+  touch-action: none;
+  border-bottom: 1px solid var(--border-color, #4a4a4a);
+  background: var(--comfy-menu-bg, #353535);
+}
+.cdl-p6b-title { flex: 1; font-weight: 700; letter-spacing: .02em; }
+.cdl-p6b-btn {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  background: transparent;
+  color: var(--input-text, #ddd);
+  border: 1px solid var(--border-color, #4a4a4a);
+  border-radius: 4px;
+}
+.cdl-p6b-btn:hover { background: var(--comfy-input-bg, #222); }
+
+.cdl-p6b-body {
+  padding: 6px 8px 8px;
+  overflow-y: auto;
+  max-height: calc(100vh - 130px);
+}
+.cdl-p6b-card {
+  margin-bottom: 6px;
+  border: 1px solid var(--border-color, #4a4a4a);
+  border-radius: 6px;
+  background: var(--comfy-input-bg, #222);
+}
+.cdl-p6b-card-title {
+  padding: 4px 7px;
+  font-weight: 700;
+  color: var(--input-text, #ddd);
+  border-bottom: 1px solid var(--border-color, #4a4a4a);
+}
+.cdl-p6b-card-body { padding: 5px 7px; }
+
+.cdl-p6b-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.cdl-p6b-switch-row input { flex: none; margin: 0; }
+.cdl-p6b-switch-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdl-p6b-tag {
+  flex: none;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+}
+.cdl-p6b-hard .cdl-p6b-tag { color: #e5484d; font-weight: 700; }
+
+.cdl-p6b-status-row {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  border-bottom: 1px dashed var(--border-color, #4a4a4a);
+}
+.cdl-p6b-status-row:last-child { border-bottom: 0; }
+.cdl-p6b-family {
+  flex: none;
+  width: 84px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cdl-p6b-kv { color: var(--input-text, #ddd); }
+.cdl-p6b-kv b { color: var(--input-text-read-only, #9a9a9a); }
+.cdl-p6b-empty, .cdl-p6b-hint {
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.cdl-p6b-hint { margin-top: 4px; }
+
+#cdl-p6b-reopen {
+  position: fixed;
+  left: calc(var(--cdl-dock-left, 59px) + 270px);
+  top: calc(var(--comfy-topbar-height, 48px) + 12px);
+  z-index: 2100;
+  padding: 3px 8px;
+  cursor: pointer;
+  background: var(--comfy-menu-bg, #353535);
+  color: var(--input-text, #ddd);
+  border: 1px solid var(--border-color, #4a4a4a);
+  border-radius: 6px;
+  font-size: 11px;
+}
+#cdl-p6b-reopen[hidden] { display: none; }
+.cdl-p6b-dragging { user-select: none; }
+
+/* Three-gate motion: global UI switch, App Panel switch, OS preference. */
+.p6b-entrance { animation: p6b-overlay-in .18s ease-out; }
+@keyframes p6b-overlay-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+html.cdl-motion-off .p6b-entrance,
+body.cdlapp-motion-off .p6b-entrance { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .p6b-entrance { animation: none; }
+  #cdl-p6b-overlay, #cdl-p6b-reopen, .cdl-p6b-btn { transition: none; }
+}

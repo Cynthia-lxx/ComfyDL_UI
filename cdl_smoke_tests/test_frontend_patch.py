@@ -114,6 +114,12 @@ def main() -> int:
               and "/comfydl/vassets/verbose.js" in index_text)
         check("real frontend: verbose loader re-apply is a no-op",
               _fp._patch_verbose_loader(web_root) is False)
+        # M-D P6b: Optimizer panel loader (thin rendering layer).
+        check("real frontend: p6b optimizer loader injected exactly once",
+              index_text.count(_fp.P6B_LOADER_MARK) == 1
+              and "/comfydl/p6b/p6b.js" in index_text)
+        check("real frontend: p6b loader re-apply is a no-op",
+              _fp._patch_p6b_loader(web_root) is False)
 
     # --- synthetic chunk: happy path ---------------------------------------- #
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_fepatch_"))

@@ -620,9 +620,49 @@ def _r4_checks() -> None:
           and "has_started_at" in fe_js)
 
 
+# ------------------------------------------------------- P6b thin layer ----
+def _p6b_frontend_checks() -> None:
+    """M-D P6b: Optimizer panel wiring + hard-disable snap-back contract."""
+    base = REPO_ROOT / "app" / "p6b_assets"
+    js = (base / "p6b.js").read_text(encoding="utf-8")
+    css = (base / "p6b.css").read_text(encoding="utf-8")
+    patch = (REPO_ROOT / "app" / "frontend_patch.py").read_text(encoding="utf-8")
+    server = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+    check("P6b-a assets + loader + static route wired",
+          (base / "p6b.js").is_file() and (base / "p6b.css").is_file()
+          and "P6B_LOADER_MARK" in patch and "_patch_p6b_loader" in patch
+          and "web.static('/comfydl/p6b', p6b_assets)" in server)
+    check("P6b-b reads the three existing endpoints, no new data source",
+          '"/comfydl/switches"' in js
+          and '"/comfydl/switches/status"' in js
+          and '"/comfydl/dataio/cache/stats"' in js
+          and "SWITCHES_URL + \"/\"" in js)
+    check("P6b-c special switches keep their real start/stop endpoints",
+          '"/comfydl/profiling/enabled"' in js
+          and '"/comfydl/crashsite/enabled"' in js
+          and '"/comfydl/spine"' in js and "const SPECIAL" in js)
+    check("P6b-d rejected toggle snaps back from server truth",
+          "await fetchAll()" in js and "box.checked = !wanted" in js
+          and "result.ok" in js)
+    check("P6b-e shell: fixed window, own keys, drag writes left/top only",
+          "position: fixed" in css and "z-index: 2100" in css
+          and "ComfyDL.P6b.Collapsed" in js and "ComfyDL.P6b.Position" in js
+          and "root.style.left = left" in js and "root.style.top = top" in js
+          and "style.transform" not in js)
+    check("P6b-f three-gate motion + collapsed/hidden shape",
+          "html.cdl-motion-off" in css and "body.cdlapp-motion-off" in css
+          and "prefers-reduced-motion" in css
+          and "root.dataset.collapsed" in js and "root.dataset.hidden" in js
+          and "data-collapsed=\"1\"" in css and "data-hidden=\"1\"" in css)
+    check("P6b-g bilingual i18n + dock-gap repair",
+          "const I18N" in js and "en:" in js and "zh:" in js
+          and "function ensureDockGap" in js and "--cdl-dock-left" in js)
+
+
 # ------------------------------------------------------------------ main --
 def _main() -> int:
     _snapshot_checks()
+    _p6b_frontend_checks()
     _r4_checks()
     _obs_craft2_checks()
     _gpu_provider_checks()

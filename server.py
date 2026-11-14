@@ -1435,6 +1435,13 @@ class PromptServer():
         if os.path.isdir(verbose_assets):
             self.app.add_routes([web.static('/comfydl/vassets', verbose_assets)])
 
+        # M-D P6b: Optimizer panel assets (thin rendering layer).
+        p6b_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "p6b_assets"
+        )
+        if os.path.isdir(p6b_assets):
+            self.app.add_routes([web.static('/comfydl/p6b', p6b_assets)])
+
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True
         if installed_templates_version:
