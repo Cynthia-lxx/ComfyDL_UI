@@ -187,6 +187,19 @@
 .cdl-obs-run-status { flex: none; font-weight: 700; }
 .cdl-obs-run-completed { color: #3ddc97; }
 .cdl-obs-run-failed { color: #e5484d; }
+/* R4 (1.7): per-row started_at / duration / this-session tag + caliber hint */
+.cdl-obs-run-time, .cdl-obs-run-dur {
+  flex: none;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-variant-numeric: tabular-nums;
+}
+.cdl-obs-run-new { flex: none; color: #f5a524; font-weight: 700; }
+.cdl-obs-runs-hint {
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 9px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
 .cdl-obs-runs-empty {
   color: var(--input-text-read-only, #9a9a9a);
   font-size: 10px;

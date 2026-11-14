@@ -22,6 +22,8 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict
 
+from comfy import verbose_log
+
 
 class Provider:
     """Base class / duck-type documentation for spine providers."""
@@ -99,28 +101,49 @@ class ProcessProvider(Provider):
     """This process's own CPU (per-core scale) + RSS, from psutil.
 
     The watchdog's primary signal: ``cpu_percent`` here is *per-core
-    scaled* (one busy core reads ~100), matching the historical
-    ProfilingWatchdog._tick semantics exactly.  The first poll after
-    creation primes the counter and returns 0.0 - same priming contract the
-    watchdog's own thread used to perform.
+    scaled* (one busy core reads ~100; a fully busy N-core box reads
+    ~100*N), matching the historical ProfilingWatchdog._tick semantics.
+
+    R4 (issue 1.5-A, 2026-11-14): the ``Process`` object is now created
+    ONCE and REUSED across polls.  ``cpu_percent(interval=None)`` measures
+    the delta against the previous call ON THAT OBJECT - the previous code
+    built a fresh Process wrapper every poll, so the object never had
+    a previous sample and the reading was pinned at 0.0 forever (the UI's
+    "Process CPU 0.0%" while the system CPU line spiked).  The first poll
+    on the shared object primes the baseline and returns 0.0 exactly once -
+    the same priming contract the watchdog's own thread performs.  Sampled
+    raw output goes to the VERBOSE log (stage ``spine``, event
+    ``proc_poll``, every 8th poll, ``obj=reused``) so numeric-caliber
+    questions stay answerable from logs alone (VERBOSE-over-probe rule).
     """
 
     fields = "proc"
 
     def __init__(self) -> None:
+        self._psutil = None
+        self._proc = None
         self._primed = False
+        self._polls = 0
 
     def poll(self) -> Dict[str, Any]:
-        import psutil
+        if self._psutil is None:
+            import psutil
 
-        proc = psutil.Process()
+            self._psutil = psutil
+            self._proc = psutil.Process()
         if not self._primed:
-            proc.cpu_percent(None)
+            # First poll on the shared object only primes the baseline.
+            self._proc.cpu_percent(None)
             self._primed = True
+        cpu_percent = round(float(self._proc.cpu_percent(None)), 1)
+        rss_mb = round(self._proc.memory_info().rss / (1024 * 1024), 1)
+        self._polls += 1
+        verbose_log.step("spine", "proc_poll", self._polls, every_n=8,
+                         cpu=cpu_percent, rss_mb=rss_mb, obj="reused")
         return {
-            "pid": proc.pid,
-            "cpu_percent": round(float(proc.cpu_percent(None)), 1),
-            "rss_mb": round(proc.memory_info().rss / (1024 * 1024), 1),
+            "pid": self._proc.pid,
+            "cpu_percent": cpu_percent,
+            "rss_mb": rss_mb,
         }
 
 

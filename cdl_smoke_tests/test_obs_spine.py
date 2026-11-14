@@ -487,9 +487,108 @@ def _obs_craft2_checks() -> None:
           and "refreshRuns()" in js)
 
 
+# ------------------------------------------------------------------ R4 ----
+def _r4_checks() -> None:
+    """R4 observation calibers: 1.5-A process-CPU object reuse + 1.7 runs rows."""
+    providers_src = (REPO_ROOT / "app" / "spine" / "providers.py").read_text(
+        encoding="utf-8")
+    obs_js = (REPO_ROOT / "app" / "obs_assets" / "obs.js").read_text(
+        encoding="utf-8")
+    obs_css = (REPO_ROOT / "app" / "obs_assets" / "obs.css").read_text(
+        encoding="utf-8")
+    fe_js = (REPO_ROOT / "app" / "verbose_assets" / "verbose.js").read_text(
+        encoding="utf-8")
+
+    # 1.5-A: the Process object must be built ONCE and reused; a fresh
+    # psutil.Process() per poll has no previous cpu_percent sample and
+    # returns 0.0 forever (the "Process CPU 0.0%" bug).
+    check("R4a 1.5-A provider: Process built once, reused, VERBOSE-sampled",
+          providers_src.count("psutil.Process()") == 1
+          and providers_src.count("self._proc.cpu_percent(None)") == 2
+          and "verbose_log.step(" in providers_src
+          and '"proc_poll"' in providers_src and "every_n=8" in providers_src)
+
+    import sys as _sys
+    import types as _types
+
+    class _FakeProc:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.pid = 4242
+
+        def cpu_percent(self, interval=None):
+            self.calls += 1
+            # psutil semantics: the FIRST call on an object carries no
+            # delta and reads 0.0; later calls report the real value.
+            return 0.0 if self.calls == 1 else 137.5
+
+        def memory_info(self):
+            return _types.SimpleNamespace(rss=64 * 1024 * 1024)
+
+    holder: dict = {}
+
+    def _process():
+        if "proc" not in holder:
+            holder["proc"] = _FakeProc()
+        return holder["proc"]
+
+    fake = _types.ModuleType("psutil")
+    fake.Process = _process
+    saved = _sys.modules.get("psutil")
+    _sys.modules["psutil"] = fake
+    try:
+        from app.spine.providers import ProcessProvider
+
+        prov = ProcessProvider()
+        first = prov.poll()
+        second = prov.poll()
+        third = prov.poll()
+    finally:
+        if saved is not None:
+            _sys.modules["psutil"] = saved
+        else:
+            _sys.modules.pop("psutil", None)
+
+    # poll 1 = prime(call 1) + read(call 2 -> real delta vs baseline);
+    # polls 2/3 read the SAME object, so the value is never pinned to 0.
+    # The old code rebuilt Process() per poll -> every poll was a "first
+    # call" and read 0.0 forever.
+    check("R4b 1.5-A provider: polls read the shared object (no rebuild)",
+          first["cpu_percent"] == 137.5 and second["cpu_percent"] == 137.5
+          and third["cpu_percent"] == 137.5
+          and holder["proc"].calls == 4  # 1 prime + 3 reads, one object
+          and holder["proc"].pid == 4242 and first["rss_mb"] == 64.0)
+
+    # 1.5-A UI: per-core caliber must NOT be clamped into 0-100, and the
+    # label/tooltip must carry the caliber.
+    check("R4c 1.5-A obs: per-core caliber kept, labeled, no 0-100 clamp",
+          "Number.isFinite(procCpu)" in obs_js
+          and "proc_hint" in obs_js
+          and "Process CPU (per-core)" in obs_js
+          and "进程 CPU(per-core)" in obs_js
+          and "clampPct(s.proc?.cpu_percent)" not in obs_js)
+
+    # 1.7: run rows gain started_at (HH:MM:SS), duration, a this-session
+    # tag, and a caliber hint; status text stays the real ledger value.
+    check("R4d 1.7 obs: runs rows show time/duration/session tag + hint",
+          "started.slice(11, 19)" in obs_js
+          and "cdl-obs-run-time" in obs_js and "cdl-obs-run-dur" in obs_js
+          and "cdl-obs-run-new" in obs_js and "run_new" in obs_js
+          and "SESSION_START" in obs_js and "runs_hint" in obs_js
+          and "cdl-obs-runs-hint" in obs_css
+          and "cdl-obs-run-new" in obs_css and "cdl-obs-run-time" in obs_css)
+
+    # VERBOSE: the /runs index body summary (R1's blind spot) is recorded.
+    check("R4e verbose: /runs index-body summary recorded by the FE hook",
+          "index-body" in fe_js and "/comfydl\\/runs" in fe_js
+          and "resp.clone().json()" in fe_js and "statuses" in fe_js
+          and "has_started_at" in fe_js)
+
+
 # ------------------------------------------------------------------ main --
 def _main() -> int:
     _snapshot_checks()
+    _r4_checks()
     _obs_craft2_checks()
     _gpu_provider_checks()
     _obs_panel_checks()

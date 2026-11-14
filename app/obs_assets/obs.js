@@ -25,6 +25,9 @@
   const COLLAPSE_KEY = "ComfyDL.Obs.Collapsed";
   const HIDDEN_KEY = "ComfyDL.Obs.Hidden";
   const POS_KEY = "ComfyDL.Obs.Position";
+  // R4 (1.7): page-load instant - runs started after this get the "new"
+  // this-session tag in the runs list.
+  const SESSION_START = Date.now();
   const MAX_POINTS = 60;
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -56,11 +59,14 @@
       reopen: "Observation",
       trend: "60-sample trend",
       cpu_trend: "CPU", ram_trend: "RAM", vram_trend: "VRAM",
-      proc: "Process CPU", vram: "VRAM", no_gpu: "No CUDA device",
+      proc: "Process CPU (per-core)", vram: "VRAM", no_gpu: "No CUDA device",
+      proc_hint: "Per-core scale: one busy core reads 100%; multi-core load can exceed 100%.",
       schema: "schema v",
       dedup: "Instantaneous values are in the bottom-left status text.",
       exec_title: "Execution", runs_title: "Experiment runs",
       ran: "ran", cached: "cached", blocked: "blocked",
+      run_new: "new",
+      runs_hint: "Rows are written when a run finishes (completed/failed); a running run appears here only once it ends.",
       runs_empty: "No experiment runs yet - only experiment/scan nodes write here.",
     },
     zh: {
@@ -75,11 +81,14 @@
       reopen: "观测",
       trend: "60 点趋势",
       cpu_trend: "CPU", ram_trend: "内存", vram_trend: "显存",
-      proc: "进程 CPU", vram: "显存", no_gpu: "无 CUDA 设备",
+      proc: "进程 CPU(per-core)", vram: "显存", no_gpu: "无 CUDA 设备",
+      proc_hint: "按单核满载=100% 计；多核满载可超过 100%。",
       schema: "协议 v",
       dedup: "瞬时数值见左下角状态栏，此处显示趋势与绝对值。",
       exec_title: "执行", runs_title: "实验 runs",
       ran: "执行", cached: "缓存", blocked: "受阻",
+      run_new: "新",
+      runs_hint: "索引行在 run 结束时写入（completed/failed）；进行中的 run 结束后才会出现。",
       runs_empty: "暂无实验 run——只有实验 / 扫描节点会写入。",
     },
   };
@@ -446,8 +455,13 @@
     r.rows.hidden = false;
     const s = state.sample;
     const gpu = s.gpu;
+    // R4 (1.5-A): per-core caliber - a fully busy N-core box reads 100*N,
+    // so this value must NOT be clamped into 0-100 (that hid real load);
+    // the label + tooltip carry the caliber instead.
+    const procCpu = Number(s.proc?.cpu_percent);
     r.proc.textContent = t("proc") + "  " +
-      clampPct(s.proc?.cpu_percent).toFixed(1) + "%";
+      (Number.isFinite(procCpu) ? procCpu.toFixed(1) : "0.0") + "%";
+    r.proc.title = t("proc_hint");
     r.vram.textContent = t("vram") + "  " + (
       gpu && gpu.available && Number(gpu.total_gib) > 0
         ? Number(gpu.used_gib).toFixed(1) + " / " +
@@ -475,15 +489,38 @@
         esc(t("runs_empty")) + "</div>";
       return;
     }
+    // R4 (1.7): the ledger's csv index layer only records FINISHED runs
+    // (rows are appended in finish(); status is the real completed/failed
+    // value, never hardcoded), so a bare "gridsearch completed" x5 told
+    // the user nothing.  Each row now carries started_at (HH:MM:SS from
+    // the ledger's local ISO stamp), the duration, and a "new" tag when
+    // the run started during THIS page session.
     host.innerHTML = state.runs.map((run) => {
       const name = String(run.experiment || run.run_id || "run");
       const status = String(run.status || "");
       const cls = status === "failed"
         ? "cdl-obs-run-failed" : "cdl-obs-run-completed";
+      const started = String(run.started_at || "");
+      const hm = started.length >= 19 ? started.slice(11, 19) : "";
+      const dur = Number(run.duration_s);
+      const durTxt = Number.isFinite(dur) && dur > 0
+        ? (dur >= 10 ? dur.toFixed(1) + "s"
+          : dur >= 1 ? dur.toFixed(2) + "s"
+          : Math.round(dur * 1000) + "ms")
+        : "";
+      const startedMs = Date.parse(started);
+      const newTag = Number.isFinite(startedMs) && startedMs >= SESSION_START
+        ? '<span class="cdl-obs-run-new">' + esc(t("run_new")) + "</span>"
+        : "";
       return '<div class="cdl-obs-run"><span class="cdl-obs-run-name">' +
-        esc(name) + '</span><span class="cdl-obs-run-status ' + cls + '">' +
+        esc(name) + '</span>' +
+        (hm ? '<span class="cdl-obs-run-time">' + esc(hm) + "</span>" : "") +
+        (durTxt ? '<span class="cdl-obs-run-dur">' + esc(durTxt) + "</span>" : "") +
+        newTag +
+        '<span class="cdl-obs-run-status ' + cls + '">' +
         esc(status) + "</span></div>";
-    }).join("");
+    }).join("") +
+      '<div class="cdl-obs-runs-hint">' + esc(t("runs_hint")) + "</div>";
   }
 
   function onExecEvent(name, payload) {

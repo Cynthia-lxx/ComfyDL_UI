@@ -59,6 +59,28 @@
           url, status: resp.status,
           duration_ms: (performance.now() - t0).toFixed(2),
         });
+        // R4 (1.7): the /runs index body was never logged, so the
+        // "all rows completed" question was unanswerable from logs alone.
+        // A summary (count + status histogram + started_at presence) is
+        // recorded via a clone - the UI consumer still gets the stream.
+        if (/\/comfydl\/runs(\?|$)/.test(url) && resp.ok) {
+          try {
+            resp.clone().json().then((data) => {
+              const rows = Array.isArray(data && data.runs) ? data.runs : [];
+              const statuses = {};
+              rows.forEach((r) => {
+                const s = String((r && r.status) || "?");
+                statuses[s] = (statuses[s] || 0) + 1;
+              });
+              emit("runs", "index-body", {
+                count: rows.length,
+                statuses: JSON.stringify(statuses),
+                has_started_at: rows.length > 0
+                  && String(rows[0].started_at || "") !== "",
+              });
+            }).catch(() => { /* courtesy */ });
+          } catch (e) { /* courtesy */ }
+        }
         return resp;
       });
     };
