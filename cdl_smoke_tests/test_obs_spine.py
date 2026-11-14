@@ -372,6 +372,49 @@ async def _route_checks() -> None:
                                   json={"enabled": "yes"})
         check("T5i2 route: non-boolean enabled rejected with 400",
               resp.status == 400)
+
+        # T5m P7: attention bench readout - a read-only projection of the
+        # attention_bench cache into HTTP, seeded here through the same
+        # store_result() path the Optimizer node uses (isolated cache root).
+        import torch  # noqa: F401  (local: only this block needs it)
+        from comfy_extras import nodes_attention_select as _attn
+        bench_root = Path(tempfile.mkdtemp(prefix="cdl_bench_"))
+        bench_old_root = signature_cache._root_override
+        signature_cache.set_root(bench_root)
+        try:
+            _attn.store_result(torch.device("cpu"), 1024, 16, 64, {
+                "times_ms": {"pytorch": 1.5, "flash": 0.75},
+                "speedup": {"flash": 2.0},
+                "chosen": "flash",
+                "benchmark_s": 0.05,
+                "device": "cpu", "torch": torch.__version__,
+                "seq_len": 1024, "heads": 16, "head_dim": 64,
+            })
+            # Old-style entry (pre-P7, geometry only in the opaque digest)
+            # must survive the readout as a geometry-less row.
+            _attn.store_result(torch.device("cpu"), 512, 8, 64, {
+                "times_ms": {"pytorch": 0.9},
+                "speedup": {},
+                "chosen": "pytorch",
+                "benchmark_s": 0.01,
+            })
+            resp = await client.get("/comfydl/attention/bench")
+            bench_body = await resp.json()
+            entries = bench_body.get("entries") or []
+            check("T5m P7: bench endpoint 200 with notes + stamped row",
+                  resp.status == 200 and bench_body.get("available") is True
+                  and isinstance(bench_body.get("notes"), dict)
+                  and "flash" in bench_body.get("notes", {})
+                  and any(e.get("chosen") == "flash"
+                          and e.get("seq_len") == 1024
+                          and e.get("heads") == 16
+                          and e.get("device") == "cpu"
+                          for e in entries))
+            check("T5m2 P7: pre-P7 entry degrades to a geometry-less row",
+                  any(e.get("chosen") == "pytorch" and e.get("times_ms")
+                      and "seq_len" not in e for e in entries))
+        finally:
+            signature_cache.set_root(bench_old_root)
     finally:
         await client.close()
         spine.stop()
@@ -657,6 +700,13 @@ def _p6b_frontend_checks() -> None:
     check("P6b-g bilingual i18n + dock-gap repair",
           "const I18N" in js and "en:" in js and "zh:" in js
           and "function ensureDockGap" in js and "--cdl-dock-left" in js)
+    check("P7-h bench card wired into the Optimizer panel (read-only)",
+          '"/comfydl/attention/bench"' in js
+          and "function renderBench" in js and 'data-p6b="bench"' in js
+          and "bench_title" in js and "nobench" in js
+          and "cdl-p6b-bench-geo" in css and "cdl-p6b-bench-backend" in css
+          and "GET /comfydl/attention/bench" in
+          (REPO_ROOT / "app" / "spine" / "routes.py").read_text(encoding="utf-8"))
 
 
 # ------------------------------------------------------------------ main --

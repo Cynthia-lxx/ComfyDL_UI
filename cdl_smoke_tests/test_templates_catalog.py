@@ -131,6 +131,7 @@ check(
         "tabular_classification_production",
         "formula_playground_app",
         "attention_lab",
+        "quantization_lab",
         "hyperparameter_exploration",
         "data_list_demo",
         "dataops_demo",

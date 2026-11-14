@@ -4,7 +4,8 @@
  *       registered performance switch, the five backend families' live
  *       describe()/status() readout, and the DataFrame-cache counters.
  * In:   GET /comfydl/switches, GET /comfydl/switches/status,
- *       GET /comfydl/dataio/cache/stats; writes go through the EXISTING
+ *       GET /comfydl/dataio/cache/stats, GET /comfydl/attention/bench (P7,
+ *       read-only cached benchmark rows); writes go through the EXISTING
  *       switch endpoints (no second switch interface is introduced).
  * Out:  DOM only - true/false state always comes back from the server;
  *       a rejected toggle (404/409) snaps the checkbox back by re-reading
@@ -27,6 +28,7 @@
   const SWITCHES_URL = "/comfydl/switches";
   const STATUS_URL = "/comfydl/switches/status";
   const CACHE_STATS_URL = "/comfydl/dataio/cache/stats";
+  const BENCH_URL = "/comfydl/attention/bench";
   const PERF_FAMILIES = ["attention", "compile", "quant", "vram", "dataio_cache"];
 
   // These three switches own real start/stop side effects in their own
@@ -49,6 +51,10 @@
       hint: "Switches use the existing /comfydl/switches API; rejected toggles snap back.",
       hits: "hits", misses: "misses", entries: "entries", bytes: "cached MB",
       bench: "bench namespace",
+      bench_title: "Attention bench",
+      nobench: "No cached benchmark yet - run the Attention Optimizer node.",
+      geo: (r) => "seq " + r.seq_len + " · " + r.heads + "h · d" + r.head_dim +
+        (r.device ? " · " + String(r.device).replace("device(", "").replace(")", "") : ""),
     },
     zh: {
       title: "性能优化", tooltip: "ComfyDL 性能控制面",
@@ -60,6 +66,10 @@
       hint: "开关走既有 /comfydl/switches 接口；被拒的切换会自动回弹。",
       hits: "命中", misses: "未命中", entries: "条目", bytes: "缓存 MB",
       bench: "基准命名空间",
+      bench_title: "Attention 实测基准",
+      nobench: "暂无缓存基准——先跑一次 Attention Optimizer 节点。",
+      geo: (r) => "seq " + r.seq_len + " · " + r.heads + " 头 · d" + r.head_dim +
+        (r.device ? " · " + String(r.device).replace("device(", "").replace(")", "") : ""),
     },
   };
 
@@ -153,7 +163,7 @@
     collapsed: loadBool(COLLAPSE_KEY, true),
     hidden: loadBool(HIDDEN_KEY, false),
     pos: loadPos(),
-    switches: [], backends: {}, cache: null, busy: false,
+    switches: [], backends: {}, cache: null, bench: null, busy: false,
   };
 
   function ensureDockGap() {
@@ -273,20 +283,23 @@
     if (state.busy) return;
     state.busy = true;
     try {
-      const [sw, st, cache] = await Promise.all([
+      const [sw, st, cache, bench] = await Promise.all([
         getJson(SWITCHES_URL).catch(() => null),
         getJson(STATUS_URL).catch(() => null),
         getJson(CACHE_STATS_URL).catch(() => null),
+        getJson(BENCH_URL).catch(() => null),
       ]);
       if (sw && Array.isArray(sw.switches)) state.switches = sw.switches;
       if (st && st.backends) state.backends = st.backends;
       state.cache = cache;
+      state.bench = bench;
     } finally {
       state.busy = false;
     }
     renderSwitches();
     renderStatus();
     renderCache();
+    renderBench();
   }
 
   async function toggleSwitch(id, enabled) {
@@ -397,6 +410,53 @@
       statusLine(t("bytes"), mb);
   }
 
+  // P7: one cached attention_bench row per geometry - fastest backend first,
+  // the chosen one highlighted.  Read-only; empty state teaches where the
+  // data comes from instead of showing a blank card.
+  function renderBench() {
+    const host = state.refs?.bench;
+    if (!host) return;
+    const b = state.bench || {};
+    if (!b.available) {
+      host.innerHTML = '<div class="cdl-p6b-empty">' + esc(t("unavailable")) +
+        "</div>";
+      return;
+    }
+    const entries = Array.isArray(b.entries) ? b.entries : [];
+    if (!entries.length) {
+      host.innerHTML = '<div class="cdl-p6b-empty">' + esc(t("nobench")) +
+        "</div>";
+      return;
+    }
+    const geoFn = t("geo");
+    host.innerHTML = entries.map((row) => {
+      const times = row.times_ms && typeof row.times_ms === "object"
+        ? row.times_ms : {};
+      const speedups = row.speedup && typeof row.speedup === "object"
+        ? row.speedup : {};
+      const chosen = row.chosen || "";
+      const backends = Object.keys(times)
+        .sort((a, b2) => times[a] - times[b2])
+        .map((name) => {
+          const ms = Number(times[name]);
+          const sp = Number(speedups[name]);
+          const bits = Number.isFinite(ms) ? ms.toFixed(3) + " ms" : esc(name);
+          const spTxt = Number.isFinite(sp) && name !== chosen
+            ? " ×" + sp.toFixed(2) : "";
+          return '<span class="cdl-p6b-bench-backend' +
+            (name === chosen ? " chosen" : "") + '">' +
+            "<b>" + esc(name) + "</b> " + esc(bits) + esc(spTxt) +
+            (name === chosen ? " ✓" : "") + "</span>";
+        })
+        .join("");
+      const geo = typeof geoFn === "function" && Number.isFinite(row.seq_len)
+        ? esc(geoFn(row)) : esc(row.key ? String(row.key).slice(0, 10) + "…" : "");
+      return '<div class="cdl-p6b-bench-row">' +
+        '<div class="cdl-p6b-bench-geo">' + geo + "</div>" +
+        '<div class="cdl-p6b-bench-list">' + backends + "</div></div>";
+    }).join("");
+  }
+
   // ---------------------------------------------------------------- shell --
   function buildOverlay() {
     const root = document.createElement("div");
@@ -428,6 +488,11 @@
             "</div>" +
           '<div class="cdl-p6b-card-body" data-p6b="cache"></div>' +
         "</div>" +
+        '<div class="cdl-p6b-card">' +
+          '<div class="cdl-p6b-card-title">' + esc(t("bench_title")) +
+            "</div>" +
+          '<div class="cdl-p6b-card-body" data-p6b="bench"></div>' +
+        "</div>" +
         '<div class="cdl-p6b-hint">' + esc(t("hint")) + "</div>" +
       "</div>";
     document.body.appendChild(root);
@@ -454,6 +519,7 @@
       switches: root.querySelector('[data-p6b="switches"]'),
       status: root.querySelector('[data-p6b="status"]'),
       cache: root.querySelector('[data-p6b="cache"]'),
+      bench: root.querySelector('[data-p6b="bench"]'),
     };
     applyShape();
     applyPosition();

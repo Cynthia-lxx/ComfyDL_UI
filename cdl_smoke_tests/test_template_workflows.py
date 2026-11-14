@@ -162,6 +162,7 @@ def main() -> int:
         "tabular_classification_production",
         "formula_playground_app",
         "attention_lab",
+        "quantization_lab",
         "hyperparameter_exploration",
         "data_list_demo",
         "dataops_demo",
@@ -309,6 +310,35 @@ def main() -> int:
           and all(links_g[l[0]][2] in node_ids for l in string_links)
           and all(next(n for n in wf_g["nodes"] if n["id"] == links_g[l[0]][2])["type"] == "SaveText"
                   for l in string_links))
+
+    # --- Template L: quantization_lab (structural only) ------------------------ #
+    # The Inspector needs a real .gguf in models/unet_gguf to execute, so only
+    # the wiring is asserted here; node behaviour is covered by the node smoke
+    # runner and test_quant_nodes-style coverage of the byte ledger renderer.
+    wf_l = json.loads(
+        (workflows_dir / "quantization_lab.json").read_text(encoding="utf-8-sig"))
+    types_l = [n["type"] for n in wf_l["nodes"]]
+    check("L: all three lab nodes present",
+          types_l.count("SaveText") == 1
+          and set(types_l) == {"MarkdownNote", "CdlQuantizationInspector",
+                               "SaveText"},
+          str(types_l))
+    inspector_l = next(n for n in wf_l["nodes"]
+                       if n["type"] == "CdlQuantizationInspector")
+    savetexts_l = [n for n in wf_l["nodes"] if n["type"] == "SaveText"]
+    string_links_l = [l for l in wf_l["links"] if l[5] == "STRING"]
+    check("L: ledger wired inspector -> SaveText",
+          len(wf_l["links"]) == 1
+          and len(string_links_l) == 1
+          and string_links_l[0][1] == inspector_l["id"]
+          and string_links_l[0][2] == 0
+          and string_links_l[0][3] == savetexts_l[0]["id"]
+          and savetexts_l[0]["inputs"][0].get("link") == string_links_l[0][0],
+          str(wf_l["links"]))
+    check("L: ledger archived under comfydl/",
+          isinstance(savetexts_l[0].get("widgets_values"), list)
+          and str(savetexts_l[0]["widgets_values"][0]).startswith("comfydl/"),
+          str(savetexts_l[0].get("widgets_values")))
 
     # --- Template H: hyperparameter_exploration (P3 experiment bench) --------- #
     # The Grid Search Train story: a JSON param_grid sweeps widths x lr, the

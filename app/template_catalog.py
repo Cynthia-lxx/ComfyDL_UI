@@ -78,6 +78,7 @@ _THUMBNAIL_FILENAMES: Dict[str, str] = {
     "data_list_demo": "tabular_regression_production-1.png",
     "dataops_demo": "tabular_regression_production-1.png",
     "dataset_eda": "tabular_regression_production-1.png",
+    "quantization_lab": "language_model_train_and_chat-1.png",
 }
 
 # The injected category.  ``name`` values MUST equal the workflow filename
@@ -319,6 +320,22 @@ _COMFYDL_CATEGORY: Dict[str, Any] = {
             "date": "2026-11-07",
             "openSource": True,
         },
+        {
+            "name": "quantization_lab",
+            "title": "Quantization Lab",
+            "description": (
+                "Read a GGUF model's metadata without loading weights: the "
+                "Quantization Inspector prints a per-layer byte ledger "
+                "(quant type, compressed vs fp bytes, compression ratio, "
+                "effective bits per weight) and Save Text archives it. "
+                "Needs any .gguf in models/unet_gguf."
+            ),
+            "mediaType": "image",
+            "mediaSubtype": "png",
+            "tags": ["quantization", "gguf", "memory", "teaching"],
+            "date": "2026-11-15",
+            "openSource": True,
+        },
     ],
 }
 
@@ -392,6 +409,12 @@ _CATEGORY_DESCRIPTION_OVERRIDES: Dict[str, Dict[str, str]] = {
             "（悬停读 bin 区间与计数，无需重跑即可切换展示列），Dataset Preview 输出表头预览，"
             "Convert 把拆出的列张量安全转为 STRING——文本消费者（如 SaveText）"
             "再也不会被裸张量炸掉。"
+        ),
+        "quantization_lab": (
+            "不载权重、只读元数据：Quantization Inspector 打开 models/unet_gguf 中的 GGUF 文件，"
+            "逐层输出字节账本（量化类型、压缩字节数 vs fp 字节数、压缩比、有效 bits/weight），"
+            "SaveText 归档账本。K 量纲携带块缩放因子，Q4_K 实际是 4.5 bits/weight 而非 4——"
+            "这正是本实验室要教的事。需在 models/unet_gguf 中放任意 .gguf 文件。"
         ),
     },
 }

@@ -113,6 +113,30 @@
 }
 .cdl-p6b-hint { margin-top: 4px; }
 
+/* P7: attention bench card - one geometry block per cached benchmark row. */
+.cdl-p6b-bench-row {
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border-color, #4a4a4a);
+}
+.cdl-p6b-bench-row:last-child { border-bottom: 0; }
+.cdl-p6b-bench-geo {
+  font-weight: 700;
+  color: var(--input-text-read-only, #9a9a9a);
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+.cdl-p6b-bench-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.cdl-p6b-bench-backend { color: var(--input-text, #ddd); }
+.cdl-p6b-bench-backend b { font-weight: 700; }
+.cdl-p6b-bench-backend.chosen {
+  color: #3fb950;
+  font-weight: 700;
+}
+
 #cdl-p6b-reopen {
   position: fixed;
   left: calc(var(--cdl-dock-left, 59px) + 270px);

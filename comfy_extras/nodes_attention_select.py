@@ -277,6 +277,42 @@ def store_result(device: torch.device, seq_len: int, heads: int,
     _cache().put(key, result)
 
 
+def bench_entries() -> List[Dict[str, object]]:
+    """P7 (principles facade): every cached benchmark row, newest-position last.
+
+    What: reads the ``attention_bench`` namespace cache and returns each
+          entry as ``{key, device, torch, seq_len, heads, head_dim,
+          times_ms, speedup, chosen, benchmark_s}``.  Entries written
+          before the geometry was stamped into the value carry no
+          seq/heads/head_dim fields (the frontend renders those as
+          unknown) - the digest key itself is opaque and never decoded.
+    Out:  a plain JSON-ready list (empty on a cold cache); read-only,
+          never triggers a benchmark or touches the device.
+    """
+    cache = _cache()
+    rows: List[Dict[str, object]] = []
+    for key in cache.keys():
+        entry = cache.get(key)
+        if not isinstance(entry, dict) or not entry.get("times_ms"):
+            continue
+        row: Dict[str, object] = {"key": key}
+        for field in ("device", "torch", "seq_len", "heads", "head_dim",
+                      "times_ms", "speedup", "chosen", "benchmark_s"):
+            if field in entry:
+                row[field] = entry[field]
+        rows.append(row)
+    return rows
+
+
+def backend_notes() -> Dict[str, str]:
+    """P7 (principles facade): the one-line mechanism note per backend.
+
+    The teaching copy for the Optimizer panel's bench card and the
+    Attention Lab template - keyed exactly like ``times_ms`` rows.
+    """
+    return dict(_BACKEND_NOTES)
+
+
 # --------------------------------------------------------------------------- #
 # Report rendering
 # --------------------------------------------------------------------------- #
@@ -418,6 +454,14 @@ class CdlAttentionOptimizer(io.ComfyNode):
                 "speedup": {k: round(v, 4) for k, v in speedups.items()},
                 "chosen": chosen,
                 "benchmark_s": round(bench_s, 3),
+                # P7: geometry stamped into the value (the digest key alone is
+                # opaque) so the /comfydl/attention/bench readout can label
+                # every cached row.  Additive - old entries simply lack it.
+                "device": str(device),
+                "torch": torch.__version__,
+                "seq_len": int(seq_len),
+                "heads": int(num_heads),
+                "head_dim": int(head_dim),
             }
             store_result(device, seq_len, num_heads, head_dim, entry)
         else:

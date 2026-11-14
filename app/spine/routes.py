@@ -14,6 +14,9 @@ re-declared in server.py so every route also gets its ``/api`` twin).
   ``describe()`` + ``status()`` for the five performance families; ALWAYS
   200, with per-module ``{"available": false}`` degradation when a backend
   cannot be imported (bare environment / hard-disabled quant family).
+* ``GET  /comfydl/attention/bench`` - P7 principles facade: the cached
+  attention-select benchmark rows + per-backend mechanism notes (read-only,
+  ALWAYS 200, same degradation contract).
 """
 
 from __future__ import annotations
@@ -189,6 +192,34 @@ async def dataio_cache_entries(request: web.Request) -> web.Response:
         "enabled": _dc.enabled(),
         "stats": _dc.stats(),
         "entries": _dc.entries(),
+    })
+
+
+@routes.get("/comfydl/attention/bench")
+async def attention_bench(request: web.Request) -> web.Response:
+    """P7 (principles facade): the attention-select benchmark cache readout.
+
+    ``GET /comfydl/attention/bench`` -> ``{"available": bool, "status": {...},
+    "notes": {backend: one-line mechanism note}, "entries": [row, ...]}``
+    where each row is one cached ``attention_bench`` entry with its stamped
+    geometry (``device/torch/seq_len/heads/head_dim``) plus ``times_ms`` /
+    ``speedup`` / ``chosen``.  Read-only: never benchmarks, never probes a
+    device.  ALWAYS 200 - ``{"available": false}`` when the attention-select
+    module cannot be imported (same per-family degradation contract as
+    ``/comfydl/switches/status``).
+    """
+    try:
+        from comfy_extras import nodes_attention_select as _attn
+    except Exception as exc:  # noqa: BLE001 - bare environment
+        return web.json_response({
+            "available": False,
+            "detail": f"{type(exc).__name__}: {exc}",
+        })
+    return web.json_response({
+        "available": True,
+        "status": _attn.status(),
+        "notes": _attn.backend_notes(),
+        "entries": _attn.bench_entries(),
     })
 
 
