@@ -38,6 +38,67 @@ from typing import Dict, Optional, Tuple
 
 import torch
 
+from comfy.profiling import switch_registry
+
+#: P6b (ADR-D7 ②): the quant family's performance switch.  Registered here
+#: (not in nodes_quant.py) because that module hard-fails at boot when the
+#: gguf package is missing - the switch must still be visible (as
+#: hard-disabled) to the Optimizer panel in that environment.
+SWITCH_ID = "comfydl.quant"
+
+
+def _gguf_available() -> bool:
+    """Whether the gguf package (and its deps) can actually be imported.
+
+    Inlined (rather than calling require_gguf, which is defined later in
+    this module) so the one-shot hard-disable probe can never hit a
+    partially-initialised module during boot.
+    """
+    try:
+        import gguf  # noqa: F401
+        return True
+    except Exception:  # noqa: BLE001 - hard-disable probe, never raises
+        return False
+
+
+def register_quant_switch() -> None:
+    """Declare ``comfydl.quant`` (idempotent, one-shot hard-disable probe)."""
+    if SWITCH_ID not in switch_registry.list_switches():
+        switch_registry.register_switch(
+            SWITCH_ID,
+            default=True,
+            hot_toggle=True,
+            self_meter=False,  # load cost is prompt setup, nothing resident
+            hard_disable_check=lambda: not _gguf_available(),
+        )
+
+
+register_quant_switch()
+
+
+def describe() -> Dict:
+    """ADR-D7 panel contract: static shape of the quantization family."""
+    return {
+        "id": SWITCH_ID,
+        "default": True,
+        "hot_toggle": True,
+        "self_meter": False,
+        "hard_disable_check": "gguf-importable",
+    }
+
+
+def status() -> Dict:
+    """ADR-D7 panel contract: live availability + switch state."""
+    reg = switch_registry.describe(SWITCH_ID)
+    return {
+        "enabled": reg["enabled"],
+        "hard_disabled": reg["hard_disabled"],
+        "gguf_available": _gguf_available(),
+        "qtype_sizes": len(GGML_QTYPE_SIZES),
+        "self_overhead": reg["self_overhead"],
+    }
+
+
 # --------------------------------------------------------------------------- #
 # GGML type codes + size table (gguf-py GGMLQuantizationType / GGML_QUANT_SIZES)
 # --------------------------------------------------------------------------- #

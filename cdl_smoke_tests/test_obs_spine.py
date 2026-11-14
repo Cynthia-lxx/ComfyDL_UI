@@ -319,6 +319,41 @@ async def _route_checks() -> None:
                   for k in ("enabled", "default", "hot_toggle", "self_meter",
                             "self_overhead")))
 
+        # --- P6b (ADR-D7 ②): quant switch + status aggregation ----------
+        check("T5j P6b: quant switch registered (hard-disabled when no gguf)",
+              "comfydl.quant" in ids
+              and desc["comfydl.quant"]["enabled"] in (True, False))
+        if desc["comfydl.quant"]["hard_disabled"]:
+            resp = await client.patch("/comfydl/switches/comfydl.quant",
+                                      json={"enabled": True})
+            check("T5j2 P6b: hard-disabled quant refuses re-enable with 409",
+                  resp.status == 409)
+        resp = await client.get("/comfydl/switches/status")
+        sbody = await resp.json()
+        fams = sbody.get("backends", {})
+        check("T5k P6b: status endpoint always 200, five families + contract",
+              resp.status == 200 and sbody.get("available") is True
+              and set(fams) == {"attention", "compile", "quant", "vram",
+                                "dataio_cache"}
+              and all(("available" in v) and ("status" in v)
+                      and ("describe" in v) for v in fams.values()))
+        check("T5k2 P6b: every importable family reports live status",
+              all((not v.get("available"))
+                  or isinstance(v.get("status"), dict)
+                  for v in fams.values()))
+        src_names = (
+            "comfy_extras/nodes_attention_select.py",
+            "comfy/compile_manager.py",
+            "comfy/quant_formats.py",
+            "comfy/vram_manager.py",
+            "comfydl/nodes/_dataio_cache.py",
+        )
+        check("T5l P6b: five backends expose zero-arg describe()/status()",
+              all("def status(" in (REPO_ROOT / p).read_text(encoding="utf-8")
+                  and "def describe(" in (REPO_ROOT / p).read_text(
+                      encoding="utf-8")
+                  for p in src_names))
+
         original = desc["comfydl.compile"]["enabled"]
         resp = await client.patch("/comfydl/switches/comfydl.compile",
                                   json={"enabled": not original})

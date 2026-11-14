@@ -145,6 +145,27 @@ def stats() -> Dict[str, Any]:
         }
 
 
+def describe() -> Dict[str, Any]:
+    """ADR-D7 ② (P6b): static shape of the compile feature."""
+    return {
+        "id": SWITCH_ID,
+        "default": True,
+        "hot_toggle": True,
+        "self_meter": True,
+        "cache": "weakref + strong-ref fallback",
+    }
+
+
+def status() -> Dict[str, Any]:
+    """ADR-D7 ② (P6b): live cache counters + switch state."""
+    reg = switch_registry.describe(SWITCH_ID)
+    out = stats()
+    out["enabled"] = reg["enabled"]
+    out["hard_disabled"] = reg["hard_disabled"]
+    out["self_overhead"] = reg["self_overhead"]
+    return out
+
+
 def _reset_for_tests() -> None:
     """Drop cache and counters (test isolation only; never call in product)."""
     global _HITS, _MISSES, _compile_fn

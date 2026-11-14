@@ -8,10 +8,17 @@ re-declared in server.py so every route also gets its ``/api`` twin).
 * ``GET  /comfydl/spine/snapshot``  - the latest complete snapshot.
 * ``PATCH /comfydl/spine``          - ``{"enabled": bool}`` and/or
   ``{"rate_s": number}``; ``rate_s <= 0`` stops the thread entirely.
+* ``GET  /comfydl/switches``        - every registered switch's description
+  (Settings > ComfyDL > Perf panel).
+* ``GET  /comfydl/switches/status`` - P6b / ADR-D7 ②: per-backend live
+  ``describe()`` + ``status()`` for the five performance families; ALWAYS
+  200, with per-module ``{"available": false}`` degradation when a backend
+  cannot be imported (bare environment / hard-disabled quant family).
 """
 
 from __future__ import annotations
 
+import importlib
 from typing import Any, Dict
 
 from aiohttp import web
@@ -88,10 +95,60 @@ async def spine_configure(request: web.Request) -> web.Response:
 @routes.get("/comfydl/switches")
 async def switches_list(request: web.Request) -> web.Response:
     """Every registered feature switch, for the Settings > ComfyDL panel."""
+    # P6b: the quant switch lives in comfy.quant_formats, which is NOT
+    # imported at boot when gguf is missing (nodes_quant.py hard-fails).
+    # Importing it here guarantees the panel always sees the switch - as
+    # hard-disabled on such hosts, with the 409 re-enable contract intact.
+    try:
+        qf = importlib.import_module("comfy.quant_formats")
+        qf.register_quant_switch()  # idempotent; survives registry resets
+    except Exception:  # noqa: BLE001 - bare environment: degrade, never 500
+        pass
     return web.json_response({
         "switches": [switch_registry.describe(sid)
                      for sid in switch_registry.list_switches()]
     })
+
+
+#: P6b (ADR-D7 ②): the five performance backend families whose module-level
+#: ``describe()`` / ``status()`` contract the Optimizer panel aggregates.
+_STATUS_BACKENDS = (
+    ("attention", "comfy_extras.nodes_attention_select"),
+    ("compile", "comfy.compile_manager"),
+    ("quant", "comfy.quant_formats"),
+    ("vram", "comfy.vram_manager"),
+    ("dataio_cache", "comfydl.nodes._dataio_cache"),
+)
+
+
+@routes.get("/comfydl/switches/status")
+async def switches_status(request: web.Request) -> web.Response:
+    """Per-backend live status for the P6b Optimizer panel.
+
+    ALWAYS 200: a missing/broken backend degrades ONLY that family to
+    ``{"available": false, "detail": ...}`` - the panel never loses the
+    whole readout because quant (or any other family) is hard-disabled.
+    """
+    backends: Dict[str, Any] = {}
+    for name, module_path in _STATUS_BACKENDS:
+        try:
+            module = importlib.import_module(module_path)
+            describe = getattr(module, "describe", None)
+            status_fn = getattr(module, "status", None)
+            entry: Dict[str, Any] = {
+                "available": callable(status_fn),
+                "describe": describe() if callable(describe) else None,
+                "status": status_fn() if callable(status_fn) else None,
+            }
+            if not callable(status_fn):
+                entry["detail"] = "missing module-level status()"
+            backends[name] = entry
+        except Exception as exc:  # noqa: BLE001 - per-family degradation
+            backends[name] = {
+                "available": False,
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+    return web.json_response({"available": True, "backends": backends})
 
 
 @routes.get("/comfydl/dataio/cache/stats")

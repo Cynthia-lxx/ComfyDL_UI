@@ -31,7 +31,7 @@ override, so unrelated branches keep their backend.
 from __future__ import annotations
 
 import time
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 from comfy_api.latest import ComfyExtension, io
@@ -54,6 +54,31 @@ switch_registry.register_switch(
     hot_toggle=True,
     self_meter=True,
 )
+
+
+def describe() -> Dict[str, Any]:
+    """ADR-D7 ② (P6b): static shape of the attention-select feature."""
+    return {
+        "id": SWITCH_ID,
+        "default": True,
+        "hot_toggle": True,
+        "self_meter": True,
+        "cache_namespace": _CACHE_NAMESPACE,
+        "cache_schema_version": _CACHE_SCHEMA_VERSION,
+    }
+
+
+def status() -> Dict[str, Any]:
+    """ADR-D7 ② (P6b): live backend inventory (no device probing)."""
+    reg = switch_registry.describe(SWITCH_ID)
+    return {
+        "enabled": reg["enabled"],
+        "hard_disabled": reg["hard_disabled"],
+        "registered_backends": registered_backends(),
+        "validated_devices": sorted(_VALIDATED),
+        "self_overhead": reg["self_overhead"],
+    }
+
 
 #: Reference backend every speedup is measured against (portable: SDPA runs
 #: everywhere PyTorch runs, CPU included).
