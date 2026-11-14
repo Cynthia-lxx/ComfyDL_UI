@@ -711,7 +711,8 @@ class LanguageModelTrain(io.ComfyNode):
                             best_state = tp.snapshot_state(trainee)
                             best_length = len(history)
                         frame = curve_previewer.record(
-                            float(step_loss.detach()), force=(step + 1 == iterations)
+                            float(step_loss.detach()), step=step,
+                            force=(step + 1 == iterations)
                         )
                         if frame is not None:
                             pbar.update_absolute(step + 1, iterations, frame)

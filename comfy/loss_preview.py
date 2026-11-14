@@ -118,6 +118,11 @@ class LossCurvePreviewer:
         self.min_interval = max(0.0, float(min_interval))
         self.max_points = int(max_points)
         self._values: list[float] = []
+        # ABSOLUTE step numbers, aligned 1:1 with _values.  `max_points`
+        # crops the window but must never reset the x-axis: a 100k-step run
+        # used to freeze the chart at step 4096 (repair R2, 2026-11-14).
+        self._steps: list[int] = []
+        self._next_step = 1
         self._last_render = 0.0
         self._last_push = 0.0
 
@@ -126,35 +131,40 @@ class LossCurvePreviewer:
     def reset(self) -> None:
         """Forget everything recorded so far (start of a new run)."""
         self._values.clear()
+        self._steps.clear()
+        self._next_step = 1
         self._last_render = 0.0
         self._last_push = 0.0
 
     def record(
-        self, loss: float, force: bool = False
+        self, loss: float, force: bool = False, step: int | None = None
     ) -> tuple[str, Image.Image, int] | None:
         """Record one step's loss and maybe render a preview frame.
 
-        Returns the preview triple when this step should push a frame,
-        otherwise ``None``. ``force=True`` (the caller's last step) always
-        renders, so the last pushed frame is the complete curve; a throttled
-        step returns ``None``, and the caller still reports through plain
-        ``update`` - one progress call per step either way.
-
-        Batch 18: every record also (throttled to DATA_PUSH_INTERVAL) pushes
-        the structured loss series to the frontend as the
-        ``cdl_preview_data`` event, from which the app panel draws a vector
-        SVG chart - the bitmap frame stays only as the node-graph fallback.
+        In: ``loss`` - detached scalar; ``force`` - final step (always
+            renders); ``step`` - the caller's 0-based ABSOLUTE step index.
+            TrainingSession/LM loops already pass an absolute step that keeps
+            counting after a Resume, so the curve no longer restarts at 1.
+            When omitted, a local 1-based counter is used (unit tests,
+            callers without step information).
+        Out: the preview triple or ``None`` (throttled / failed).
         """
         try:
+            absolute = int(step) + 1 if step is not None else self._next_step
             self._values.append(float(loss))
+            self._steps.append(absolute)
+            self._next_step = absolute + 1
             if len(self._values) > self.max_points:
-                del self._values[: len(self._values) - self.max_points]
+                cut = len(self._values) - self.max_points
+                del self._values[:cut]
+                del self._steps[:cut]
         except (TypeError, ValueError):
             return None
         now = time.perf_counter()
         if force or now - self._last_push >= DATA_PUSH_INTERVAL:
             self._last_push = now
-            push_loss_series(self.title, self._values, force=force)
+            push_loss_series(self.title, self._values, force=force,
+                             steps=self._steps)
         if not force:
             if now - self._last_render < self.min_interval:
                 return None
@@ -188,15 +198,17 @@ class LossCurvePreviewer:
         import matplotlib.figure
 
         values = self._values
+        # Repair R2: absolute step numbers, not 1..len(values).  A cropped
+        # window still ends at the real step, so the axis keeps growing.
+        steps = self._steps or list(range(1, len(values) + 1))
         figure = matplotlib.figure.Figure(
             figsize=BITMAP_FIGSIZE, dpi=BITMAP_DPI)
         axis = figure.add_subplot(1, 1, 1)
-        steps = range(1, len(values) + 1)
         axis.plot(steps, values, color="#1f77b4", linewidth=1.2, label="loss")
         smoothed = _moving_average(values, 8)
         if len(values) >= 8:
             axis.plot(steps, smoothed, color="#ff7f0e", linewidth=1.6, label="smoothed")
-        axis.set_title(f"{self.title}  (step {len(values)}, best {min(values):.4g})")
+        axis.set_title(f"{self.title}  (step {steps[-1]}, best {min(values):.4g})")
         axis.set_xlabel("step")
         axis.set_ylabel("loss")
         axis.legend(loc="upper right", fontsize=8)
@@ -251,9 +263,10 @@ class LossCurvePreviewer:
         if len(values) >= 8:
             smooth_points = [(_x(i), _y(v)) for i, v in enumerate(smoothed)]
             draw.line(smooth_points, fill="#ff7f0e", width=2)
+        last_step = self._steps[-1] if self._steps else len(values)
         draw.text(
             (margin_left, 8),
-            f"{self.title}  step {len(values)}  best {min(values):.4g}",
+            f"{self.title}  step {last_step}  best {min(values):.4g}",
             fill="#111111",
             font=font,
         )
@@ -289,18 +302,22 @@ def push_loss_series(
     values: Sequence[float],
     total: int | None = None,
     force: bool = False,
+    steps: Sequence[int] | None = None,
 ) -> None:
     """Push the loss series to the frontend as a structured event.
 
     In:   title - curve title (the previewer's name); values - the per-step
           loss list recorded so far (uniformly decimated to
           DATA_MAX_POINTS); total - expected step count when known;
-          force - True on the final step (marks the series as complete).
+          force - True on the final step (marks the series as complete);
+          steps - ABSOLUTE step numbers aligned with ``values``.  Repair R2:
+          when omitted, a 1-based local counter is used so older callers and
+          unit tests keep working.
     Out:  a ``cdl_preview_data`` websocket event:
           ``{type: "loss", node_id, title, step, total, best,
-             points: [[step, loss], ...], finished}``.
-          Broadcast to every connected client; silently skipped when the
-          server is unreachable (e.g. unit tests, offline rendering).
+             points: [[step, loss], ...], finished}``.  ``step`` and every
+          point's x are absolute, so a cropped 4096-point window or a
+          resumed run no longer freezes/restarts the chart x-axis.
     """
     try:
         if not values:
@@ -310,21 +327,25 @@ def push_loss_series(
         server = PromptServer.instance
         if server is None:
             return
+        count = len(values)
+        if steps is None or len(steps) != count:
+            steps = list(range(1, count + 1))
         # Uniform decimation that always KEEPS the first and the last step
         # (a plain slice would drop the freshly-recorded tail).
-        count = len(values)
         if count <= DATA_MAX_POINTS:
-            points = [[i + 1, round(float(v), 6)] for i, v in enumerate(values)]
+            points = [[int(steps[i]), round(float(v), 6)]
+                      for i, v in enumerate(values)]
         else:
             stride = count / (DATA_MAX_POINTS - 1)
             indices = [int(i * stride) for i in range(DATA_MAX_POINTS - 1)]
             indices.append(count - 1)
-            points = [[i + 1, round(float(values[i]), 6)] for i in indices]
+            points = [[int(steps[i]), round(float(values[i]), 6)]
+                      for i in indices]
         payload = {
             "type": "loss",
             "node_id": _resolve_node_id() or "0",
             "title": str(title),
-            "step": len(values),
+            "step": int(steps[-1]),
             "total": int(total) if total else None,
             "best": round(min(float(v) for v in values), 6),
             "points": points,

@@ -798,7 +798,11 @@ class TrainingLoop(io.ComfyNode):
         curve_previewer = loss_preview.LossCurvePreviewer(title="loss")
 
         def _progress(step, value):
-            frame = curve_previewer.record(value, force=(step + 1 == iterations))
+            # TrainingSession already reports the ABSOLUTE step (it resumes at
+            # start_step).  Passing it keeps the curve's x-axis continuous
+            # after Resume instead of redrawing from step 1 (repair R2).
+            frame = curve_previewer.record(
+                value, step=step, force=(step + 1 == iterations))
             if frame is not None:
                 pbar.update_absolute(step + 1, iterations, frame)
             else:
