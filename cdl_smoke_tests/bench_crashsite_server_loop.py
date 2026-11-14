@@ -19,10 +19,25 @@ Run (manual, NOT part of the default smoke suite):
   penv\\Scripts\\python.exe cdl_smoke_tests\\bench_crashsite_server_loop.py
   penv\\Scripts\\python.exe ... --snapshots 200 --rows 40 --duration 3
 
-Readout: ping p50 / p95 / max in ms, plus the list request's wall time.
-The acceptance bar is that ``paged`` max RTT stays close to ``baseline``
-(a few ms), while ``inline`` is expected to be much worse.  This is a
-server-loop microbenchmark, NOT a substitute for the user's real-machine A/B:
+R7 statistical caliber (2026-11-14, issue 5): single-round max/max verdicts
+produced garbage like "paged/baseline max = 0.12x" when the baseline's one
+round happened to catch a 14ms outlier.  The probe now runs ``--rounds``
+timed rounds per arm (round 0 is an UNTIMED warmup and is discarded), and
+the verdict compares median-of-round-p99 values, with p50/p95/p99/max all
+reported.  p99 (not p95) carries the verdict because the inline regression
+is a SPIKE that only a tail percentile sees.  Three arms, same seeded
+library:
+  baseline - no list request at all (the loop is idle)
+  paged    - current handler (executor + P0-2 aggregates + P0-4 paging)
+  inline   - a control route that calls ``store.list_snapshots()`` INLINE,
+             i.e. the pre-P0-1 behaviour, to show the size of the regression
+             that was fixed.  Never mount this control outside this probe.
+
+Readout: per-arm median-of-rounds ping p50/p95/p99 + max-of-rounds in ms,
+plus the median list request wall time.  The acceptance bar is that
+``paged``'s median p95 stays close to ``baseline`` (a few ms), while
+``inline`` is expected to be much worse.  This is a server-loop
+microbenchmark, NOT a substitute for the user's real-machine A/B:
 it has no browser, no WebSocket fan-out and no GPU inference.
 """
 
@@ -81,10 +96,11 @@ def _make_app() -> web.Application:
 def _stats(values: List[float]) -> Dict[str, float]:
     ordered = sorted(values)
     if not ordered:
-        return {"p50": 0.0, "p95": 0.0, "max": 0.0}
+        return {"p50": 0.0, "p95": 0.0, "p99": 0.0, "max": 0.0}
     return {
         "p50": ordered[len(ordered) // 2],
         "p95": ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))],
+        "p99": ordered[min(len(ordered) - 1, int(len(ordered) * 0.99))],
         "max": ordered[-1],
     }
 
@@ -131,21 +147,45 @@ async def _run(args: argparse.Namespace) -> None:
             )
             print("crash site server-loop probe")
             print(f"  snapshots={args.snapshots} rows_per={args.rows} "
-                  f"duration={args.duration}s")
-            print("  arm        ping p50    ping p95    ping max    "
-                  "list wall   pings")
+                  f"duration={args.duration}s rounds={args.rounds} "
+                  f"(round 0 = discarded warmup)")
+            print("  arm        p50 med    p95 med    p99 med    max of rounds"
+                  "  list med   pings")
             results: Dict[str, Dict[str, Any]] = {}
             for name, path in arms:
-                r = await _probe(client, path, args.duration)
-                results[name.strip()] = r
-                print(f"  {name}  {r['p50']:8.2f}ms {r['p95']:9.2f}ms "
-                      f"{r['max']:9.2f}ms {r['list_ms']:9.1f}ms "
-                      f"{r['pings']:6d}")
-            base = results["baseline"]["max"]
-            paged = results["paged"]["max"]
-            inline = results["inline"]["max"]
-            print(f"  VERDICT: paged/baseline max = {paged / max(base, 0.01):.2f}x"
-                  f" | inline/baseline max = {inline / max(base, 0.01):.2f}x")
+                rounds: List[Dict[str, Any]] = []
+                for rep in range(args.rounds + 1):
+                    r = await _probe(client, path, args.duration)
+                    if rep:  # round 0 is the untimed warmup
+                        rounds.append(r)
+                # R7 caliber: median across rounds for every percentile;
+                # max is reported but NEVER drives the verdict.
+                agg = {
+                    "p50": statistics.median([r["p50"] for r in rounds]),
+                    "p95": statistics.median([r["p95"] for r in rounds]),
+                    "p99": statistics.median([r["p99"] for r in rounds]),
+                    "max": max(r["max"] for r in rounds),
+                    "list_ms": statistics.median([r["list_ms"] for r in rounds]),
+                    "pings": sum(r["pings"] for r in rounds),
+                    "rounds": rounds,
+                }
+                results[name.strip()] = agg
+                print(f"  {name}  {agg['p50']:8.2f}ms {agg['p95']:9.2f}ms "
+                      f"{agg['p99']:9.2f}ms {agg['max']:12.2f}ms "
+                      f"{agg['list_ms']:8.1f}ms {agg['pings']:6d}")
+            base = results["baseline"]["p99"]
+            paged = results["paged"]["p99"]
+            inline = results["inline"]["p99"]
+            # p99 (not p95) is the verdict statistic: the inline regression
+            # is a SPIKE that only a tail percentile sees, while median
+            # p95 stays clean; p99 across rounds stays robust to single-
+            # round outliers that made the old max/max verdict lie.
+            print(f"  VERDICT: paged/baseline median-p99 = "
+                  f"{paged / max(base, 0.01):.2f}x"
+                  f" | inline/baseline median-p99 = "
+                  f"{inline / max(base, 0.01):.2f}x")
+            print("  (verdict uses median-of-rounds p99; single-round max is")
+            print("   reported above for reference only - issue 5, R7)")
             print("  SCOPE CAVEAT: no browser / WS fan-out / GPU inference;"
                   " real-machine A/B still belongs to the user.")
         finally:
@@ -157,6 +197,7 @@ def main() -> int:
     parser.add_argument("--snapshots", type=int, default=50)
     parser.add_argument("--rows", type=int, default=20)
     parser.add_argument("--duration", type=float, default=1.5)
+    parser.add_argument("--rounds", type=int, default=5)
     args = parser.parse_args()
     asyncio.run(_run(args))
     return 0

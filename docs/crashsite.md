@@ -87,7 +87,11 @@ executor (P0-1). The panel requests `limit=PAGE_SIZE` (20) and grows the page
 via a **Load more** button; four execution-start/end WebSocket events are
 coalesced into one debounced refresh, and no request is made at all while the
 sidebar panel is hidden (the pending refresh is replayed when it opens).
-Manual Refresh, resume and export completion still refresh immediately.
+R6-1 (2026-11-14): resume completion, export completion and switching the
+master switch back ON go through the SAME coalesced entry; only the manual
+Refresh button and Load more keep their immediate semantics, and
+`nudgeExport` still fetches directly because it needs the data in hand to
+locate the interrupted target.
 
 ## Scene export (git-fire M2, 2026-10-13)
 
@@ -114,6 +118,11 @@ back to that slot's own default.  Endpoints: `GET .../snapshots/{id}/detail`
 
 Auto-nudge: on `execution_error`/`execution_interrupted` the panel opens
 itself with the newest interrupted snapshot's export table and a toast.
+Known limitation (R6 acceptance, 2026-11-14): the auto-open calls
+`extensionManager.toggleSidebarTab`, which newer ComfyUI frontends moved
+into the `extensionManager.sidebarTab` pinia store — on those frontends the
+toast and the data load still happen, but the panel does NOT pop open by
+itself until that call site gains the new-API fallback.
 
 Resume semantics (M1): **node-level memoization, not mid-node continuation** —
 with one M3 exception: the three trainers (Regression Train, Training Loop,
