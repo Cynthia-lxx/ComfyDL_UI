@@ -89,6 +89,10 @@ def sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative
     return samples
 
 def sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image, noise_mask=None, callback=None, disable_pbar=False, seed=None):
+    # Repair R0 gap: KSampler Advanced goes through sample_custom, not sample.
+    # Same wrapper, same OFF-path no-op, original callback preserved.
+    from comfy import verbose_log
+    callback = verbose_log.wrap_sampler_callback(callback)
     samples = comfy.samplers.sample(model, noise, positive, negative, cfg, model.load_device, sampler, sigmas, model_options=model.model_options, latent_image=latent_image, denoise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=seed)
     samples = samples.to(device=comfy.model_management.intermediate_device(), dtype=comfy.model_management.intermediate_dtype())
     return samples

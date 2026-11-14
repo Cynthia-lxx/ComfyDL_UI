@@ -88,6 +88,10 @@ def main() -> int:
         vl.log("test", "hello", n=3, tag="a b")
         vl.ws_event("executing", "7")
         vl.ws_event("executed", {"node": "7", "prompt_id": "p1"})
+        # This build sends dict payloads for executing too (R0 gap regression).
+        vl.ws_event("executing", {"node": "9", "display_node": "9",
+                                  "prompt_id": "p2"})
+        vl.ws_event("executed", {"node": "9", "prompt_id": "p2"})
         vl.ingest(["front-end line"])
 
         @vl.timed("test", "decorated")
@@ -122,6 +126,11 @@ def main() -> int:
               "ws executing node=7" in joined
               and any("ws executed node=7" in line and "node_ms=" in line
                       for line in lines), joined[:300])
+        check("V5b dict-shaped executing keeps its correlation key",
+              "ws executing node=9" in joined
+              and any("ws executed node=9" in line and "node_ms=" in line
+                      for line in lines)
+              and "ws executing node={'node'" not in joined, joined[-300:])
         check("V6 front-end lines share the same log",
               any("[CDL-V-FE]" in line and "front-end_line" in line
                   for line in lines), joined[:300])

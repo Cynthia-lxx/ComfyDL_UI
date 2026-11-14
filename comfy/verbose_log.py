@@ -196,26 +196,44 @@ def _prompt_of(data: Any) -> str:
     return ""
 
 
+def _node_of(data: Any) -> str:
+    """Normalize the node id carried by ``executing`` / ``executed``.
+
+    This build sends a dict ``{'node': '1', 'display_node': '1', ...}`` for
+    BOTH events (queue idle is ``{'node': None, ...}``); older builds sent a
+    bare id.  Stringifying the whole dict used to make the correlation key
+    useless, so every ``node_ms`` came out as 0.0.
+    """
+    if isinstance(data, dict):
+        value = data.get("node")
+        if value is None:
+            value = data.get("display_node", "")
+        return "" if value is None else str(value)
+    if data is None:
+        return ""
+    return str(data)
+
+
 def ws_event(event: str, data: Any = None) -> None:
     """What: single central hook for ``PromptServer.send_sync``.
 
     In: the WS event name and payload. Out: None.  Besides timestamping the
-    seven execution events it correlates ``executing`` (bare node id) with
-    ``executed`` (``{node, prompt_id, ...}``) into ``node_ms``, so R1 can
-    compute per-node durations without touching ``execution.py``.
+    seven execution events it correlates ``executing`` with ``executed``
+    into ``node_ms``, so R1 can compute per-node durations without touching
+    ``execution.py``.  Both bare ids and dict payloads are accepted.
     """
     if not _ENABLED or event not in _WS_EVENTS:
         return
     try:
         if event == "executing":
-            node = "" if data is None else str(data)
+            node = _node_of(data)
             if node:
                 _PENDING_NODES[node] = time.perf_counter()
             log("ws", "executing", node=node)
             return
         if event == "executed":
             detail = data if isinstance(data, dict) else {}
-            node = str(detail.get("node", ""))
+            node = _node_of(detail)
             started = _PENDING_NODES.pop(node, None)
             elapsed = (time.perf_counter() - started) * 1000 if started else 0.0
             log("ws", "executed", node=node, node_ms=round(elapsed, 3),
