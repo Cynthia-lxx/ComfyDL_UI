@@ -227,7 +227,9 @@
       });
       if (resp.ok) {
         showToast(t("resume_ok"));
-        await fetchSnapshots();
+        // R6-1 (3.4): resume state changes flow through the same coalesced
+        // entry as the WS burst - no duplicate fetch when events also land.
+        scheduleRefresh();
       } else {
         const body = await resp.json().catch(() => ({}));
         showToast(t("resume_fail") + (body.error || resp.status), true);
@@ -309,7 +311,8 @@
           nFailed > 0);
         state.exportDetail = null;
         state.exportFor = null;
-        fetchSnapshots();
+        // R6-1 (3.4): coalesced, same entry as the WS burst.
+        scheduleRefresh();
       } else {
         showToast(t("export_fail_msg") + (body.error || resp.status), true);
       }
@@ -324,6 +327,9 @@
   // panel opens itself with the newest interrupted snapshot's export table.
   async function nudgeExport() {
     await sleep(500); // let the server-side lifecycle mark the snapshot
+    // R6-1 (3.4): direct fetch, NOT scheduleRefresh - the next line reads
+    // state.snapshots to locate the interrupted target, so the data must be
+    // present before this function continues.
     await fetchSnapshots();
     const target = (state.snapshots || []).find((s) => s.status === "interrupted");
     if (!target) return;
@@ -652,10 +658,11 @@
       await syncEnabledState();
     }
     applyEnabledVisibility();
-    // Re-render so the panel follows the state; re-attach the library load
-    // when switching back ON (fetchSnapshots no-ops while disabled).
+    // Re-render so the panel follows the state.  R6-1 (3.4): switching back
+    // ON only marks dirty + debounces; a hidden panel loads nothing here and
+    // replays the pending load on open (render's null/dirty check).
     if (state.panelEl) renderPanel();
-    if (state.masterEnabled) fetchSnapshots();
+    if (state.masterEnabled) scheduleRefresh();
   }
 
   function applyEnabledVisibility() {

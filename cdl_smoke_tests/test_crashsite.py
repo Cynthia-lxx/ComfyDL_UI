@@ -764,6 +764,14 @@ def _p04_checks() -> None:
           and js.count("scheduleRefresh();") >= 2
           and "if (state.snapshots === null || state.dirty) fetchSnapshots();"
               in js)
+    # R6-1 (issue 3.4): post-action refreshes (resume success, export done,
+    # master switch back ON) must use the coalesced entry too.  The only
+    # remaining direct await is nudgeExport, which needs the data in hand to
+    # locate the interrupted target.  Manual refresh / load-more / the
+    # contract line at panel-open keep their immediate semantics.
+    check("P0-4d R6-1 post-action refreshes are coalesced",
+          js.count("scheduleRefresh();") >= 5
+          and js.count("await fetchSnapshots();") == 1)
 
 
 def _alpha_checks() -> None:
