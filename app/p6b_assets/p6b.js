@@ -52,6 +52,7 @@
       hits: "hits", misses: "misses", entries: "entries", bytes: "cached MB",
       bench: "bench namespace",
       bench_title: "Attention bench",
+      theme_title: "Accent theme",
       nobench: "No cached benchmark yet - run the Attention Optimizer node.",
       geo: (r) => "seq " + r.seq_len + " · " + r.heads + "h · d" + r.head_dim +
         (r.device ? " · " + String(r.device).replace("device(", "").replace(")", "") : ""),
@@ -67,6 +68,7 @@
       hits: "命中", misses: "未命中", entries: "条目", bytes: "缓存 MB",
       bench: "基准命名空间",
       bench_title: "Attention 实测基准",
+      theme_title: "主题色",
       nobench: "暂无缓存基准——先跑一次 Attention Optimizer 节点。",
       geo: (r) => "seq " + r.seq_len + " · " + r.heads + " 头 · d" + r.head_dim +
         (r.device ? " · " + String(r.device).replace("device(", "").replace(")", "") : ""),
@@ -99,6 +101,20 @@
   function saveBool(key, value) {
     try { localStorage.setItem(key, value ? "1" : "0"); } catch (e) { /* private mode */ }
   }
+
+  // U stick 2: string-valued settings (the kit hue theme selection).
+  function loadStr(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? fallback : raw;
+    } catch (e) { return fallback; }
+  }
+  function saveStr(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* private mode */ }
+  }
+  const THEME_KEY = "ComfyDL.P6b.theme";
+  const THEMES = ["blue", "aquamarine", "green", "lime", "orange",
+    "pink", "plum", "purple", "red"];
 
   function loadPos() {
     try {
@@ -164,6 +180,7 @@
     hidden: loadBool(HIDDEN_KEY, false),
     pos: loadPos(),
     switches: [], backends: {}, cache: null, bench: null, busy: false,
+    theme: loadStr(THEME_KEY, ""),
   };
 
   function ensureDockGap() {
@@ -331,21 +348,25 @@
       const hard = !!s.hard_disabled;
       const label = id.replace(/^comfydl\./, "");
       return '<label class="cdl-p6b-switch-row' + (hard ? " cdl-p6b-hard" : "") + '">' +
-        '<input type="checkbox" data-p6b-switch="' + esc(id) + '"' +
+        // U stick 2: kit checkbox (checked/disabled/label attributes; the
+        // hard-disabled ones stay CLICKABLE on purpose - the 409 snap-back
+        // demo is part of the contract, P6b-d).
+        '<ui-checkbox data-p6b-switch="' + esc(id) + '"' +
+        ' label="' + esc(label) + '" title="' + esc(id) + '"' +
         (on ? " checked" : "") + ">" +
-        '<span class="cdl-p6b-switch-name" title="' + esc(id) + '">' +
-        esc(label) + "</span>" +
+        "</ui-checkbox>" +
         '<span class="cdl-p6b-tag">' +
         (hard ? esc(t("hard")) : (on ? esc(t("on")) : esc(t("off")))) +
         "</span></label>";
     }).join("");
-    host.querySelectorAll("input[data-p6b-switch]").forEach((box) => {
-      box.addEventListener("change", async () => {
-        const wanted = box.checked;
-        box.disabled = true;
+    host.querySelectorAll("ui-checkbox[data-p6b-switch]").forEach((box) => {
+      box.addEventListener("ui-change", async (ev) => {
+        const wanted = !!(ev.detail && ev.detail.checked);
+        box.setAttribute("disabled", "");
         const ok = await toggleSwitch(box.dataset.p6bSwitch, wanted);
-        if (!ok) box.checked = !wanted; // immediate visual snap-back
-        box.disabled = false;
+        // immediate visual snap-back: force the attribute back to server truth
+        if (!ok) box.setAttribute("checked", String(!wanted));
+        box.removeAttribute("disabled");
       });
     });
   }
@@ -493,6 +514,11 @@
             "</div>" +
           '<div class="cdl-p6b-card-body" data-p6b="bench"></div>' +
         "</div>" +
+        '<div class="cdl-p6b-card">' +
+          '<div class="cdl-p6b-card-title">' + esc(t("theme_title")) +
+            "</div>" +
+          '<div class="cdl-p6b-card-body" data-p6b="theme"></div>' +
+        "</div>" +
         '<div class="cdl-p6b-hint">' + esc(t("hint")) + "</div>" +
       "</div>";
     document.body.appendChild(root);
@@ -520,15 +546,42 @@
       status: root.querySelector('[data-p6b="status"]'),
       cache: root.querySelector('[data-p6b="cache"]'),
       bench: root.querySelector('[data-p6b="bench"]'),
+      theme: root.querySelector('[data-p6b="theme"]'),
     };
     applyShape();
     applyPosition();
+  }
+
+  // U stick 2: the kit hue-theme selector.  Persisted in localStorage; sets
+  // data-theme on <html> so the token layer (themes.css) re-derives every
+  // --colour-* / --ui-accent for ALL kit surfaces at once.
+  function renderTheme() {
+    const host = state.refs?.theme;
+    if (!host) return;
+    host.innerHTML =
+      '<ui-dropdown data-p6b="theme-dd" placeholder="theme">' +
+      THEMES.map((th) =>
+        '<ui-option value="' + th + '" label="' + th + '"></ui-option>').join("") +
+      "</ui-dropdown>";
+    const dd = host.querySelector("ui-dropdown");
+    if (state.theme) {
+      dd.setAttribute("value", state.theme);
+      document.documentElement.dataset.theme = state.theme;
+    }
+    dd.addEventListener("ui-select", (ev) => {
+      const v = String((ev.detail && ev.detail.value) || "");
+      if (!THEMES.includes(v)) return;
+      state.theme = v;
+      saveStr(THEME_KEY, v);
+      document.documentElement.dataset.theme = v;
+    });
   }
 
   function mountOverlay() {
     if (document.getElementById(OVERLAY_ID)) return;
     injectCss();
     buildOverlay();
+    renderTheme();
   }
 
   function destroyOverlay() {
@@ -541,7 +594,7 @@
 
   function boot() {
     let tries = 0;
-    const tick = () => {
+    const tick = async () => {
       const app = getApp();
       const store = app?.extensionManager?.setting;
       const ready = store?.isReady ? store.isReady() === true : !!store;
@@ -549,6 +602,13 @@
         try {
           locale = String(store?.get?.("Comfy.Locale") || "en").split("-")[0];
         } catch (e) { locale = "en"; }
+        // U stick 2: make sure the kit components this panel uses are
+        // registered before the first render; if the kit is absent the
+        // panel still works (checkbox rows just render unstyled).
+        try {
+          await import("/comfydl/ui/components/ui-checkbox/ui-checkbox.js");
+          await import("/comfydl/ui/components/ui-dropdown/ui-dropdown.js");
+        } catch (e) { /* kit not served - keep going */ }
         mountOverlay();
         fetchAll(); // three cheap GETs; keep the first paint honest
         return;

@@ -113,6 +113,16 @@
 }
 .cdl-p6b-hint { margin-top: 4px; }
 
+/* U stick 2: kit component fallbacks (the kit css styles :host, but if the
+ * kit fails to load these keep the rows usable instead of collapsing). */
+.cdl-p6b-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cdl-p6b-switch-row ui-checkbox { flex: 0 0 auto; }
+ui-checkbox, ui-dropdown, ui-button { display: inline-flex; }
+
 /* P7: attention bench card - one geometry block per cached benchmark row. */
 .cdl-p6b-bench-row {
   padding: 3px 0;

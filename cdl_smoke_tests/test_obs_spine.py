@@ -692,7 +692,7 @@ def _p6b_frontend_checks() -> None:
           and '"/comfydl/crashsite/enabled"' in js
           and '"/comfydl/spine"' in js and "const SPECIAL" in js)
     check("P6b-d rejected toggle snaps back from server truth",
-          "await fetchAll()" in js and "box.checked = !wanted" in js
+          "await fetchAll()" in js and "box.setAttribute(\"checked\", String(!wanted))" in js
           and "result.ok" in js)
     check("P6b-e shell: fixed window, own keys, drag writes left/top only",
           "position: fixed" in css and "z-index: 2100" in css
