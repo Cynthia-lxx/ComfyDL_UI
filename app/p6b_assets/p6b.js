@@ -20,6 +20,20 @@
   "use strict";
 
   const CSS_URL = "/comfydl/p6b/p6b.css";
+
+  // VERBOSE: every lifecycle step logs to console (and a ring buffer at
+  // window.ComfyDL.p6bLogs) so a screenshot alone is enough to diagnose
+  // "the window is nowhere / did not react" reports.
+  const LOG_PREFIX = "[P6b]";
+  const p6bLogs = [];
+  function log(...args) {
+    const line = LOG_PREFIX + " " + args.map((a) =>
+      typeof a === "string" ? a : JSON.stringify(a)).join(" ");
+    p6bLogs.push(line);
+    if (p6bLogs.length > 200) p6bLogs.shift();
+    try { window.ComfyDL = window.ComfyDL || {}; window.ComfyDL.p6bLogs = p6bLogs; } catch (e) {}
+    console.log(line);
+  }
   const OVERLAY_ID = "cdl-p6b-overlay";
   const REOPEN_ID = "cdl-p6b-reopen";
   const COLLAPSE_KEY = "ComfyDL.P6b.Collapsed";
@@ -231,6 +245,7 @@
 
   function toggleCollapse() {
     state.collapsed = !state.collapsed;
+    log("collapse toggled ->", state.collapsed ? "collapsed" : "expanded");
     saveBool(COLLAPSE_KEY, state.collapsed);
     applyShape();
     applyPosition();
@@ -301,15 +316,19 @@
     state.busy = true;
     try {
       const [sw, st, cache, bench] = await Promise.all([
-        getJson(SWITCHES_URL).catch(() => null),
-        getJson(STATUS_URL).catch(() => null),
-        getJson(CACHE_STATS_URL).catch(() => null),
-        getJson(BENCH_URL).catch(() => null),
+        getJson(SWITCHES_URL).catch((e) => (log("fetch switches FAIL:", String(e)), null)),
+        getJson(STATUS_URL).catch((e) => (log("fetch status FAIL:", String(e)), null)),
+        getJson(CACHE_STATS_URL).catch((e) => (log("fetch cache FAIL:", String(e)), null)),
+        getJson(BENCH_URL).catch((e) => (log("fetch bench FAIL:", String(e)), null)),
       ]);
       if (sw && Array.isArray(sw.switches)) state.switches = sw.switches;
       if (st && st.backends) state.backends = st.backends;
       state.cache = cache;
       state.bench = bench;
+      log("fetched: switches=" + state.switches.length,
+        "backends=" + Object.keys(state.backends).length,
+        "cache=" + (cache ? "ok" : "null"),
+        "bench=" + (bench ? "ok" : "null"));
     } finally {
       state.busy = false;
     }
@@ -329,6 +348,8 @@
     } catch (e) {
       result = { ok: false, status: 0, data: {} };
     }
+    log("toggle", id, "wanted=" + !!enabled, "->", "ok=" + result.ok,
+      "status=" + result.status);
     // Always re-read the server truth: a 409 (hard-disabled) or 404 must
     // snap the checkbox back, and a 200 must reflect the canonical state.
     await fetchAll();
@@ -550,6 +571,10 @@
     };
     applyShape();
     applyPosition();
+    log("overlay mounted: collapsed=" + state.collapsed,
+      "hidden=" + state.hidden,
+      "pos=" + JSON.stringify(state.pos),
+      "theme=" + JSON.stringify(state.theme));
   }
 
   // U stick 2: the kit hue-theme selector.  Persisted in localStorage; sets
@@ -570,10 +595,13 @@
     }
     dd.addEventListener("ui-select", (ev) => {
       const v = String((ev.detail && ev.detail.value) || "");
-      if (!THEMES.includes(v)) return;
+      log("theme ui-select:", v);
+      if (!THEMES.includes(v)) { log("theme rejected (not in THEMES)"); return; }
       state.theme = v;
       saveStr(THEME_KEY, v);
       document.documentElement.dataset.theme = v;
+      log("theme applied:", v,
+        "html[data-theme]=" + document.documentElement.dataset.theme);
     });
   }
 
@@ -599,24 +627,31 @@
       const store = app?.extensionManager?.setting;
       const ready = store?.isReady ? store.isReady() === true : !!store;
       if (ready || tries > 200) {
+        log("boot ready after " + tries + " polls",
+          "(ready=" + ready + ", tries>200=" + (tries > 200) + ")");
         try {
           locale = String(store?.get?.("Comfy.Locale") || "en").split("-")[0];
         } catch (e) { locale = "en"; }
+        log("locale =", locale);
         // U stick 2: make sure the kit components this panel uses are
         // registered before the first render; if the kit is absent the
         // panel still works (checkbox rows just render unstyled).
         try {
           await import("/comfydl/ui/components/ui-checkbox/ui-checkbox.js");
+          log("kit import ui-checkbox OK");
           await import("/comfydl/ui/components/ui-dropdown/ui-dropdown.js");
-        } catch (e) { /* kit not served - keep going */ }
+          log("kit import ui-dropdown OK");
+        } catch (e) { log("kit import FAIL (panel degrades):", String(e)); }
         mountOverlay();
         fetchAll(); // three cheap GETs; keep the first paint honest
         return;
       }
       tries += 1;
+      if (tries % 20 === 0) log("boot waiting, poll #" + tries);
       setTimeout(tick, 100);
     };
     tick();
+    log("boot() started");
   }
 
   boot();
