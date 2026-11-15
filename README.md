@@ -63,7 +63,8 @@ You already know deep learning (don't you?) — here, most of it is a node away.
 linear / conv / norm / attention layers, losses, optimizers with gradient clipping, LR
 schedulers, training loops with early stopping, dataset readers and writers (CSV / Excel /
 DB / JSON / TXT), tokenizers and language-model blocks, object detection, segmentation and
-visualization — 141 nodes across 23 categories, wired instead of written.
+visualization — 231 nodes across 35 categories, wired instead of written (133 provided by
+the ComfyDL pack plus 98 ComfyUI core nodes added on top).
 
 The catalog at a glance:
 
@@ -118,6 +119,11 @@ per-node breakdown, the measured history and the ATen operator graph:
 - **Honest about unknowns** — uncovered node types report `unknown`; failed probes fall back
   to formula values with an explicit `fallback` grade. Panels, badges and dialogs follow the
   UI language.
+- **Phase anatomy & net duration** — the panel dissects the last execution into the cost
+  positions (prompt setup / per-step callbacks / run teardown) and shows the run's **net
+  duration** next to the gross: the gross minus the run's share of every performance
+  feature's self-measured overhead. See [Performance switches](#performance-switches--the-optimizer-panel)
+  and [`docs/observation-pack.md`](docs/observation-pack.md).
 
 Design notes: [`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md),
 [`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md),
@@ -159,6 +165,80 @@ The scene-export table — choose what to keep and in which format:
 <p align="center">
   <img src="assets/crashsite_scene_export.png" alt="Crash Site scene export: per-node checkboxes with format dropdowns and the workflow prompt row" width="520" />
 </p>
+
+### Performance switches & the Optimizer panel
+
+Every optional performance feature registers itself in a **switch registry**
+(`comfy.profiling.switch_registry`) with its default state, whether it
+hot-toggles and — the meta-profiling rule — a **self-overhead meter**: each
+feature measures its own bookkeeping cost and reports it, so "what does this
+feature cost me" is always a number, never a promise. One settings group
+(*Settings > ComfyDL > Performance*) renders the whole registry; twelve
+switches govern the families:
+
+| Switch | Default | Governs |
+|---|---|---|
+| `comfydl.profiling` | on | the whole profiling stack — `--cdl-profiling-disable` hard-disables until restart |
+| `comfydl.crashsite` | on | snapshot capture, resume, training checkpoints — `--cdl-crashsite-disable` hard-disables |
+| `comfydl.spine` | on | the background observation-sampling daemon |
+| `comfydl.attention_select` | on | attention backend benchmarking & injection |
+| `comfydl.compile` | on | global torch.compile hot-disable (the node itself is opt-in per graph) |
+| `comfydl.quant` | on | GGUF lazy-dequant loading (family absent entirely without the `gguf` package) |
+| `comfydl.vram` | on | VRAM hygiene (Purge VRAM) |
+| `comfydl.dataio.cache` | on | the DataFrame cache behind the dataset readers |
+| `comfydl.runs` | on | the experiment runs ledger |
+| `comfydl.phasetimer` | on | the per-execution phase anatomy |
+| `comfydl.verbose` | off | per-step VERBOSE logging to disk |
+| `comfydl.notebook` | off | the in-graph Notebook cell (Tier 2, off by default) |
+
+The floating **Optimizer panel** (minimap-sized, collapsible, hideable and
+draggable with a persisted position) is the registry's runtime face: every
+family's live truth, the DataFrame cache stats, and the **attention bench
+card** — the cached per-geometry benchmark rows (fastest backend first, the
+chosen one highlighted) produced by the Attention Optimizer. Toggles ride the
+switch endpoints; a 409/404 answer (hard-disabled or missing) snaps the
+checkbox back to the server's truth instead of lying.
+
+The registry ties into the performance nodes: **Attention Optimizer (Auto)**
+benchmarks every attention backend that actually runs on this machine (imports
+are not trusted — a mini forward must succeed), attaches the fastest and
+caches the verdict per geometry; **Attention Backend (Manual)** pins one by
+hand; **Compile Model (torch.compile)** wraps a MODEL with
+backend/mode/fullgraph/dynamic settings, cached in-process; **Load Diffusion
+Model (GGUF)** keeps weights compressed and dequantizes per-layer right before
+the matmul — VRAM scales with the file, not the fp16 footprint;
+**Quantization Inspector** prints a per-layer byte ledger (effective bits per
+weight included) without loading weights; **Purge VRAM** frees the caches on
+demand. Timing probes everywhere run under a unified `torch.compiler.disable`
+so tracing never lands inside a benchmark.
+
+### Observation panel, the runs ledger & the experiment bench
+
+A second floating panel — the **Observation panel** — is the run monitor: it
+lists recent runs from the ledger with their experiment name, status and
+durations (gross, and net where the ledger carries it).
+
+The **runs ledger** (`comfydl.runs`) files every experiment run in three
+layers: a per-run detail JSON (params, per-step loss history, timing), a
+compact `runs.csv` index, and the experiment grouping that feeds the
+comparison charts. Each run records both the **gross duration** and the **net
+duration** — the gross minus the run's share of every performance feature's
+self-measured overhead (baseline-delta attribution, floored at zero) — so "how
+much did the profiling itself cost this run" is a column, not a guess.
+
+The **experiment bench** rides on it: **Grid Search Train** expands a JSON
+`param_grid` into every combination (hidden widths × learning rates, ...),
+trains each on a fresh network with the full training machinery (early stop,
+best-snapshot rollback) and files the whole sweep in the ledger — the winner's
+parameters come out of `params`, and the combination curves overlay live in
+the CDL App Panel's comparison chart. **Batch Loop** + **Output Gate** turn a
+graph into an auto-queued sweep without external scripts.
+
+The **Phase anatomy** card (Profiling panel) dissects one prompt execution
+into the cost positions — prompt setup / per-step callbacks / run teardown —
+gross and net side by side, fed by the in-memory PhaseTimer. Design notes and
+the full HTTP API surface:
+[`docs/observation-pack.md`](docs/observation-pack.md).
 
 ### Live loss map
 
@@ -370,13 +450,16 @@ On AMD cards not officially covered by ROCm, try `HSA_OVERRIDE_GFX_VERSION=10.3.
 - [`comfydl/`](comfydl/) — the node pack: `README.md` / `README_zh.md` and the complete node
   references `FUNCTIONS.md` / `FUNCTIONS_zh.md`.
 - [`docs/`](docs/) — fork-specific notes: dehydration manifest, branding, built-in node pack,
-  memory profiling, and the step-by-step reform design documents.
+  memory profiling, the observation & performance pack
+  ([`docs/observation-pack.md`](docs/observation-pack.md)), and the step-by-step reform design
+  documents.
 - [`AGENTS.md`](AGENTS.md) — how this repository is worked on.
 - [中文说明](README_zh.md)
 
 ## Version and credits
 
-- **Version** — `v0.3.1`, dehydrated from ComfyUI `v0.34.0`.
+- **Version** — `v0.6.0` (observation & performance pack complete), dehydrated from ComfyUI
+  `v0.34.0`.
 - **Maintainer** — [Cynthia-lxx](https://github.com/Cynthia-lxx).
 - **License** — GPL-3.0, for this repository and the `comfydl/` submodule
   ([`LICENSE`](LICENSE), [`comfydl/LICENSE`](comfydl/LICENSE)).

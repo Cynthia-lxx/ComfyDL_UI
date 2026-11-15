@@ -42,7 +42,8 @@
 你大概懂深度学习（不是吗？）——在这里，大部分内容都做成了开箱即用的节点。张量与形状操作、
 linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化器、LR 调度器、带早停的
 训练循环、数据集读写（CSV / Excel / DB / JSON / TXT）、分词器与语言模型块、目标检测、
-分割与可视化——141 个节点、23 个分类，连线代替手写代码。
+分割与可视化——231 个节点、35 个分类，连线代替手写代码（其中 ComfyDL 节点包提供 133 个，
+另加 98 个 ComfyUI 核心节点）。
 
 目录一览：
 
@@ -84,6 +85,10 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
   计数，以及每张缓存表一张小卡（源文件、解析参数、缓存大小、命中次数）——"现在缓存了
   什么"随时可见。文件读取节点同时暴露 `IS_CHANGED` 指纹，让执行器在未变更的读取发生
   之前就直接跳过。
+- **阶段解剖与净耗时** — 面板把最近一次执行解剖到成本位置（prompt 建立期 / 每步回调 /
+  run 收尾期），并在毛耗时旁给出本次运行的**净耗时**：毛耗时扣除本次运行分摊到的各性能
+  特性自计量开销。详见下文[性能开关](#性能开关--optimizer-浮窗)与
+  [`docs/observation-pack.md`](docs/observation-pack.md)。
 
 设计文档：[`docs/profiling-m1-memory-estimation.md`](docs/profiling-m1-memory-estimation.md)、
 [`docs/profiling-m2-compute-and-watchdog.md`](docs/profiling-m2-compute-and-watchdog.md)、
@@ -115,6 +120,62 @@ linear / conv / norm / attention 层、损失函数、带梯度裁剪的优化�
 <p align="center">
   <img src="assets/crashsite_scene_export.png" alt="Crash Site 现场导出：逐节点勾选框、格式下拉与工作流提示词行" width="520" />
 </p>
+
+### 性能开关 & Optimizer 浮窗
+
+每个可选性能特性都会向**开关注册表**（`comfy.profiling.switch_registry`）注册自己的
+默认状态、是否可热切换，以及——元 profiling 铁律——一份**自我计量**账本：每个特性
+都实测自己的记账开销并如实上报，"这个特性花了我多少"永远是一个数字而不是一句承诺。
+一组设置（*设置 > ComfyDL > 性能*）渲染整个注册表；十二个开关分管各特性族：
+
+| 开关 | 默认 | 管辖 |
+|---|---|---|
+| `comfydl.profiling` | 开 | 整个 profiling 栈——`--cdl-profiling-disable` 硬停用（重启才能恢复） |
+| `comfydl.crashsite` | 开 | 快照捕获、恢复、断点续训——`--cdl-crashsite-disable` 硬停用 |
+| `comfydl.spine` | 开 | 后台观测采样守护线程 |
+| `comfydl.attention_select` | 开 | attention 后端实测与注入 |
+| `comfydl.compile` | 开 | torch.compile 全局热停用（节点本身按图选用） |
+| `comfydl.quant` | 开 | GGUF 惰性反量化加载（缺 `gguf` 包时整个族直接缺席） |
+| `comfydl.vram` | 开 | 显存治理（Purge VRAM） |
+| `comfydl.dataio.cache` | 开 | 数据集读取节点背后的 DataFrame 缓存 |
+| `comfydl.runs` | 开 | 实验运行账本 |
+| `comfydl.phasetimer` | 开 | 单次执行的阶段解剖 |
+| `comfydl.verbose` | 关 | 逐步 VERBOSE 落盘日志 |
+| `comfydl.notebook` | 关 | 图内 Notebook 单元格（Tier 2，默认关） |
+
+**Optimizer 浮窗**（minimap 尺寸、可收起/隐藏/拖拽且位置持久化）是注册表的运行时门面：
+各特性族的实时真值、DataFrame 缓存统计，以及 **Attention 实测基准卡**——Attention
+Optimizer 产出的按几何分行的缓存基准（最快的排最前、胜者高亮）。切换走开关端点；
+409/404 应答（硬停用或缺席）会让复选框弹回服务器真值，绝不撒谎。
+
+注册表与性能节点联动：**Attention Optimizer (Auto)** 对本机真正能跑的每个 attention
+后端做实测（import 成功不算数——必须通过一次微型前向），选最快者注入并按几何缓存结论；
+**Attention Backend (Manual)** 手动钉死一个后端；**Compile Model (torch.compile)** 以
+backend/mode/fullgraph/dynamic 配置包裹 MODEL，结果进程内缓存；**Load Diffusion Model
+(GGUF)** 权重保持压缩、在矩阵乘前才逐层反量化——显存占用随文件而非 fp16 体量走；
+**Quantization Inspector** 不载权重即可打印逐层字节账本（含有效 bits/weight）；
+**Purge VRAM** 随时清空缓存。所有计时探针统一走 `torch.compiler.disable`，
+编译追踪绝不落进基准的计时窗口。
+
+### 观测浮窗、运行账本与实验台
+
+第二个浮窗——**观测浮窗**——是运行监视器：按账本列出最近的实验运行（实验名、状态、
+耗时），毛耗时旁给出账本携带的净耗时。
+
+**运行账本**（`comfydl.runs`）把每次实验运行记入三层：单次运行的 detail JSON（参数、
+逐步 loss 历史、计时）、紧凑的 `runs.csv` 索引、以及喂给对比图的实验分组。每次运行同时
+记录**毛耗时**与**净耗时**——净耗时 = 毛耗时扣除本次运行分摊到的各性能特性自计量开销
+（基线差值口径、零下限防负）——"profiling 本身花了这次运行多少钱"从此是一列数据
+而不是一句猜测。
+
+**实验台**骑在账本上：**Grid Search Train** 把 JSON `param_grid` 叉积展开成全部组合
+（隐藏层宽度 × 学习率……），每个组合都用全新网络走完整训练机制（早停 + 最佳快照回滚），
+整个扫描入账——胜者参数从 `params` 输出，组合曲线在 CDL App Panel 的对比图里实时叠加。
+**Batch Loop** + **Output Gate** 把一张图变成无需外部脚本的自动连跑扫描。
+
+**阶段解剖卡**（Profiling 面板）把单次 prompt 执行解剖到成本位置——prompt 建立期 /
+每步回调 / run 收尾期——毛净并列，由内存态 PhaseTimer 供数。设计说明与完整 HTTP API
+清单：[`docs/observation-pack.md`](docs/observation-pack.md)。
 
 ### 实时 loss 图表
 
@@ -277,14 +338,14 @@ python main.py
 ## 文档
 
 - [`comfydl/`](comfydl/) — 节点包：`README.md` / `README_zh.md` 与完整节点参考 `FUNCTIONS.md` / `FUNCTIONS_zh.md`。
-- [`docs/`](docs/) — 分支专属说明：脱水清单、品牌、内置节点包、Profiling 与分步改造设计
-  文档。
+- [`docs/`](docs/) — 分支专属说明：脱水清单、品牌、内置节点包、Profiling、观测与性能包
+  （[`docs/observation-pack.md`](docs/observation-pack.md)）与分步改造设计文档。
 - [`AGENTS.md`](AGENTS.md) — 本仓库的工作方式。
 - [English](README.md)
 
 ## 版本与致谢
 
-- **版本** — `v0.3.1`，自 ComfyUI `v0.34.0` 脱水而来。
+- **版本** — `v0.6.0`（观测与性能包收官），自 ComfyUI `v0.34.0` 脱水而来。
 - **维护者** — [Cynthia-lxx](https://github.com/Cynthia-lxx)。
 - **许可** — GPL-3.0，适用于本仓库与 `comfydl/` 子模块
   （[`LICENSE`](LICENSE)、[`comfydl/LICENSE`](comfydl/LICENSE)）。
