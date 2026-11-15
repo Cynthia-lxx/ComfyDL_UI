@@ -33,21 +33,20 @@ jobs:
         run: |
           mkdir -p temp-wiki
           
-          # 高优先级文档处理
+          # 1. 核心高优先级文件（加数字前缀置顶）
           if [ -f "comfydl/FUNCTIONS.md" ]; then
-            cp "comfydl/FUNCTIONS.md" temp-wiki/Home.md
+            cp "comfydl/FUNCTIONS.md" temp-wiki/01-FUNCTIONS.md
           fi
           
           if [ -f "QUANTIZATION.md" ]; then
-            cp "QUANTIZATION.md" temp-wiki/Priority-1-QUANTIZATION.md
+            cp "QUANTIZATION.md" temp-wiki/02-QUANTIZATION.md
           fi
           
-          # HTML 转换为 MD
           if [ -f "docs/network-and-layers.html" ]; then
-            pandoc "docs/network-and-layers.html" -o "temp-wiki/Priority-2-Network-and-Layers.md"
+            pandoc "docs/network-and-layers.html" -o "temp-wiki/03-Network-and-Layers.md"
           fi
 
-          # 遍历 docs/ 下的所有 md 文件，加前缀并展平
+          # 2. 遍历 docs/ 目录
           if ls docs/*.md 1> /dev/null 2>&1; then
             for f in docs/*.md; do
               filename=$(basename "$f")
@@ -55,7 +54,25 @@ jobs:
             done
           fi
 
-          # 同步到 Wiki 仓库（注意：这会删除 Wiki 里原本存在但 temp-wiki 里没有的文件）
+          # 3. 自动生成 _Sidebar.md 侧边栏
+          echo "### 🚀 核心文档" > temp-wiki/_Sidebar.md
+          echo "* [Features (FUNCTIONS)](01-FUNCTIONS)" >> temp-wiki/_Sidebar.md
+          echo "* [Quantization Guide (QUANTIZATION)](02-QUANTIZATION)" >> temp-wiki/_Sidebar.md
+          echo "* [Nodes Reference (Network & Layers)](03-Network-and-Layers)" >> temp-wiki/_Sidebar.md
+          echo "" >> temp-wiki/_Sidebar.md
+          echo "### 📚 详细文档" >> temp-wiki/_Sidebar.md
+          
+          # 把 docs 里的文件也塞进侧边栏
+          if ls docs/*.md 1> /dev/null 2>&1; then
+            for f in docs/*.md; do
+              filename=$(basename "$f" .md) # 去掉 .md 后缀
+              # 利用 awk 把首字母大写
+              title=$(echo "$filename" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+              echo "* [$title](Docs-$filename)" >> temp-wiki/_Sidebar.md
+            done
+          fi
+
+          # 4. 同步到 Wiki 仓库
           rsync -av --delete --exclude='.git' temp-wiki/ wiki-checkout/
 
       - name: Commit and Push
