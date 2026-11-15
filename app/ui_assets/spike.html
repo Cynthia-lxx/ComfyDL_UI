@@ -1,82 +1,149 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- U stick 1 [0.88] real-machine spike page (not part of the kit; served
-     from /comfydl/ui-assets/spike.html while the kit itself is served from
-     /comfydl/ui/).  Exercises the full chain a stick-2 panel will rely on:
-     token layer -> hue theme switch -> bridge mapping -> Custom Element
-     (Shadow DOM) -> i18n change -> reduced-motion gate.  Every assertion
-     writes a data-* verdict onto <body> so a CDP driver can machine-check
-     the page without a human reading it. -->
+<!-- U stick 1 [0.88] real-machine spike v3 (served from
+     /comfydl/ui-assets/spike.html).
+
+     v3: every event goes to console.log AND to the on-page log pane; the
+     kit component is loaded via dynamic import() from a CLASSIC script so a
+     module-parse failure cannot silently skip the whole program; resource
+     load errors are trapped in capture phase; every stylesheet's loaded
+     state is asserted; performance resource entries are dumped.  URLs carry
+     a ?v=3 cache buster (v1 may never have been served fresh). -->
 <html lang="en" data-theme="blue">
 <head>
   <meta charset="utf-8"/>
-  <title>ComfyDL UI kit spike</title>
-  <link rel="stylesheet" href="/comfydl/ui/tokens.css"/>
-  <link rel="stylesheet" href="/comfydl/ui/themes.css"/>
-  <link rel="stylesheet" href="/comfydl/ui-assets/bridge.css"/>
-  <link rel="stylesheet" href="/comfydl/ui/components/ui-button/ui-button.css"/>
+  <title>ComfyDL UI kit spike v3</title>
+  <link rel="stylesheet" href="/comfydl/ui/tokens.css?v=3"/>
+  <link rel="stylesheet" href="/comfydl/ui/themes.css?v=3"/>
+  <link rel="stylesheet" href="/comfydl/ui-assets/bridge.css?v=3"/>
+  <link rel="stylesheet" href="/comfydl/ui/components/ui-button/ui-button.css?v=3"/>
 </head>
 <body style="padding:24px;font-family:var(--font-family)">
-  <div style="display:flex;gap:8px;margin-bottom:16px">
-    <button data-spike-theme="blue">blue</button>
-    <button data-spike-theme="purple">purple</button>
-    <button data-spike-theme="red">red</button>
-    <button data-spike-motion="off">motion-off</button>
-    <button data-spike-motion="on">motion-on</button>
-    <button data-spike-lang="zh-CN">zh-CN</button>
-    <button data-spike-lang="en">en</button>
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button data-spike-theme="blue">theme:blue</button>
+    <button data-spike-theme="purple">theme:purple</button>
+    <button data-spike-theme="red">theme:red</button>
+    <button data-spike-motion="off">motion:off</button>
+    <button data-spike-motion="on">motion:on</button>
+    <button id="spike-copy">copy log</button>
   </div>
-  <div style="display:flex;gap:12px;align-items:center">
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
     <ui-button id="spike-btn" variant="primary">Spike</ui-button>
-    <span id="spike-readout"></span>
+    <span id="spike-accent" style="font-family:var(--font-family-mono)"></span>
   </div>
-  <script type="module">
-    const verdict = {};
-    const readout = document.getElementById("spike-readout");
-    const stamp = () => { readout.textContent = JSON.stringify(verdict); };
+  <pre id="spike-log" style="white-space:pre-wrap;font-family:var(--font-family-mono);background:#111;color:#8f8;border:1px solid #444;padding:12px;max-height:420px;overflow:auto"></pre>
+  <p style="color:var(--ui-text-muted,#9a9a9a);max-width:60ch">
+    请把绿色日志框内容（或 F12 Console 的 [spike] 行）整段发我。
+  </p>
+  <script>
+    // ---- 双通道日志：console.log + 页面绿框，一个字都不许静默 ------------
+    (function () {
+      var pane = null;
+      var lines = [];
+      window.spikeLog = function (msg) {
+        var line = "[" + new Date().toISOString().slice(11, 23) + "] " + msg;
+        lines.push(line);
+        console.log("[spike] " + line);
+        if (!pane) pane = document.getElementById("spike-log");
+        if (pane) pane.textContent = lines.join("\n");
+      };
+      window.addEventListener("error", function (e) {
+        // capture 阶段连资源加载失败（404 的 css/js）也能抓到
+        var t = e.target;
+        if (t && (t.src || t.href) && t !== window) {
+          spikeLog("RESOURCE-ERROR " + (t.src || t.href));
+        } else {
+          spikeLog("JS-ERROR " + (e.message || String(e)) + " @" +
+            (e.filename || "?") + ":" + (e.lineno || "?"));
+        }
+      }, true);
+      window.addEventListener("unhandledrejection", function (e) {
+        spikeLog("REJECTION " + ((e.reason && e.reason.message) || String(e.reason)));
+      });
+      document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("spike-copy").addEventListener("click",
+          function () { navigator.clipboard.writeText(lines.join("\n")); });
+        spikeLog("page ready, url=" + location.href);
+        // 每个 <link> 的实际加载状态
+        document.querySelectorAll("link[rel=stylesheet]").forEach(function (l) {
+          spikeLog("stylesheet " + l.href.split("/").slice(-2).join("/") +
+            " loaded=" + (l.sheet ? "YES" : "NO"));
+        });
+        // token 层在组件登场前必须已生效
+        var cs = getComputedStyle(document.documentElement);
+        spikeLog("--ui-accent=" + cs.getPropertyValue("--ui-accent").trim());
+        spikeLog("--motion-scale=" + cs.getPropertyValue("--motion-scale").trim());
+        spikeLog("--ui-surface=" + cs.getPropertyValue("--ui-surface").trim());
+      });
+    })();
+  </script>
+  <script>
+    // ---- 组件动态导入 + 判定（经典脚本里用 dynamic import，模块解析失败
+    //      会走进 catch 而不是无声无息）--------------------------------
+    window.addEventListener("DOMContentLoaded", function () {
+      var verdict = {};
+      var btn = document.getElementById("spike-btn");
+      var accentEl = document.getElementById("spike-accent");
+      var accentOf = function () {
+        return getComputedStyle(btn).getPropertyValue("--ui-accent").trim();
+      };
+      var accentReadout = function () {
+        accentEl.textContent = "accent=" + accentOf() + "  motion-scale=" +
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--motion-scale").trim();
+      };
+      document.querySelectorAll("[data-spike-theme]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          document.documentElement.dataset.theme = b.dataset.spikeTheme;
+          spikeLog("theme -> " + b.dataset.spikeTheme + ", accent=" + accentOf());
+          accentReadout();
+        });
+      });
+      document.querySelectorAll("[data-spike-motion]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          document.documentElement.classList
+            .toggle("cdl-motion-off", b.dataset.spikeMotion === "off");
+          spikeLog("motion -> " + b.dataset.spikeMotion + ", scale=" +
+            getComputedStyle(document.documentElement)
+              .getPropertyValue("--motion-scale").trim());
+          accentReadout();
+        });
+      });
+      document.addEventListener("ui-press", function () {
+        verdict.pressEvent = true; spikeLog("ui-press reached document (composed)");
+      });
 
-    // 1) the kit component registers itself (Custom Elements + open Shadow DOM)
-    //    (dist layout: components/<id>/<file> - the assembler flattens the
-    //    source-tree 04-components/ prefix away)
-    await import("/comfydl/ui/components/ui-button/ui-button.js");
-    const btn = document.getElementById("spike-btn");
-    await customElements.whenDefined("ui-button");
-    verdict.defined = customElements.get("ui-button")?.name === "UIButton";
-    verdict.shadow = !!btn.shadowRoot;
+      spikeLog("importing ui-button.js ...");
+      import("/comfydl/ui/components/ui-button/ui-button.js?v=3")
+        .then(function () {
+          spikeLog("import resolved");
+          return customElements.whenDefined("ui-button");
+        })
+        .then(function (cls) {
+          verdict.defined = cls && cls.name === "UIButton";
+          verdict.shadow = !!btn.shadowRoot;
+          spikeLog("ui-button defined=" + verdict.defined +
+            " shadowRoot=" + verdict.shadow + " cls=" + (cls && cls.name));
 
-    // 2) the accent actually changes when the hue theme switches (CSS custom
-    //    properties pierce the shadow boundary - this is the whole bet)
-    const accent = () => getComputedStyle(btn).getPropertyValue("--ui-accent").trim();
-    const before = accent();
-    document.documentElement.dataset.theme = "purple";
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const after = accent();
-    verdict.themeSwitch = before !== "" && after !== "" && before !== after;
-    verdict.accentBlue = before; verdict.accentPurple = after;
-    document.documentElement.dataset.theme = "blue";
-
-    // 3) the bridge layer wins the alias layer: --ui-surface tracks the
-    //    official variable (absent on this page -> falls back to the kit)
-    verdict.bridgeSurface = getComputedStyle(btn)
-      .getPropertyValue("--ui-surface").trim() !== "";
-
-    // 4) our motion gates drive the kit's reduced-motion scale
-    verdict.motionOn = getComputedStyle(document.documentElement)
-      .getPropertyValue("--motion-scale").trim() === "1";
-    document.documentElement.classList.add("cdl-motion-off");
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    verdict.motionOff = getComputedStyle(document.documentElement)
-      .getPropertyValue("--motion-scale").trim() === "0";
-    document.documentElement.classList.remove("cdl-motion-off");
-
-    // 5) pressing the button dispatches a composed event (panel consumers)
-    btn.addEventListener("ui-press", () => { verdict.pressEvent = true; stamp(); });
-    btn.dispatchEvent(new CustomEvent("ui-press", { bubbles: true, composed: true }));
-
-    for (const [k, v] of Object.entries(verdict)) {
-      document.body.dataset[k] = String(v);
-    }
-    stamp();
+          var before = accentOf();
+          document.documentElement.dataset.theme = "purple";
+          return new Promise(function (r) {
+            requestAnimationFrame(function () { requestAnimationFrame(r); });
+          }).then(function () {
+            var after = accentOf();
+            verdict.themeSwitch = before !== "" && after !== "" && before !== after;
+            verdict.accentBlue = before; verdict.accentPurple = after;
+            spikeLog("accent blue=" + before + " purple=" + after +
+              " switch=" + verdict.themeSwitch);
+            document.documentElement.dataset.theme = "blue";
+            accentReadout();
+            spikeLog("verdict=" + JSON.stringify(verdict));
+          });
+        })
+        .catch(function (e) {
+          spikeLog("IMPORT-FAILED " + ((e && e.message) || String(e)));
+        });
+    });
   </script>
 </body>
 </html>
