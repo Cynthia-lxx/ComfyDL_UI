@@ -105,6 +105,11 @@ def _registry_checks() -> None:
     check("T2e registry: self-overhead accumulates; unknown ids ignored",
           abs(ov["total_s"] - 0.75) < 1e-9 and ov["samples"] == 2)
 
+    all_ov = switch_registry.self_overhead_all()
+    check("T2i registry: self_overhead_all snapshots every meter (P7)",
+          isinstance(all_ov, dict) and "cdl.test.switch" in all_ov
+          and {"total_s", "samples"} <= set(all_ov["cdl.test.switch"]))
+
     desc = switch_registry.describe("cdl.test.switch")
     check("T2f registry: describe exposes the settings-panel contract",
           desc["id"] == "cdl.test.switch" and desc["enabled"] is True

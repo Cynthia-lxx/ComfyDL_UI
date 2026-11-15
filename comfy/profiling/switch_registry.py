@@ -188,6 +188,23 @@ def self_overhead(switch_id: str) -> Dict[str, Any]:
         }
 
 
+def self_overhead_all() -> Dict[str, Dict[str, Any]]:
+    """Single-lock snapshot of every switch's self-overhead meter (P7).
+
+    ``{switch_id: {"total_s": float, "samples": int}}`` - one lock
+    acquisition instead of ``list_switches() + describe()`` double-locking.
+    Consumers computing a *per-run* overhead must take a snapshot at run
+    start and subtract it at finish (baseline delta): resident threads
+    (e.g. the spine) accumulate across runs, so absolute totals cannot be
+    attributed to a single run.
+    """
+    with _LOCK:
+        return {
+            sid: {"total_s": st.overhead_total_s, "samples": st.overhead_samples}
+            for sid, st in _REGISTRY.items()
+        }
+
+
 def describe(switch_id: str) -> Dict[str, Any]:
     """Read-only snapshot for the settings panel / diagnostics endpoints."""
     with _LOCK:

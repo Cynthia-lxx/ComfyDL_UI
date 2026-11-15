@@ -80,6 +80,7 @@ INDEX_COLUMNS = (
     "experiment",   # caller-chosen batch name (e.g. "gridsearch-lr-sweep")
     "started_at",   # local ISO timestamp
     "duration_s",   # wall seconds, rounded
+    "duration_s_net",# wall seconds minus this run's Tier-1 self-overheads
     "status",       # completed | failed
     "node_id",      # ComfyUI node unique_id that owned the run
     "combo_index",  # position within a scan batch (None for single runs)
@@ -284,6 +285,11 @@ class ActiveRun:
         self.run_id = _new_run_id()
         self.root = default_root()
         self.started_monotonic = time.perf_counter()
+        # P7 net-duration baseline: the switch-registry self-overhead meter
+        # is process-cumulative (resident threads keep accruing), so a run's
+        # own overhead is the *delta* between this snapshot and the one taken
+        # in finish().
+        self.overhead_baseline = switch_registry.self_overhead_all()
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
         self.detail: Dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
@@ -292,6 +298,8 @@ class ActiveRun:
             "started_at": stamp,
             "finished_at": None,
             "duration_s": None,
+            "duration_s_net": None,  # P7: gross minus Tier-1 self-overheads
+            "self_overheads": {},    # P7: {switch_id: delta_s} within this run
             "status": "running",
             "node_id": str(node_id),
             "combo_index": combo_index,
@@ -353,8 +361,24 @@ class ActiveRun:
         _LOG_HANDLER.close()
         self.detail["status"] = status
         self.detail["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        self.detail["duration_s"] = round(
-            time.perf_counter() - self.started_monotonic, 4)
+        gross = round(time.perf_counter() - self.started_monotonic, 4)
+        self.detail["duration_s"] = gross
+        # P7 net duration: this run's share of every Tier-1 feature's
+        # self-measured overhead (baseline delta - resident-thread meters
+        # accrue across runs).  Net is floored at 0: a mis-attributed
+        # overhead must never render a negative duration.
+        overheads: Dict[str, float] = {}
+        current = switch_registry.self_overhead_all()
+        for sid, cur in current.items():
+            base = self.overhead_baseline.get(sid)
+            base_s = float(base["total_s"]) if base else 0.0
+            delta = float(cur["total_s"]) - base_s
+            if delta > 1e-6:
+                overheads[sid] = round(delta, 4)
+        total_overhead = round(sum(overheads.values()), 4)
+        self.detail["self_overheads"] = overheads
+        self.detail["duration_s_net"] = round(
+            max(0.0, gross - total_overhead), 4)
         self._write_detail()
         self._append_index_row()
 
@@ -411,6 +435,7 @@ class ActiveRun:
             "experiment": d["experiment"],
             "started_at": d["started_at"],
             "duration_s": d["duration_s"],
+            "duration_s_net": d.get("duration_s_net"),
             "status": d["status"],
             "node_id": d["node_id"],
             "combo_index": d["combo_index"],
@@ -520,7 +545,7 @@ def read_index(limit: Optional[int] = None) -> List[Dict[str, Any]]:
 def _coerce_row(row: Dict[str, str]) -> bool:
     """Normalise csv strings in place; drops malformed rows (returns False)."""
     try:
-        for key in ("duration_s", "metric_final"):
+        for key in ("duration_s", "duration_s_net", "metric_final"):
             if row.get(key) not in (None, ""):
                 row[key] = float(row[key])  # type: ignore[assignment]
         for key in ("best", "combo_index"):

@@ -263,6 +263,38 @@ check("T12a self-overhead accumulated across the writes above",
       overhead["total_s"] > 0 and overhead["samples"] >= 10,
       f"total={overhead['total_s']:.6f}s samples={overhead['samples']}")
 
+# ---------------------------------------------------------------------------
+# T13 (P7): net duration - gross minus this run's Tier-1 self-overheads
+
+sr.register_switch("cdl.test.p7meter", default=True, hot_toggle=True,
+                   self_meter=True)
+with rl.start_run(experiment="net-check", params={"lr": 0.1}) as run:
+    # booked DURING the run window: must show up in the run's delta
+    sr.record_self_overhead("cdl.test.p7meter", 0.25)
+    run.append_history(1, 0.5)
+detail = rl.read_detail(run.run_id)
+check("T13a net: duration fields present",
+      detail is not None and detail.get("duration_s") is not None
+      and detail.get("duration_s_net") is not None
+      and isinstance(detail.get("self_overheads"), dict))
+ovs = (detail or {}).get("self_overheads") or {}
+check("T13b net: in-run overhead attributed by baseline delta",
+      abs(ovs.get("cdl.test.p7meter", 0.0) - 0.25) < 0.05,
+      str(ovs))
+gross = detail["duration_s"]
+net = detail["duration_s_net"]
+check("T13c net: net <= gross (never negative)",
+      0.0 <= net <= gross + 1e-9, f"gross={gross} net={net}")
+check("T13d net: net = floor(gross - sum(self_overheads), 0)",
+      abs(net - max(0.0, gross - sum(ovs.values()))) < 0.01,
+      f"gross={gross} net={net} overheads={sum(ovs.values()):.4f}")
+index_row = next((r for r in rl.read_index() if r.get("run_id") == run.run_id),
+                 None)
+check("T13e net: index row carries the net column (float after coerce)",
+      index_row is not None
+      and isinstance(index_row.get("duration_s_net"), float),
+      str(index_row))
+
 # restore
 rl.set_root(None)
 

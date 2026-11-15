@@ -508,6 +508,14 @@
           : dur >= 1 ? dur.toFixed(2) + "s"
           : Math.round(dur * 1000) + "ms")
         : "";
+      // P7: net duration (gross minus the run's Tier-1 self-overheads);
+      // shown next to the gross figure when the ledger carries it.
+      const net = Number(run.duration_s_net);
+      const netTxt = Number.isFinite(net) && net > 0 && net < dur
+        ? (net >= 10 ? net.toFixed(1) + "s"
+          : net >= 1 ? net.toFixed(2) + "s"
+          : Math.round(net * 1000) + "ms")
+        : "";
       const startedMs = Date.parse(started);
       const newTag = Number.isFinite(startedMs) && startedMs >= SESSION_START
         ? '<span class="cdl-obs-run-new">' + esc(t("run_new")) + "</span>"
@@ -516,6 +524,7 @@
         esc(name) + '</span>' +
         (hm ? '<span class="cdl-obs-run-time">' + esc(hm) + "</span>" : "") +
         (durTxt ? '<span class="cdl-obs-run-dur">' + esc(durTxt) + "</span>" : "") +
+        (netTxt ? '<span class="cdl-obs-run-dur">' + esc("\u2212 " + netTxt) + "</span>" : "") +
         newTag +
         '<span class="cdl-obs-run-status ' + cls + '">' +
         esc(status) + "</span></div>";
