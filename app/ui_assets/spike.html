@@ -120,7 +120,7 @@
           return customElements.whenDefined("ui-button");
         })
         .then(function (cls) {
-          verdict.defined = cls && cls.name === "UIButton";
+          verdict.defined = cls && cls.name === "UiButtonElement";
           verdict.shadow = !!btn.shadowRoot;
           spikeLog("ui-button defined=" + verdict.defined +
             " shadowRoot=" + verdict.shadow + " cls=" + (cls && cls.name));
