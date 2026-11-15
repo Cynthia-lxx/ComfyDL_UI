@@ -742,6 +742,16 @@ class PromptExecutor:
         asyncio.run(self.execute_async(prompt, prompt_id, extra_data, execute_outputs))
 
     async def execute_async(self, prompt, prompt_id, extra_data={}, execute_outputs=[]):
+        # M-D P7 PhaseTimer: open the per-execution phase record (no-op when
+        # the comfydl.phasetimer switch is off - same courtesy contract as
+        # the run meter below).
+        try:
+            from comfy.profiling import phase_timer
+
+            phase_timer.begin_execution(prompt_id)
+        except Exception:
+            pass
+
         set_preview_method(extra_data.get("preview_method"))
 
         nodes.interrupt_processing(False)
@@ -811,6 +821,15 @@ class PromptExecutor:
                 current_outputs = self.caches.outputs.all_node_ids()
                 for node_id in list(execute_outputs):
                     execution_list.add_node(node_id)
+
+                # M-D P7 PhaseTimer: the prompt-setup phase ends where node
+                # execution begins.
+                try:
+                    from comfy.profiling import phase_timer
+
+                    phase_timer.mark_prompt_setup_done(prompt_id)
+                except Exception:
+                    pass
 
                 while not execution_list.is_empty():
                     node_id, error, ex = await execution_list.stage_node_execution()
@@ -893,6 +912,15 @@ class PromptExecutor:
                 if comfy.model_management.DISABLE_SMART_MEMORY:
                     comfy.model_management.unload_all_models()
         finally:
+            # M-D P7 PhaseTimer: everything after node execution (crash-site
+            # rescue, lifecycle notification, run persistence, meter exit)
+            # is the run-teardown cost position.
+            try:
+                from comfy.profiling import phase_timer
+
+                phase_timer.mark_teardown_start(prompt_id)
+            except Exception:
+                pass
             if self.cache_type == CacheType.RAM_PRESSURE:
                 detail("RAM cache evictions: prompt=%s active=%s full=%s", prompt_id, self.caches.outputs.active_evictions, self.caches.outputs.full_evictions)
             comfy.memory_management.set_ram_cache_release_state(None, 0)
@@ -920,6 +948,13 @@ class PromptExecutor:
                     run_meter.__exit__(None, None, None)
                 except Exception:
                     pass
+            try:
+                from comfy.profiling import phase_timer
+
+                phase_timer.finish_execution(
+                    prompt_id, failed=lifecycle_failed)
+            except Exception:
+                pass
 
 
 async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):

@@ -81,7 +81,9 @@ def sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative
     # exact callback signature and forwards the original (latent preview /
     # progress), and returns it untouched when the switch is OFF.
     from comfy import verbose_log
-    callback = verbose_log.wrap_sampler_callback(callback)
+    from comfy.profiling import phase_timer
+    callback = phase_timer.wrap_sampler_callback(
+        verbose_log.wrap_sampler_callback(callback))
     sampler = comfy.samplers.KSampler(model, steps=steps, device=model.load_device, sampler=sampler_name, scheduler=scheduler, denoise=denoise, model_options=model.model_options)
 
     samples = sampler.sample(noise, positive, negative, cfg=cfg, latent_image=latent_image, start_step=start_step, last_step=last_step, force_full_denoise=force_full_denoise, denoise_mask=noise_mask, sigmas=sigmas, callback=callback, disable_pbar=disable_pbar, seed=seed)
@@ -92,7 +94,9 @@ def sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent
     # Repair R0 gap: KSampler Advanced goes through sample_custom, not sample.
     # Same wrapper, same OFF-path no-op, original callback preserved.
     from comfy import verbose_log
-    callback = verbose_log.wrap_sampler_callback(callback)
+    from comfy.profiling import phase_timer
+    callback = phase_timer.wrap_sampler_callback(
+        verbose_log.wrap_sampler_callback(callback))
     samples = comfy.samplers.sample(model, noise, positive, negative, cfg, model.load_device, sampler, sigmas, model_options=model.model_options, latent_image=latent_image, denoise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=seed)
     samples = samples.to(device=comfy.model_management.intermediate_device(), dtype=comfy.model_management.intermediate_dtype())
     return samples

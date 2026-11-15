@@ -525,3 +525,33 @@ async def history(request: web.Request) -> web.Response:
         return web.json_response({"runs": [], "available": False}, status=200)
     proflog.log("low", "history: %d run(s) served", len(runs), request=request)
     return web.json_response({"runs": runs, "available": True})
+
+
+@routes.get("/comfydl/profiling/phases")
+async def phases(request: web.Request) -> web.Response:
+    """P7 PhaseTimer anatomy: the current + last executions' phase breakdown.
+
+    ``{"available": bool, "switch": {...}, "current": {...}|null,
+    "history": [...], "overheads": {switch_id: {total_s, samples}}}``.
+    Read-only projection of ``comfy.profiling.phase_timer`` plus the
+    registry's cumulative self-overhead meter; ALWAYS 200 with
+    ``{"available": false}`` when the module is absent (bare environment).
+    """
+    try:
+        from comfy.profiling import phase_timer, switch_registry
+    except Exception as exc:  # noqa: BLE001 - bare environment
+        return web.json_response({
+            "available": False,
+            "detail": f"{type(exc).__name__}: {exc}",
+        })
+    try:
+        switch_desc = switch_registry.describe(phase_timer.SWITCH_ID)
+    except Exception:  # noqa: BLE001 - unregistered in bare tests
+        switch_desc = None
+    return web.json_response({
+        "available": True,
+        "switch": switch_desc,
+        "current": phase_timer.current(),
+        "history": phase_timer.history(),
+        "overheads": switch_registry.self_overhead_all(),
+    })

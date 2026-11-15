@@ -389,7 +389,12 @@ def probe_workflow(prompt, formula_report=None, deadline: Optional[float] = None
         elif resolved is None:
             entry["error"] = resolve_error
         else:
-            probe, node_outputs = _probe_one(class_type, cls, resolved)
+            # T6-2 (P7): probe sessions time user node code under
+            # torch.compiler.disable - tracing/recompilation must never land
+            # inside the probe's timing window.
+            from comfy import compile_manager as _cm
+            with _cm.probe_session():
+                probe, node_outputs = _probe_one(class_type, cls, resolved)
             entry.update(probe)
             if probe["status"] == "probed":
                 outputs[node_id] = node_outputs

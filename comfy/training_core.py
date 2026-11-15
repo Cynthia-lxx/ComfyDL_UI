@@ -48,6 +48,7 @@ import torch.nn as nn
 
 from comfy import training_metrics as tm
 from comfy import training_protocol as tp
+from comfy.profiling import phase_timer  # P7: per-step anatomy (no-op off)
 
 #: Loss functions the trainer can minimize (shared with the Loss / Evaluate
 #: nodes; see ``comfy.training_metrics``). ``cross_entropy`` and ``perplexity``
@@ -515,7 +516,12 @@ class TrainingSession:
                         best_state = tp.snapshot_state(model)
                         best_length = len(history)
                     if self.progress is not None:
-                        self.progress(step, float(step_loss.detach()))
+                        # M-D P7: the progress call is per-step observability
+                        # cost - timed into the phase anatomy (no-op when the
+                        # phasetimer switch is off; the interrupt raised by
+                        # the host hook propagates untouched).
+                        with phase_timer.step_window():
+                            self.progress(step, float(step_loss.detach()))
             except InterruptProcessingException:
                 if ckpt_run is not None:
                     ckpt_save(ckpt_run, {

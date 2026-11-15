@@ -36,6 +36,7 @@
   const WATCHDOG_LOG_URL = "/comfydl/profiling/watchdog/log";
   const SERVER_LOG_URL = "/internal/logs/raw";
   const HISTORY_URL = "/comfydl/profiling/history";
+  const PHASES_URL = "/comfydl/profiling/phases";
   const CACHE_ENTRIES_URL = "/comfydl/dataio/cache/entries";
   const TAB_ID = "comfydl-profiling";
   const SETTING_LOG_LEVEL = "ComfyDL.Profiling.LogLevel";
@@ -181,6 +182,14 @@
       timing_cached: "cache hit(s)",
       timing_running: "Collecting timings...",
       timing_empty: "Run a workflow - every node's real time lands here.",
+      phase_title: "Phase anatomy",
+      phase_none: "Run a workflow - its prompt-setup / per-step / teardown anatomy lands here.",
+      phase_gross: "Gross",
+      phase_setup: "Prompt setup",
+      phase_step: "Per-step callbacks",
+      phase_teardown: "Run teardown",
+      phase_net: "Net (gross \u2212 Tier-1 overheads)",
+      phase_overheads: "Tier-1 bookkeeping (cumulative)",
       watchdog_title: "Execution monitor",
       watchdog_unavailable: "monitoring unavailable (psutil missing on the server)",
       watchdog_bursts: "CPU burst log",
@@ -374,6 +383,14 @@
       timing_cached: "个缓存命中",
       timing_running: "正在采集耗时...",
       timing_empty: "运行一次工作流——每个节点的真实耗时都会落在这里。",
+      phase_title: "阶段解剖",
+      phase_none: "运行一次工作流——prompt 建立 / 每步 / 收尾的解剖数据会落在这里。",
+      phase_gross: "毛耗时",
+      phase_setup: "Prompt 建立期",
+      phase_step: "每步回调",
+      phase_teardown: "Run 收尾期",
+      phase_net: "净耗时（毛 − Tier-1 自计量）",
+      phase_overheads: "Tier-1 记账开销（累计）",
       watchdog_title: "执行监控",
       watchdog_unavailable: "监控不可用（服务端缺少 psutil）",
       watchdog_bursts: "CPU 瞬爆记录",
@@ -451,6 +468,8 @@
     timingEnd: null,
     executing: false,
     currentNodeTitle: null,
+    // P7: phase anatomy (prompt_setup / per_step / teardown, gross vs net)
+    phases: null,
     // M2: execution monitor (W2)
     liveEl: null,
     liveTimer: null,
@@ -1468,6 +1487,7 @@
     stopLivePolling();
     fetchBursts();
     fetchHistory();  // P2: a run just finished - its measured FLOPs landed.
+    fetchPhases();  // P7: the execution's phase anatomy just closed.
     fetchCacheEntries();  // read nodes may have just populated the DataFrame cache
     renderPanel();
   }
@@ -1537,6 +1557,20 @@
         renderPanel();
       }
     } catch (e) { /* silent */ }
+  }
+
+  // P7: phase anatomy fetch - one cheap read of the in-memory phase records.
+  async function fetchPhases() {
+    const api = getApi();
+    if (!api) return;
+    try {
+      const resp = await api.fetchApi(PHASES_URL, { headers: profHeaders() });
+      if (resp.ok) {
+        const body = await resp.json();
+        state.phases = body && body.available ? body : null;
+        renderPanel();
+      }
+    } catch (e) { plog("low", "Phases fetch failed: " + e); }
   }
 
   // P2: measured-FLOPs run history (newest first, per-node details inline).
@@ -2036,6 +2070,43 @@
         + '<div class="cdlp-hint">' + esc(t("timing_running")) + "</div></div>");
     }
 
+    // P7: phase anatomy - the last execution's cost-position breakdown
+    // (ADR-D1: prompt_setup / per_step / run_teardown, gross vs net).
+    const ph = state.phases;
+    if (ph) {
+      const last = (ph.history && ph.history.length)
+        ? ph.history[ph.history.length - 1] : null;
+      const ms = (v) => (v == null ? null : Number(v) * 1000);
+      html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">'
+        + esc(t("phase_title")) + "</div>");
+      if (!last) {
+        html.push('<div class="cdlp-hint">' + esc(t("phase_none")) + "</div>");
+      } else {
+        const row = (label, msv) => '<div class="cdlp-timing-row">'
+          + '<span class="cdlp-timing-name">' + esc(label) + "</span>"
+          + '<span class="cdlp-timing-val">' + esc(fmtDuration(msv)) + "</span></div>";
+        html.push('<div class="cdlp-timing-total"><span>' + esc(t("phase_gross"))
+          + "</span><b>" + esc(fmtDuration(ms(last.gross_s))) + "</b></div>");
+        html.push(row(t("phase_setup"), ms(last.prompt_setup_s)));
+        html.push(row(t("phase_step") + " \u00d7" + (last.steps || 0),
+          ms(last.per_step_s)));
+        html.push(row(t("phase_teardown"), ms(last.run_teardown_s)));
+        html.push('<div class="cdlp-timing-total"><span>' + esc(t("phase_net"))
+          + "</span><b>" + esc(fmtDuration(ms(last.net_s))) + "</b></div>");
+        const ovs = ph.overheads || {};
+        const top = Object.keys(ovs)
+          .sort((a, b) => (Number(ovs[b].total_s) || 0) - (Number(ovs[a].total_s) || 0))
+          .slice(0, 4);
+        if (top.length) {
+          html.push('<div class="cdlp-hint">' + esc(t("phase_overheads")) + ": "
+            + top.map((sid) => esc(String(sid).replace(/^comfydl\./, ""))
+              + " " + (Number(ovs[sid].total_s) || 0).toFixed(2) + "s").join(" \u00b7 ")
+            + "</div>");
+        }
+      }
+      html.push("</div>");
+    }
+
     // Execution monitor burst log (M2 / W2)
     if (state.watchdogUnavailable) {
       html.push('<div class="cdlp-card" data-col="right"><div class="cdlp-card-title">' + esc(t("watchdog_title")) + "</div>"
@@ -2256,6 +2327,7 @@
         if (state.bursts === null) fetchBursts();
         if (state.history === null) fetchHistory();
         if (state.cache === null) fetchCacheEntries();
+        fetchPhases();  // P7: the anatomy card refreshes with the panel.
         return () => { state.panelEl = null; };
       },
     });

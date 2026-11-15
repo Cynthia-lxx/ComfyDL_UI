@@ -35,6 +35,7 @@ Public API
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 import weakref
@@ -143,6 +144,54 @@ def stats() -> Dict[str, Any]:
             "hits": _HITS,
             "misses": _MISSES,
         }
+
+
+@contextlib.contextmanager
+def probe_session():
+    """``torch.compiler.disable`` for probe/benchmark sessions (T6-2, P7).
+
+    What: any measurement session that times user code (attention benchmark,
+    opgraph node probes) must not pay torch.compile tracing or recompilation
+    inside its timing window - this wraps the session in
+    ``torch.compiler.disable()`` so compiled frames run eagerly (and no new
+    compilation is triggered by the probe itself).
+    In:   used as ``with compile_manager.probe_session():`` around the probe.
+    Out:  a plain no-op context when torch lacks ``compiler.disable``, when
+          torch is unavailable in bare tests, or when the torch build
+          forbids context-manager usage of ``dynamo.optimize`` (observed on
+          2.13: ``RuntimeError: torch._dynamo.optimize(...) is used with a
+          context manager``) - the probe always keeps working.
+    Caveats: the disable is dynamic (per with-block), never global; it does
+    not unload existing compiled wrappers, it only stops tracing/recompiles
+    for code running inside the block.  Where the CM form is refused the
+    protection degrades to nothing rather than breaking the measurement.
+    """
+    try:
+        import torch
+    except Exception:  # noqa: BLE001 - bare test environment
+        yield
+        return
+    disable = getattr(getattr(torch, "compiler", None), "disable", None)
+    if disable is None:
+        yield
+        return
+    try:
+        ctx = disable()
+    except Exception:  # noqa: BLE001
+        yield
+        return
+    try:
+        ctx.__enter__()
+    except Exception:  # noqa: BLE001 - CM usage refused by this torch build
+        yield
+        return
+    try:
+        yield
+    finally:
+        try:
+            ctx.__exit__(None, None, None)
+        except Exception:  # noqa: BLE001 - never break the caller
+            pass
 
 
 def describe() -> Dict[str, Any]:

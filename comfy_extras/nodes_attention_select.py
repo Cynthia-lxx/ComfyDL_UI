@@ -199,19 +199,24 @@ def run_benchmark(
     q, k, v = _probe_tensors(device, dtype, heads, head_dim, seq_len)
     q, k, v = q[:batch], k[:batch], v[:batch]
     times: Dict[str, List[float]] = {}
-    for name, func in candidates.items():
-        with torch.no_grad():
-            for _ in range(warmup):
-                func(q, k, v, heads, mask=None)
-        _sync(device)
-        samples: List[float] = []
-        for _ in range(iters):
-            t0 = timer()
-            func(q, k, v, heads, mask=None)
+    # T6-2 (P7): a probe session must not pay torch.compile tracing or
+    # recompilation inside its timing window - run the whole benchmark
+    # under torch.compiler.disable.
+    from comfy import compile_manager as _cm
+    with _cm.probe_session():
+        for name, func in candidates.items():
+            with torch.no_grad():
+                for _ in range(warmup):
+                    func(q, k, v, heads, mask=None)
             _sync(device)
-            samples.append(timer() - t0)
-        samples.sort()
-        times[name] = samples[len(samples) // 2]
+            samples: List[float] = []
+            for _ in range(iters):
+                t0 = timer()
+                func(q, k, v, heads, mask=None)
+                _sync(device)
+                samples.append(timer() - t0)
+            samples.sort()
+            times[name] = samples[len(samples) // 2]
     return times
 
 
@@ -245,6 +250,18 @@ def ref_speed(t: float, best: float) -> float:
 
 def _bench_key_payload(device: torch.device, seq_len: int, heads: int,
                        head_dim: int) -> Dict[str, object]:
+    # P7 (bigplan §7 risk register): the compile configuration is part of a
+    # benchmark's identity - a compiled attention path times differently -
+    # so the global compile switch state rides in the signature key.  Only
+    # the stable global toggle goes in (per-node widgets vary per graph and
+    # would shatter the cache).
+    try:
+        from comfy import compile_manager as _cm
+        compile_enabled = (
+            switch_registry.is_enabled(_cm.SWITCH_ID)
+            and not switch_registry.is_hard_disabled(_cm.SWITCH_ID))
+    except Exception:  # noqa: BLE001 - compile module optional in bare tests
+        compile_enabled = False
     return {
         "device": str(device),
         "torch": torch.__version__,
@@ -253,6 +270,7 @@ def _bench_key_payload(device: torch.device, seq_len: int, heads: int,
         "head_dim": head_dim,
         "batch": _BENCH_BATCH,
         "backends": sorted(registered_backends()),
+        "compile_enabled": bool(compile_enabled),
     }
 
 
