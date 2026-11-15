@@ -2,12 +2,12 @@ name: Sync Docs to Wiki
 
 on:
   push:
-    branches: [ master ] # 如果你本地的主分支叫 master，请把这里改成 master
+    branches: [ master ] 
     paths:
       - 'comfydl/FUNCTIONS.md'
       - 'QUANTIZATION.md'
       - 'docs/**'
-  workflow_dispatch: # 允许你在网页上手动点击触发
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -16,8 +16,11 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout main repo
+      - name: Checkout main repo with submodules
         uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
 
       - name: Checkout Wiki repo
         uses: actions/checkout@v4
@@ -33,7 +36,7 @@ jobs:
         run: |
           mkdir -p temp-wiki
           
-          # 1. 核心高优先级文件（加数字前缀置顶）
+          # 1. High Priority Files
           if [ -f "comfydl/FUNCTIONS.md" ]; then
             cp "comfydl/FUNCTIONS.md" temp-wiki/01-FUNCTIONS.md
           fi
@@ -43,10 +46,10 @@ jobs:
           fi
           
           if [ -f "docs/network-and-layers.html" ]; then
-            pandoc "docs/network-and-layers.html" -o "temp-wiki/03-Network-and-Layers.md"
+            pandoc "docs/network-and-layers.html" -o "temp-wiki/03-Node-Reference.md"
           fi
 
-          # 2. 遍历 docs/ 目录
+          # 2. Process docs/
           if ls docs/*.md 1> /dev/null 2>&1; then
             for f in docs/*.md; do
               filename=$(basename "$f")
@@ -54,25 +57,25 @@ jobs:
             done
           fi
 
-          # 3. 自动生成 _Sidebar.md 侧边栏
-          echo "### 🚀 核心文档" > temp-wiki/_Sidebar.md
-          echo "* [Features (FUNCTIONS)](01-FUNCTIONS)" >> temp-wiki/_Sidebar.md
-          echo "* [Quantization Guide (QUANTIZATION)](02-QUANTIZATION)" >> temp-wiki/_Sidebar.md
-          echo "* [Nodes Reference (Network & Layers)](03-Network-and-Layers)" >> temp-wiki/_Sidebar.md
-          echo "" >> temp-wiki/_Sidebar.md
-          echo "### 📚 详细文档" >> temp-wiki/_Sidebar.md
+          # 3. Generate English Sidebar
+          cat << 'EOF' > temp-wiki/_Sidebar.md
+          ### 🚀 Core Documentation
+          * [Function Overview](01-FUNCTIONS)
+          * [Quantization Guide](02-QUANTIZATION)
+          * [Node Reference](03-Node-Reference)
           
-          # 把 docs 里的文件也塞进侧边栏
+          ### 📚 Detailed Docs
+          EOF
+
           if ls docs/*.md 1> /dev/null 2>&1; then
             for f in docs/*.md; do
-              filename=$(basename "$f" .md) # 去掉 .md 后缀
-              # 利用 awk 把首字母大写
-              title=$(echo "$filename" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+              filename=$(basename "$f" .md)
+              title=$(echo "$filename" | sed -e 's/[-_]/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
               echo "* [$title](Docs-$filename)" >> temp-wiki/_Sidebar.md
             done
           fi
 
-          # 4. 同步到 Wiki 仓库
+          # 4. Sync to Wiki repo
           rsync -av --delete --exclude='.git' temp-wiki/ wiki-checkout/
 
       - name: Commit and Push
@@ -87,5 +90,5 @@ jobs:
           fi
           
           git add -A
-          git commit -m "Auto-sync docs to Wiki (Prioritized layout)"
+          git commit -m "Auto-sync docs to Wiki (English layout)"
           git push
