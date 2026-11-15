@@ -1,0 +1,1517 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "purpose": "把源于游戏 UI 的资源包改造为通用 UI 词汇；命名只表达用途与特征",
+    "usage": "python 10-templates/apply-naming.py --dry-run / --apply",
+    "generatedNote": "法律与考据元数据不属于『命名』，按 policy.retained 原样保留"
+  },
+  "policy": {
+    "principle": "对外命名（路径、组件标签、导出符号、CSS 变量、JSON 键、配置 id、i18n 键、界面文案、视图 id）一律使用通用 UI 语义；不出现游戏域词",
+    "retained": [
+      "SPDX / MIT 许可头与 LICENSE-MIT.txt（法律义务）",
+      "licence-audit.json 中的品牌名与商标说明（法律事实）",
+      "manifest / inventory 中指向上游源码的路径与行号（考据出处，不是命名）",
+      "文件头注释里的上游 .cs 路径（溯源，不构成对外 API）"
+    ],
+    "excludedFiles": [
+      "00-overview/licence-audit.json",
+      "00-overview/LICENSE-MIT.txt",
+      "00-overview/naming-map.json",
+      "05-motion/expansion-inventory.json",
+      "05-motion/layered-view.json",
+      "05-motion/layered-view.js",
+      "05-motion/layered-view.css",
+      "04-components/ui-layered-view/ui-layered-view.js",
+      "04-components/ui-layered-view/ui-layered-view.css",
+      "10-templates/preview/view-layers.js",
+      "04-components/ui-spinner/ui-spinner.js",
+      "04-components/ui-spinner/ui-spinner.css",
+      "04-components/ui-progress/ui-progress.js",
+      "04-components/ui-progress/ui-progress.css",
+      "04-components/ui-counter/ui-counter.js",
+      "04-components/ui-counter/ui-counter.css",
+      "04-components/ui-graph/ui-graph.js",
+      "04-components/ui-graph/ui-graph.css",
+      "04-components/ui-range-slider/ui-range-slider.js",
+      "04-components/ui-range-slider/ui-range-slider.css",
+      "04-components/ui-motion-container/ui-motion-container.js",
+      "04-components/ui-motion-container/ui-motion-container.css",
+      "04-components/ui-sections/ui-sections.js",
+      "04-components/ui-sections/ui-sections.css",
+      "04-components/ui-hotkey/ui-hotkey.js",
+      "04-components/ui-hotkey/ui-hotkey.css",
+      "00-overview/ui-manifest.json"
+    ],
+    "excludedDirs": [
+      "dist",
+      ".codebuddy",
+      "__pycache__"
+    ],
+    "structuredFiles": [
+      "00-overview/ui-manifest.json",
+      "00-overview/settings.json",
+      "00-overview/i18n/en.json",
+      "00-overview/i18n/zh-CN.json",
+      "05-motion/motion.json",
+      "05-motion/effect-inventory.json",
+      "03-colour-typography/themes/index.json",
+      "06-visual-effects/particles/presets.json"
+    ],
+    "skipKeys": [
+      "s",
+      "source",
+      "licenceFile",
+      "audit",
+      "provenance",
+      "_meta"
+    ]
+  },
+  "dirRenames": [
+    {
+      "from": "04-components/ui-button-system",
+      "to": "04-components/ui-action-rail"
+    },
+    {
+      "from": "04-components/ui-wave-overlay",
+      "to": "04-components/ui-reveal-overlay"
+    },
+    {
+      "from": "06-vfx/shaders",
+      "to": "06-vfx/geometry"
+    },
+    {
+      "from": "06-vfx/scenes",
+      "to": "06-vfx/compositions"
+    },
+    {
+      "from": "06-vfx",
+      "to": "06-visual-effects"
+    },
+    {
+      "from": "09-skinning",
+      "to": "09-theming"
+    }
+  ],
+  "fileRenames": [
+    {
+      "from": "04-components/ui-action-rail/ui-button-system.js",
+      "to": "04-components/ui-action-rail/ui-action-rail.js"
+    },
+    {
+      "from": "04-components/ui-action-rail/ui-button-system.css",
+      "to": "04-components/ui-action-rail/ui-action-rail.css"
+    },
+    {
+      "from": "04-components/ui-reveal-overlay/ui-wave-overlay.js",
+      "to": "04-components/ui-reveal-overlay/ui-reveal-overlay.js"
+    },
+    {
+      "from": "04-components/ui-reveal-overlay/ui-wave-overlay.css",
+      "to": "04-components/ui-reveal-overlay/ui-reveal-overlay.css"
+    },
+    {
+      "from": "06-visual-effects/geometry/flashlight.js",
+      "to": "06-visual-effects/geometry/focus-mask.js"
+    },
+    {
+      "from": "06-visual-effects/geometry/triangle-border.js",
+      "to": "06-visual-effects/geometry/edge-geometry.js"
+    },
+    {
+      "from": "06-visual-effects/compositions/intro-timeline.js",
+      "to": "06-visual-effects/compositions/entrance-timeline.js"
+    },
+    {
+      "from": "06-visual-effects/compositions/judgement.js",
+      "to": "06-visual-effects/compositions/status-pulse.js"
+    },
+    {
+      "from": "06-visual-effects/compositions/judgement.css",
+      "to": "06-visual-effects/compositions/status-pulse.css"
+    },
+    {
+      "from": "05-motion/motion-inventory.json",
+      "to": "05-motion/effect-inventory.json"
+    },
+    {
+      "from": "10-templates/menu-demo.html",
+      "to": "10-templates/navigation-demo.html"
+    },
+    {
+      "from": "10-templates/vfx-demo.html",
+      "to": "10-templates/effects-demo.html"
+    },
+    {
+      "from": "10-templates/preview/view-vfx.js",
+      "to": "10-templates/preview/view-effects.js"
+    }
+  ],
+  "keyTokens": [
+    [
+      "intro",
+      "entrance"
+    ],
+    [
+      "introTriangles",
+      "entranceSteps"
+    ],
+    [
+      "buttonSystem",
+      "actionRail"
+    ],
+    [
+      "hudAndRanking",
+      "liveMetricsAndSummary"
+    ],
+    [
+      "matchmaking",
+      "multiParty"
+    ],
+    [
+      "dailyChallenge",
+      "timedFeature"
+    ],
+    [
+      "beatSync",
+      "intervalSync"
+    ],
+    [
+      "menuButtonSystem",
+      "actionRail"
+    ],
+    [
+      "hudAndGameplay",
+      "liveMetrics"
+    ],
+    [
+      "ranking",
+      "summary"
+    ],
+    [
+      "dailyChallengeAndSelect",
+      "timedFeatureAndList"
+    ],
+    [
+      "feedbackAndMisc",
+      "feedback"
+    ],
+    [
+      "screenAndBackground",
+      "screenTransition"
+    ],
+    [
+      "cursor",
+      "pointer"
+    ],
+    [
+      "vfx",
+      "effects"
+    ],
+    [
+      "starFountain",
+      "radialSpray"
+    ],
+    [
+      "judgementBurst",
+      "statusBurst"
+    ],
+    [
+      "kiaiFountain",
+      "emphasisSpray"
+    ],
+    [
+      "cursorTrail",
+      "pointerTrail"
+    ],
+    [
+      "vsEnter",
+      "enter"
+    ],
+    [
+      "vsExit",
+      "exit"
+    ],
+    [
+      "starRating",
+      "distribution"
+    ],
+    [
+      "scoreBar",
+      "progress"
+    ],
+    [
+      "damageFly",
+      "flyout"
+    ],
+    [
+      "christmas",
+      "seasonal"
+    ],
+    [
+      "kiai",
+      "emphasis"
+    ],
+    [
+      "combo",
+      "intensity"
+    ],
+    [
+      "hud.visibility",
+      "dock.visibility"
+    ],
+    [
+      "storyboard.enabled",
+      "backdropMedia.enabled"
+    ],
+    [
+      "common.beatmaps",
+      "common.items"
+    ],
+    [
+      "common.scores",
+      "common.results"
+    ],
+    [
+      "common.skins",
+      "common.themes"
+    ],
+    [
+      "common.mod_presets",
+      "common.presets"
+    ],
+    [
+      "ui.main_menu",
+      "ui.home"
+    ],
+    [
+      "ui.menu_tips",
+      "ui.tips"
+    ]
+  ],
+  "tokens": [
+    [
+      "skinning",
+      "theming"
+    ],
+    [
+      "06-vfx/shaders/flashlight.js",
+      "06-visual-effects/geometry/focus-mask.js"
+    ],
+    [
+      "06-vfx/shaders/triangle-border.js",
+      "06-visual-effects/geometry/edge-geometry.js"
+    ],
+    [
+      "06-vfx/particles/particles.js",
+      "06-visual-effects/particles/particles.js"
+    ],
+    [
+      "06-vfx/particles/presets.json",
+      "06-visual-effects/particles/presets.json"
+    ],
+    [
+      "06-vfx/glow/glow.js",
+      "06-visual-effects/glow/glow.js"
+    ],
+    [
+      "06-vfx/glow/glow.css",
+      "06-visual-effects/glow/glow.css"
+    ],
+    [
+      "06-vfx/scenes/intro-timeline.js",
+      "06-visual-effects/compositions/entrance-timeline.js"
+    ],
+    [
+      "06-vfx/scenes/judgement.js",
+      "06-visual-effects/compositions/status-pulse.js"
+    ],
+    [
+      "06-vfx/scenes/judgement.css",
+      "06-visual-effects/compositions/status-pulse.css"
+    ],
+    [
+      "05-motion/motion-inventory.json",
+      "05-motion/effect-inventory.json"
+    ],
+    [
+      "10-templates/menu-demo.html",
+      "10-templates/navigation-demo.html"
+    ],
+    [
+      "10-templates/vfx-demo.html",
+      "10-templates/effects-demo.html"
+    ],
+    [
+      "10-templates/preview/view-vfx.js",
+      "10-templates/preview/view-effects.js"
+    ],
+    [
+      "04-components/ui-button-system/ui-button-system.js",
+      "04-components/ui-action-rail/ui-action-rail.js"
+    ],
+    [
+      "04-components/ui-button-system/ui-button-system.css",
+      "04-components/ui-action-rail/ui-action-rail.css"
+    ],
+    [
+      "04-components/ui-wave-overlay/ui-wave-overlay.js",
+      "04-components/ui-reveal-overlay/ui-reveal-overlay.js"
+    ],
+    [
+      "04-components/ui-wave-overlay/ui-wave-overlay.css",
+      "04-components/ui-reveal-overlay/ui-reveal-overlay.css"
+    ],
+    [
+      "09-skinning",
+      "09-theming"
+    ],
+    [
+      "06-vfx/",
+      "06-visual-effects/"
+    ],
+    [
+      "04-components/ui-button-system/",
+      "04-components/ui-action-rail/"
+    ],
+    [
+      "04-components/ui-wave-overlay/",
+      "04-components/ui-reveal-overlay/"
+    ],
+    [
+      "UiButtonSystemElement",
+      "UiActionRailElement"
+    ],
+    [
+      "UiWaveOverlayElement",
+      "UiRevealOverlayElement"
+    ],
+    [
+      "createIntroPlayer",
+      "createEntrancePlayer"
+    ],
+    [
+      "resolveIntroSequence",
+      "resolveEntranceSequence"
+    ],
+    [
+      "createJudgementLayer",
+      "createStatusPulseLayer"
+    ],
+    [
+      "mountFlashlight",
+      "mountFocusMask"
+    ],
+    [
+      "getSizeForCombo",
+      "getSizeForIntensity"
+    ],
+    [
+      "COMBO_SCALE_100",
+      "INTENSITY_SCALE_100"
+    ],
+    [
+      "COMBO_SCALE_200",
+      "INTENSITY_SCALE_200"
+    ],
+    [
+      "BREAK_SCALE",
+      "EXPANDED_SCALE"
+    ],
+    [
+      "gameWideFlash",
+      "fullSurfaceFlash"
+    ],
+    [
+      "glitchTriangles",
+      "scatterShapes"
+    ],
+    [
+      "beatSync",
+      "intervalSync"
+    ],
+    [
+      "BeatLength",
+      "CycleLength"
+    ],
+    [
+      "beatLength",
+      "cycleLength"
+    ],
+    [
+      "beatIndex",
+      "cycleIndex"
+    ],
+    [
+      "DEFAULT_SKIN",
+      "DEFAULT_RENDERER"
+    ],
+    [
+      "customSkin",
+      "customRenderer"
+    ],
+    [
+      "options.skin",
+      "options.renderer"
+    ],
+    [
+      "playIntro",
+      "playEntrance"
+    ],
+    [
+      "V2_ACTION_NAMES",
+      "ENTRANCE_ACTION_NAMES"
+    ],
+    [
+      "WAVE_LAYERS",
+      "REVEAL_LAYERS"
+    ],
+    [
+      "ui-button-system",
+      "ui-action-rail"
+    ],
+    [
+      "ui-wave-overlay",
+      "ui-reveal-overlay"
+    ],
+    [
+      "ButtonSystemState",
+      "ActionRailState"
+    ],
+    [
+      "ButtonSystem",
+      "ActionRail"
+    ],
+    [
+      "ui-game-wide-flash",
+      "ui-full-surface-flash"
+    ],
+    [
+      "ui-glitch-triangle",
+      "ui-scatter-shape"
+    ],
+    [
+      "ui-logo-beat",
+      "ui-hub-pulse"
+    ],
+    [
+      "ui-logo-ripple",
+      "ui-hub-ripple"
+    ],
+    [
+      "ui-judgement-layer",
+      "ui-status-pulse-layer"
+    ],
+    [
+      "ui-judgement-host",
+      "ui-status-pulse-host"
+    ],
+    [
+      "ui-judgement--",
+      "ui-status-pulse--"
+    ],
+    [
+      "ui-judgement",
+      "ui-status-pulse"
+    ],
+    [
+      "ui-motion-beat",
+      "ui-motion-pulse"
+    ],
+    [
+      "ui-beat-",
+      "ui-pulse-"
+    ],
+    [
+      "data-beating",
+      "data-pulsing"
+    ],
+    [
+      "data-beat",
+      "data-pulse"
+    ],
+    [
+      "intro-",
+      "entrance-"
+    ],
+    [
+      "judgement",
+      "status-pulse"
+    ],
+    [
+      "--hit-miss",
+      "--state-error"
+    ],
+    [
+      "--hit-meh",
+      "--state-warning"
+    ],
+    [
+      "--hit-ok",
+      "--state-success"
+    ],
+    [
+      "--hit-good",
+      "--state-success-soft"
+    ],
+    [
+      "--hit-great",
+      "--state-info"
+    ],
+    [
+      "--rank-xh",
+      "--grade-1"
+    ],
+    [
+      "--rank-s",
+      "--grade-2"
+    ],
+    [
+      "--rank-a",
+      "--grade-3"
+    ],
+    [
+      "--rank-b",
+      "--grade-4"
+    ],
+    [
+      "--rank-c",
+      "--grade-5"
+    ],
+    [
+      "--rank-d",
+      "--grade-6"
+    ],
+    [
+      "--rank-f",
+      "--grade-7"
+    ],
+    [
+      "--status-ranked",
+      "--state-approved"
+    ],
+    [
+      "--status-loved",
+      "--state-featured"
+    ],
+    [
+      "--status-qualified",
+      "--state-verified"
+    ],
+    [
+      "--status-pending",
+      "--state-queued"
+    ],
+    [
+      "--status-wip",
+      "--state-draft"
+    ],
+    [
+      "--status-graveyard",
+      "--state-archived"
+    ],
+    [
+      "--mod-automation",
+      "--tag-automation"
+    ],
+    [
+      "--mod-difficulty-increase",
+      "--tag-increase"
+    ],
+    [
+      "--mod-difficulty-reduction",
+      "--tag-reduction"
+    ],
+    [
+      "--mod-conversion",
+      "--tag-conversion"
+    ],
+    [
+      "--mod-fun",
+      "--tag-creative"
+    ],
+    [
+      "--mod-system",
+      "--tag-system"
+    ],
+    [
+      "--star-",
+      "--intensity-"
+    ],
+    [
+      "\"hud.visibility\"",
+      "\"dock.visibility\""
+    ],
+    [
+      "hide-during-gameplay",
+      "hide-during-focus"
+    ],
+    [
+      "\"storyboard.enabled\"",
+      "\"backdropMedia.enabled\""
+    ],
+    [
+      "common.beatmaps",
+      "common.items"
+    ],
+    [
+      "common.scores",
+      "common.results"
+    ],
+    [
+      "common.skins",
+      "common.themes"
+    ],
+    [
+      "common.mod_presets",
+      "common.presets"
+    ],
+    [
+      "ui.main_menu",
+      "ui.home"
+    ],
+    [
+      "ui.menu_tips",
+      "ui.tips"
+    ],
+    [
+      "Beatmaps",
+      "Items"
+    ],
+    [
+      "Scores",
+      "Results"
+    ],
+    [
+      "Skins",
+      "Themes"
+    ],
+    [
+      "Mod presets",
+      "Presets"
+    ],
+    [
+      "Main Menu",
+      "Home"
+    ],
+    [
+      "Menu tips",
+      "Tips"
+    ],
+    [
+      "谱面",
+      "条目"
+    ],
+    [
+      "成绩",
+      "结果"
+    ],
+    [
+      "皮肤",
+      "主题"
+    ],
+    [
+      "模组预设",
+      "预设"
+    ],
+    [
+      "主菜单",
+      "首页"
+    ],
+    [
+      "菜单提示",
+      "提示"
+    ],
+    [
+      "\"buttonSystem\"",
+      "\"actionRail\""
+    ],
+    [
+      "\"introTriangles\"",
+      "\"entranceSteps\""
+    ],
+    [
+      "\"hudAndRanking\"",
+      "\"liveMetricsAndSummary\""
+    ],
+    [
+      "\"matchmaking\"",
+      "\"multiParty\""
+    ],
+    [
+      "\"dailyChallenge\"",
+      "\"timedFeature\""
+    ],
+    [
+      "\"beatSync\"",
+      "\"intervalSync\""
+    ],
+    [
+      "\"menuButtonSystem\"",
+      "\"actionRail\""
+    ],
+    [
+      "\"hudAndGameplay\"",
+      "\"liveMetrics\""
+    ],
+    [
+      "\"ranking\"",
+      "\"summary\""
+    ],
+    [
+      "\"dailyChallengeAndSelect\"",
+      "\"timedFeatureAndList\""
+    ],
+    [
+      "\"feedbackAndMisc\"",
+      "\"feedback\""
+    ],
+    [
+      "\"screenAndBackground\"",
+      "\"screenTransition\""
+    ],
+    [
+      "\"starFountain\"",
+      "\"radialSpray\""
+    ],
+    [
+      "\"judgementBurst\"",
+      "\"statusBurst\""
+    ],
+    [
+      "\"kiaiFountain\"",
+      "\"emphasisSpray\""
+    ],
+    [
+      "\"cursorTrail\"",
+      "\"pointerTrail\""
+    ],
+    [
+      "\"vsEnter\"",
+      "\"enter\""
+    ],
+    [
+      "\"vsExit\"",
+      "\"exit\""
+    ],
+    [
+      "\"starRating\"",
+      "\"distribution\""
+    ],
+    [
+      "\"scoreBar\"",
+      "\"progress\""
+    ],
+    [
+      "\"damageFly\"",
+      "\"flyout\""
+    ],
+    [
+      "game-wide-flash",
+      "full-surface-flash"
+    ],
+    [
+      "glitch-triangles",
+      "scatter-shapes"
+    ],
+    [
+      "ruleset-icons-",
+      "item-"
+    ],
+    [
+      "logo-stroke",
+      "accent-stroke"
+    ],
+    [
+      "logo-grow",
+      "expand"
+    ],
+    [
+      "letter-",
+      "reveal-"
+    ],
+    [
+      "'great'",
+      "'success'"
+    ],
+    [
+      "'good'",
+      "'info'"
+    ],
+    [
+      "'good', 'ok', 'meh'",
+      "'info', 'notice', 'warning'"
+    ],
+    [
+      "'meh'",
+      "'warning'"
+    ],
+    [
+      "'miss'",
+      "'error'"
+    ],
+    [
+      "\"great\"",
+      "\"success\""
+    ],
+    [
+      "\"good\"",
+      "\"info\""
+    ],
+    [
+      "\"meh\"",
+      "\"warning\""
+    ],
+    [
+      "\"miss\"",
+      "\"error\""
+    ],
+    [
+      "GREAT",
+      "SUCCESS"
+    ],
+    [
+      "GOOD",
+      "INFO"
+    ],
+    [
+      "MEH",
+      "WARNING"
+    ],
+    [
+      "MISS",
+      "ERROR"
+    ],
+    [
+      "'play'",
+      "'detail'"
+    ],
+    [
+      "'top'",
+      "'primary'"
+    ],
+    [
+      "'multi'",
+      "'group'"
+    ],
+    [
+      "'edit'",
+      "'secondary'"
+    ],
+    [
+      "'exit'",
+      "'hidden'"
+    ],
+    [
+      "'entering'",
+      "'transition'"
+    ],
+    [
+      "\"play\"",
+      "\"detail\""
+    ],
+    [
+      "\"top\"",
+      "\"primary\""
+    ],
+    [
+      "\"multi\"",
+      "\"group\""
+    ],
+    [
+      "\"edit\"",
+      "\"secondary\""
+    ],
+    [
+      "\"exit\"",
+      "\"hidden\""
+    ],
+    [
+      "\"entering\"",
+      "\"transition\""
+    ],
+    [
+      "play: 3",
+      "detail: 3"
+    ],
+    [
+      "top: 2",
+      "primary: 2"
+    ],
+    [
+      "multi: 4",
+      "group: 4"
+    ],
+    [
+      "edit: 5",
+      "secondary: 5"
+    ],
+    [
+      "exit: 0",
+      "hidden: 0"
+    ],
+    [
+      "entering: 6",
+      "transition: 6"
+    ],
+    [
+      "cp-state-play",
+      "cp-state-detail"
+    ],
+    [
+      "cp-state-top",
+      "cp-state-primary"
+    ],
+    [
+      "cp-state-multi",
+      "cp-state-group"
+    ],
+    [
+      "cp-state-edit",
+      "cp-state-secondary"
+    ],
+    [
+      "cp-state-exit",
+      "cp-state-hidden"
+    ],
+    [
+      "cp-state-entering",
+      "cp-state-transition"
+    ],
+    [
+      "data-state-btn=\"play\"",
+      "data-state-btn=\"detail\""
+    ],
+    [
+      "data-state-btn=\"top\"",
+      "data-state-btn=\"primary\""
+    ],
+    [
+      "data-state-btn=\"multi\"",
+      "data-state-btn=\"group\""
+    ],
+    [
+      "data-state-btn=\"edit\"",
+      "data-state-btn=\"secondary\""
+    ],
+    [
+      "data-state-btn=\"exit\"",
+      "data-state-btn=\"hidden\""
+    ],
+    [
+      "data-state-btn=\"entering\"",
+      "data-state-btn=\"transition\""
+    ],
+    [
+      "TopLevel",
+      "Primary"
+    ],
+    [
+      "EnteringMode",
+      "Transition"
+    ],
+    [
+      ">Play</span>",
+      ">Open</span>"
+    ],
+    [
+      ">Edit</span>",
+      ">Modify</span>"
+    ],
+    [
+      "Edit map",
+      "Modify item"
+    ],
+    [
+      "Edit skin",
+      "Modify theme"
+    ],
+    [
+      ">Browse</span>",
+      ">Explore</span>"
+    ],
+    [
+      ">Solo</span>",
+      ">Single</span>"
+    ],
+    [
+      ">Multi</span>",
+      ">Group</span>"
+    ],
+    [
+      ">Exit</span>",
+      ">Hide</span>"
+    ],
+    [
+      "settings\", \"",
+      "settings\", \""
+    ],
+    [
+      "VFX",
+      "视觉效果"
+    ],
+    [
+      "Intro 时间轴",
+      "入场序列"
+    ],
+    [
+      "Intro stage",
+      "Entrance stage"
+    ],
+    [
+      "Intro 步骤",
+      "入场步骤"
+    ],
+    [
+      "判定特效",
+      "状态反馈"
+    ],
+    [
+      "判定",
+      "状态"
+    ],
+    [
+      "TrianglesV2",
+      "Edge geometry"
+    ],
+    [
+      "ModFlashlight",
+      "Focus mask"
+    ],
+    [
+      "ButtonSystem",
+      "Action rail"
+    ],
+    [
+      "logo 右侧横排",
+      "锚点右侧横排"
+    ],
+    [
+      "logo",
+      "hub"
+    ],
+    [
+      "combo",
+      "intensity"
+    ],
+    [
+      "Combo",
+      "Intensity"
+    ],
+    [
+      "break (×2.5)",
+      "expanded (×2.5)"
+    ],
+    [
+      "kiai",
+      "emphasis"
+    ],
+    [
+      "HUD",
+      "dashboard"
+    ],
+    [
+      "skin",
+      "renderer"
+    ],
+    [
+      "game resources",
+      "third-party assets"
+    ],
+    [
+      "game ",
+      "application "
+    ],
+    [
+      "beatmap",
+      "item"
+    ],
+    [
+      "gameplay",
+      "interactive session"
+    ],
+    [
+      "skinning",
+      "theming"
+    ],
+    [
+      "introTriangles",
+      "entranceSteps"
+    ],
+    [
+      "sequences.intro",
+      "sequences.entrance"
+    ],
+    [
+      "intro:",
+      "entrance:"
+    ],
+    [
+      "\"intro\"",
+      "\"entrance\""
+    ],
+    [
+      "christmas",
+      "seasonal"
+    ],
+    [
+      "view-vfx.js",
+      "view-effects.js"
+    ],
+    [
+      "import vfx from",
+      "import effects from"
+    ],
+    [
+      "components, motion, vfx, data",
+      "components, motion, effects, data"
+    ],
+    [
+      "'motion', 'vfx', 'data'",
+      "'motion', 'effects', 'data'"
+    ],
+    [
+      "vfx: {",
+      "effects: {"
+    ],
+    [
+      "#/vfx",
+      "#/effects"
+    ],
+    [
+      "go('vfx')",
+      "go('effects')"
+    ],
+    [
+      "ov-go-vfx",
+      "ov-go-effects"
+    ],
+    [
+      "'vfx'",
+      "'effects'"
+    ],
+    [
+      "hud.visibility",
+      "dock.visibility"
+    ],
+    [
+      "storyboard.enabled",
+      "backdropMedia.enabled"
+    ],
+    [
+      "menuDemoFragment",
+      "navigationDemoFragment"
+    ],
+    [
+      "__VFX_DEMO__",
+      "__EFFECTS_DEMO__"
+    ],
+    [
+      "vfx-demo",
+      "effects-demo"
+    ],
+    [
+      "menu-demo",
+      "navigation-demo"
+    ],
+    [
+      "switch skin",
+      "switch renderer"
+    ],
+    [
+      "skin:",
+      "renderer:"
+    ],
+    [
+      "const skin",
+      "const renderer"
+    ],
+    [
+      "{ skin,",
+      "{ renderer,"
+    ],
+    [
+      "--great",
+      "--success"
+    ],
+    [
+      "--good",
+      "--info"
+    ],
+    [
+      "--ok",
+      "--notice"
+    ],
+    [
+      "--meh",
+      "--warning"
+    ],
+    [
+      "--miss",
+      "--error"
+    ],
+    [
+      "vx-j-great",
+      "vx-j-success"
+    ],
+    [
+      "vx-j-good",
+      "vx-j-info"
+    ],
+    [
+      "vx-j-ok",
+      "vx-j-notice"
+    ],
+    [
+      "vx-j-meh",
+      "vx-j-warning"
+    ],
+    [
+      "vx-j-miss",
+      "vx-j-error"
+    ],
+    [
+      "\"notice\": True",
+      "\"ok\": True"
+    ],
+    [
+      "return {\"notice\": summary.get(\"validation\") == \"notice\",",
+      "return {\"ok\": summary.get(\"validation\") == \"ok\","
+    ],
+    [
+      "\"validation\": \"notice\"",
+      "\"validation\": \"ok\""
+    ],
+    [
+      "${triangles.available ? 'notice' : 'bad'}",
+      "${triangles.available ? 'ok' : 'bad'}"
+    ],
+    [
+      "ok === true ? 'notice' :",
+      "ok === true ? 'ok' :"
+    ],
+    [
+      "status-pulses",
+      "statusPulseLayer"
+    ],
+    [
+      "syncJudgements",
+      "syncStatusPulse"
+    ],
+    [
+      "lastJudgementId",
+      "lastPulseId"
+    ],
+    [
+      "onJudgement",
+      "onStatusPulse"
+    ],
+    [
+      "safe('Judgement',",
+      "safe('Status pulse',"
+    ],
+    [
+      "'vx-j-notice', 'OK'",
+      "'vx-j-notice', 'NOTICE'"
+    ],
+    [
+      "btn-judge-",
+      "btn-status-"
+    ],
+    [
+      "btn-focusMask",
+      "btn-focus-mask"
+    ],
+    [
+      "intro step:",
+      "entrance step:"
+    ],
+    [
+      "MainMenuButton",
+      "Action rail item"
+    ],
+    [
+      "MainMenu",
+      "Primary view"
+    ],
+    [
+      "IntroTriangles",
+      "Entrance steps"
+    ],
+    [
+      "IntroSequence",
+      "Entrance sequence"
+    ],
+    [
+      "IntroScreen",
+      "Entrance screen"
+    ],
+    [
+      "Intro ",
+      "Entrance "
+    ],
+    [
+      "ModSelect",
+      "Option columns"
+    ],
+    [
+      "ModPanel",
+      "Option panel"
+    ],
+    [
+      "ModColumn",
+      "Option column"
+    ],
+    [
+      "ModFlashlight",
+      "Focus mask"
+    ],
+    [
+      "PlayerPanel",
+      "Participant panel"
+    ],
+    [
+      "PlayerLoader",
+      "View loader"
+    ],
+    [
+      "SongSelect",
+      "List view"
+    ],
+    [
+      "BeatmapCarousel",
+      "Item carousel"
+    ],
+    [
+      "Beatmap",
+      "Item"
+    ],
+    [
+      "StarFountain",
+      "Radial spray"
+    ],
+    [
+      "StarRating",
+      "Intensity"
+    ],
+    [
+      "Skinning",
+      "Theming"
+    ],
+    [
+      "SkinEditor",
+      "Theme editor"
+    ],
+    [
+      "Skin ",
+      "Theme "
+    ],
+    [
+      "Ranking",
+      "Summary"
+    ],
+    [
+      "Score",
+      "Result"
+    ],
+    [
+      "Rank",
+      "Grade"
+    ],
+    [
+      "Star difficulty",
+      "Intensity level"
+    ],
+    [
+      "ruleset",
+      "extension"
+    ],
+    [
+      "Judgement ",
+      "Status pulse "
+    ],
+    [
+      "Judgement:",
+      "Status pulse:"
+    ],
+    [
+      "Flashlight ·",
+      "Focus mask ·"
+    ],
+    [
+      "Flashlight 光锥",
+      "Focus mask 光锥"
+    ],
+    [
+      "'Flashlight'",
+      "'Focus mask'"
+    ],
+    [
+      "buildJudgements",
+      "buildStatusPulse"
+    ],
+    [
+      "buildFlashlight",
+      "buildFocusMask"
+    ],
+    [
+      "flashlight",
+      "focusMask"
+    ],
+    [
+      "vfx-focusMask",
+      "vfx-focus-mask"
+    ],
+    [
+      "vx-focusMask",
+      "vx-focus-mask"
+    ],
+    [
+      "buildFocus mask",
+      "buildFocusMask"
+    ],
+    [
+      "Entrance steps.GameWideFlash",
+      "EntranceSteps.GameWideFlash"
+    ],
+    [
+      "Entrance steps glitch",
+      "Scatter shapes"
+    ],
+    [
+      "NowPlayingOverlay",
+      "Media panel"
+    ],
+    [
+      "IntroCircles",
+      "Entrance rings"
+    ],
+    [
+      "IntroWelcome",
+      "Entrance welcome"
+    ],
+    [
+      "IntroChristmas",
+      "Entrance seasonal"
+    ],
+    [
+      "HoldForMenuButton",
+      "Hold to confirm"
+    ],
+    [
+      "GradeedPlayCornerPiece",
+      "Corner ornament"
+    ],
+    [
+      "DailyChallengeIntro",
+      "Timed feature entrance"
+    ],
+    [
+      "FooterButtonMods",
+      "Footer option button"
+    ],
+    [
+      "padIntensityt",
+      "padStart"
+    ]
+  ]
+}

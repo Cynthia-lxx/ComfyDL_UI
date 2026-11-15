@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="__LANG__" data-theme="__THEME__">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>UI Reference Kit · Preview</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="05-motion/motion.css">
+  <link rel="stylesheet" href="04-components/ui-action-rail/ui-action-rail.css">
+  <link rel="stylesheet" href="04-components/ui-reveal-overlay/ui-reveal-overlay.css">
+  <link rel="stylesheet" href="06-visual-effects/glow/glow.css">
+  <link rel="stylesheet" href="06-visual-effects/compositions/status-pulse.css">
+  <link rel="stylesheet" href="components/ui-panel/ui-panel.css" data-ui-panel-styles>
+__EXTRA_CSS__
+  <link rel="stylesheet" href="preview/preview.css">
+</head>
+<body>
+  <div class="pv-shell">
+    <aside class="pv-side">
+      <div class="pv-brand">
+        <span class="pv-brand-mark">UR</span>
+        <span class="pv-brand-text"><span data-i18n="brand">UI Reference Kit</span><small>preview / __BUILD__</small></span>
+      </div>
+      <nav class="pv-nav" id="pv-nav" aria-label="Preview views"></nav>
+      <div class="pv-side-foot">
+        <div class="pv-side-row"><span class="pv-dot" id="pv-server-dot"></span><span id="pv-server-status">checking server…</span></div>
+        <div class="pv-side-row pv-muted" id="pv-api-note">static mode fallback available</div>
+        <div class="pv-side-row pv-muted" data-i18n="footer">MIT-derived · GPL-3.0 target</div>
+      </div>
+    </aside>
+
+    <main class="pv-main">
+      <header class="pv-top">
+        <div class="pv-head-title">
+          <h1 id="pv-view-title">总览</h1>
+          <p id="pv-view-desc"></p>
+        </div>
+        <div class="pv-controls">
+          <label><span data-i18n="theme">Theme</span><ui-dropdown id="pv-theme" value="__THEME__">__THEME_UI_OPTIONS__</ui-dropdown></label>
+          <label><span data-i18n="lang">Lang</span><ui-dropdown id="pv-lang" value="__LANG__">__LANG_UI_OPTIONS__</ui-dropdown></label>
+          <label><span data-i18n="speed">Speed</span><ui-dropdown id="pv-rate" value="1">
+            <ui-option value="0.5" label="0.5×"></ui-option>
+            <ui-option value="1" label="1×"></ui-option>
+            <ui-option value="1.5" label="1.5×"></ui-option>
+            <ui-option value="2" label="2×"></ui-option>
+          </ui-dropdown></label>
+          <ui-button id="pv-reduce" label="Reduced motion: off"></ui-button>
+          <ui-button id="pv-log-toggle"><span data-i18n="log">Log</span> <span id="pv-log-count">0</span></ui-button>
+        </div>
+      </header>
+
+      <div class="pv-view" id="pv-view"></div>
+
+      <footer class="pv-foot">
+        <span id="pv-foot-left">ready</span>
+        <span id="pv-foot-right">hash-route · no build step</span>
+      </footer>
+    </main>
+  </div>
+
+  <aside class="pv-log-panel" id="pv-log-panel">
+    <header><strong data-i18n="eventLog">Event log</strong><span><ui-button id="pv-log-clear" label="clear"></ui-button> <ui-button id="pv-log-close" label="×"></ui-button></span></header>
+    <ul id="pv-log-list"></ul>
+  </aside>
+
+  <script type="application/json" id="pv-config">__APP_CONFIG__</script>
+  <script type="module" src="preview/app.js"></script>
+</body>
+</html>

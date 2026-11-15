@@ -1,0 +1,73 @@
+/* SPDX-License-Identifier: MIT — RangeSlider / ShearedRangeSlider / TimeSlider / ExpandableSlider 映射 */
+:host { display: block; position: relative; height: 40px; min-width: 180px; contain: layout style; touch-action: none; }
+
+.track {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  right: 7px;
+  height: 6px; /* LeftBox/RightBox.Height = 6 防叠色渗色 */
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--ui-surface-sunken, #222);
+}
+.fill {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  background: var(--ui-accent, #66ccff);
+  border-radius: 3px;
+}
+.nub {
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--ui-accent, #66ccff);
+  color: var(--gray-0, #000);
+  font-size: 8px;
+  line-height: 15px;
+  text-align: center;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+  transition: box-shadow 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nub:hover, .nub:focus-visible {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ui-accent, #66ccff) 60%, transparent);
+  transition-duration: 40ms; /* Nub.Glowing 两段式 */
+  outline: none;
+}
+.caption { position: absolute; top: -14px; left: 0; font-size: 10px; color: var(--ui-text-muted, #aaa); }
+
+/* ShearedRangeSlider：高 30、SHEAR 0.2、左侧标签胶囊 */
+:host([data-variant='sheared']) { height: 30px; }
+:host([data-variant='sheared']) .track,
+:host([data-variant='sheared']) .fill { height: 30px; border-radius: 5px; }
+:host([data-variant='sheared']) .nub { width: 30px; height: 30px; line-height: 30px; border-radius: 5px; border: 8px solid rgba(255, 255, 255, 0.9); }
+:host([data-variant='sheared']) .track { transform: translateY(-50%) skewX(-11.5deg); }
+:host([data-variant='sheared']) .caption {
+  top: 0; padding: 5px 12px; border-radius: 5px;
+  background: var(--ui-surface-raised, #333);
+  transform: skewX(-11.5deg);
+  color: var(--ui-text, #fff);
+  z-index: 2;
+}
+
+/* ExpandableSlider：收起时标签淡出、滑块淡入，500ms OutQuint */
+:host([data-variant='expandable']) .caption,
+:host([data-variant='expandable']) .track,
+:host([data-variant='expandable']) .fill,
+:host([data-variant='expandable']) .nub {
+  transition: opacity 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([data-variant='expandable'][data-expanded='false']) .caption { opacity: 0; }
+:host([data-variant='expandable'][data-expanded='true']) .track,
+:host([data-variant='expandable'][data-expanded='true']) .fill,
+:host([data-variant='expandable'][data-expanded='true']) .nub { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nub, .caption, .track, .fill, .nub { transition-duration: 0ms !important; }
+}

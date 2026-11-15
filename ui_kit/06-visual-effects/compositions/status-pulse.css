@@ -1,0 +1,63 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * Ported from Rulesets/Judgements/DefaultJudgementPiece.cs:39-54 and
+ * ArgonJudgementPiece.cs:101-168 (default miss: 1.6 -> 1 scale, 100px fall, 40deg rotate).
+ */
+
+.ui-status-pulse-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ui-status-pulse-host {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+}
+
+.ui-status-pulse {
+  font-family: var(--font-family-numeric, sans-serif);
+  font-size: var(--font-size-heading1, 22px);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--colour-0, #99ddff);
+  text-shadow: 0 0 var(--glow-radius, 8px) var(--ui-glow, #66ccff);
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.ui-status-pulse--success { color: var(--state-info, #66ccff); }
+.ui-status-pulse--info  { color: var(--state-success-soft, #b3d944); }
+.ui-status-pulse--notice    { color: var(--state-success, #88b300); }
+.ui-status-pulse--warning   { color: var(--state-warning, #ffcc22); }
+.ui-status-pulse--error  { color: var(--state-error, #ed1121); }
+
+@keyframes ui-status-pulse-hit {
+  0%   { opacity: 0; transform: scale(0.85) translateY(8px); }
+  18%  { opacity: 1; transform: scale(1.12) translateY(0); }
+  100% { opacity: 0; transform: scale(1) translateY(-24px); }
+}
+
+@keyframes ui-status-pulse-miss {
+  0%   { opacity: 0; transform: scale(1.6) rotate(0deg) translateY(0); }
+  15%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1) rotate(40deg) translateY(100px); }
+}
+
+.ui-status-pulse-host[data-active='true'] .ui-status-pulse {
+  animation: ui-status-pulse-hit
+    calc(var(--duration-normal, 300ms) * 2 * var(--motion-scale, 1))
+    var(--easing-out, ease-out) both;
+}
+
+.ui-status-pulse-host[data-active='true'] .ui-status-pulse--error {
+  animation: ui-status-pulse-miss
+    calc(var(--duration-normal, 300ms) * 2 * var(--motion-scale, 1))
+    var(--easing-out, ease-out) both;
+}
+
+:root[data-reduce-motion='true'] .ui-status-pulse-host[data-active='true'] .ui-status-pulse {
+  animation-duration: 0.01ms !important;
+  opacity: 1;
+}

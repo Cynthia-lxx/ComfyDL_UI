@@ -40,6 +40,8 @@ _RESULTS = []
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     _RESULTS.append((name, bool(ok), detail))
+    # U 批次起立为铁律：测试必须实时输出进度，不允许静默跑到最后。
+    print(f"  [{'PASS' if ok else 'FAIL'}] {name}", flush=True)
 
 
 # ------------------------------------------------------------------ T1 ----

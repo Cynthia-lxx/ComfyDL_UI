@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "source": "osu.Game/Overlays/OverlayColourScheme.cs:23-57 + OverlayColourProvider.cs:29-54",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt"
+  },
+  "id": "orange",
+  "label": "Orange",
+  "hue": 45,
+  "usedBy": [],
+  "tokensFrom": "blue",
+  "overrides": {}
+}

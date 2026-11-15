@@ -1,0 +1,38 @@
+/* SPDX-License-Identifier: MIT — SectionHeader / SectionsContainer / RearrangeableList 映射 */
+:host { display: block; height: 260px; position: relative; }
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.scroll::-webkit-scrollbar { display: none; }
+
+/* SectionHeader：16 SemiBold、margin 10/5、垂直 spacing 2、28x2 圆角高亮条 */
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin: 10px 5px 2px;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--ui-text, #fff);
+  flex-wrap: wrap;
+}
+.head::after {
+  content: '';
+  display: block;
+  flex-basis: 100%;
+  width: 28px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ui-accent, #66ccff);
+}
+.details { color: var(--ui-accent-strong, #66ccff); }
+.handle {
+  margin-left: auto;
+  cursor: grab;
+  color: var(--ui-text-muted, #aaa);
+  font-size: 12px;
+  user-select: none;
+}
+[data-section][data-dragging] { opacity: 0.5; }

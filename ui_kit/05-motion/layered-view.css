@@ -1,0 +1,204 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * Geometry for the multi-layer reveal/collapse engine (05-motion/layered-view.js).
+ * Every layer's start/end state comes from inline CSS variables written from
+ * layered-view.json, so one stylesheet serves every preset.
+ */
+
+.lv-root {
+  position: absolute;
+  inset: 0;
+  --lv-frame-x: 7.5%;
+  --lv-frame-y: 6%;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--corner-radius-large, 14px);
+  contain: paint;
+}
+
+.lv-layer {
+  position: absolute;
+  inset: 0;
+  opacity: var(--lv-open-opacity, 1);
+  transform: var(--lv-open-transform, none);
+  transition-property: opacity, transform, box-shadow, filter;
+  transition-delay: calc((var(--lv-layer-delay, 0ms) + var(--lv-delay, 0ms)) * var(--motion-scale, 1));
+  will-change: opacity, transform;
+}
+.lv-layer > * {
+  transition-property: opacity, transform;
+  transition-delay: calc((var(--lv-layer-delay, 0ms) + var(--lv-delay, 0ms)) * var(--motion-scale, 1));
+}
+
+.lv-root[data-direction='enter'] .lv-layer,
+.lv-root[data-direction='enter'] .lv-layer > * {
+  transition-duration: calc(var(--lv-enter-ms, 800ms) * var(--motion-scale, 1));
+  transition-timing-function: var(--lv-enter-ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lv-root[data-direction='exit'] .lv-layer,
+.lv-root[data-direction='exit'] .lv-layer > * {
+  transition-duration: calc(var(--lv-exit-ms, 500ms) * var(--motion-scale, 1));
+  transition-timing-function: var(--lv-exit-ease, cubic-bezier(0.42, 0, 1, 1));
+}
+.lv-root[data-direction='exit'] .lv-layer,
+.lv-root[data-direction='exit'] .lv-layer > * { transition-delay: 0ms; }
+
+.lv-root[data-phase='closed'] .lv-layer {
+  opacity: var(--lv-closed-opacity, 1);
+  transform: var(--lv-closed-transform, none);
+}
+.lv-root[data-phase='closed'] .lv-layer > * {
+  opacity: var(--lv-closed-opacity, 1);
+  transform: var(--lv-closed-transform, none);
+}
+.lv-root[data-phase='open'] .lv-layer > * {
+  opacity: var(--lv-open-opacity, 1);
+  transform: var(--lv-open-transform, none);
+}
+
+/* ---- layer: background dim (only the screen layer is dimmed upstream) ---- */
+.lv-layer.lv-dim {
+  background: rgb(0 0 0 / 0.62);
+  backdrop-filter: blur(calc(var(--dim-level, 0.2) * 10px));
+}
+
+/* ---- layer: window / clipping / edge glow ---- */
+.lv-layer.lv-surface {
+  left: var(--lv-frame-x);
+  right: var(--lv-frame-x);
+  top: var(--lv-frame-y);
+  bottom: var(--lv-frame-y);
+  border-radius: var(--corner-radius-large, 14px);
+  background: color-mix(in srgb, var(--colour-4, #1a1a1a) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--colour-0, #66ccff) 35%, transparent);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
+  overflow: hidden;
+}
+.lv-layer.lv-surface.lv-side { right: auto; width: min(570px, 78%); }
+.lv-layer.lv-surface.lv-right { left: auto; width: min(320px, 62%); }
+.lv-layer.lv-surface.lv-pop {
+  left: 50%; right: auto; top: 50%; bottom: auto;
+  width: min(420px, 78%); height: min(240px, 62%);
+  margin: 0;
+  transform-origin: center;
+}
+
+/* ---- layer: four rotating waves ---- */
+.lv-layer.lv-wave {
+  left: -20%;
+  right: auto;
+  top: -30%;
+  width: 150%;
+  height: 150%;
+  border-radius: 40%;
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--colour-2, #2a5f7a) 92%, transparent),
+    color-mix(in srgb, var(--colour-4, #16222a) 96%, transparent));
+  box-shadow: 0 0 20px rgb(0 0 0 / 0.28);
+  pointer-events: none;
+}
+.lv-layer.lv-wave[style*='right'] { left: auto; right: -20%; }
+.lv-layer.lv-wave:nth-of-type(odd) { filter: brightness(1.06); }
+
+/* ---- layer: content ---- */
+.lv-layer.lv-content {
+  left: var(--lv-frame-x); right: var(--lv-frame-x);
+  top: var(--lv-frame-y); bottom: var(--lv-frame-y);
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ui-text, #fff);
+  text-shadow: 0 2px 8px rgb(0 0 0 / 0.7);
+}
+
+/* ---- layer: header ---- */
+.lv-layer.lv-header {
+  left: calc(var(--lv-frame-x) + 18px); right: calc(var(--lv-frame-x) + 18px);
+  top: calc(var(--lv-frame-y) + 16px); bottom: auto;
+  height: 44px;
+  display: flex; align-items: center; gap: 10px;
+  pointer-events: none;
+}
+.lv-header-title { font-size: 15px; font-weight: 700; color: var(--ui-text, #fff); }
+.lv-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 6px;
+  border: 1px solid var(--ui-accent, #66ccff); color: var(--ui-accent, #66ccff);
+}
+.lv-search {
+  margin-left: auto; width: 130px; height: 28px; border-radius: 6px;
+  border: 1px solid var(--ui-border, #444); background: rgb(255 255 255 / 0.06);
+  display: grid; place-items: center; font-size: 11px; color: var(--ui-text-muted, #aaa);
+}
+
+/* ---- layer: filters ---- */
+.lv-layer.lv-filters {
+  left: calc(var(--lv-frame-x) + 18px); right: calc(var(--lv-frame-x) + 18px);
+  top: calc(var(--lv-frame-y) + 70px); bottom: auto;
+  height: 30px; display: flex; gap: 7px; pointer-events: none;
+}
+.lv-chip {
+  padding: 5px 10px; border-radius: 14px; font-size: 10px;
+  border: 1px solid var(--ui-border, #444); background: rgb(255 255 255 / 0.05);
+  color: var(--ui-text-muted, #aaa);
+}
+
+/* ---- layer: cards ---- */
+.lv-layer.lv-cards {
+  left: calc(var(--lv-frame-x) + 18px); right: calc(var(--lv-frame-x) + 18px);
+  top: calc(var(--lv-frame-y) + 112px); bottom: calc(var(--lv-frame-y) + 54px);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  align-content: start; pointer-events: none;
+}
+.lv-card {
+  height: 58px; border-radius: 8px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--colour-1, #66ccff) 30%, #242424), #242424);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 360ms ease;
+}
+.lv-card:hover { transform: scale(1.03); box-shadow: 0 8px 22px rgb(0 0 0 / 0.5); }
+.lv-columns { display: flex; }
+.lv-columns > .lv-card { flex: 1; height: 130px; }
+
+/* ---- layer: back-to-top ---- */
+.lv-layer.lv-to-top {
+  left: auto; right: calc(var(--lv-frame-x) + 18px);
+  top: auto; bottom: calc(var(--lv-frame-y) + 62px);
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 15px; font-weight: 700;
+  background: var(--ui-accent, #66ccff); color: #06202c;
+  pointer-events: none;
+}
+
+/* ---- layer: footer ---- */
+.lv-layer.lv-footer {
+  left: calc(var(--lv-frame-x) + 18px); right: calc(var(--lv-frame-x) + 18px);
+  top: auto; bottom: calc(var(--lv-frame-y) + 14px);
+  height: 32px; display: flex; gap: 7px; align-items: center; pointer-events: none;
+}
+.lv-footer > span {
+  padding: 5px 12px; border-radius: 6px; font-size: 10px;
+  border: 1px solid var(--ui-border, #444); background: rgb(255 255 255 / 0.06);
+  color: var(--ui-text, #fff);
+}
+
+/* ---- auxiliary layers used by other presets ---- */
+.lv-layer.lv-sidebar {
+  left: var(--lv-frame-x); right: auto; width: 60px;
+  background: rgb(255 255 255 / 0.05); border-right: 1px solid var(--ui-border, #444);
+}
+.lv-layer.lv-ring {
+  left: 50%; top: 50%; right: auto; bottom: auto;
+  width: 100px; height: 100px; margin: -50px 0 0 -50px;
+  border-radius: 50%; border: 4px solid var(--ui-accent, #66ccff);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--ui-accent, #66ccff) 70%, transparent);
+}
+
+:root[data-reduce-motion='true'] .lv-layer,
+:root[data-reduce-motion='true'] .lv-layer > * { transition-duration: 0.01ms !important; transition-delay: 0ms !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-layer, .lv-layer > * { transition-duration: 0.01ms !important; transition-delay: 0ms !important; }
+}

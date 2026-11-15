@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "generated": "2026-11-13",
+  "purpose": "决定哪些上游资源可以被抽离/翻译进 GPL-3.0 目标仓库",
+  "source": {
+    "path": "p:/Dev/osu",
+    "project": "osu! (lazer) source snapshot",
+    "licence": "MIT",
+    "licenceFile": "LICENCE",
+    "copyright": "Copyright (c) 2025 ppy Pty Ltd <contact@ppy.sh>.",
+    "note": "工作区无独立 .git（父仓为 P:/Dev），此为源码快照，不是上游 git 检出"
+  },
+  "target": {
+    "licence": "GPL-3.0-only",
+    "compatibility": "MIT 与 GPLv3 单向兼容：MIT 代码可并入 GPLv3 项目，合并作品整体按 GPL-3.0 分发；MIT 部分的版权与许可声明必须原样保留，不得改标为 GPL 或删除。",
+    "distributionRule": "派生文件保留 MIT 声明（见 obligations），新增编排/翻译代码可随目标仓库按 GPL-3.0 授权"
+  },
+  "scan": {
+    "csFilesScanned": 4928,
+    "distinctFirstLineHeaders": 1,
+    "header": "// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.",
+    "thirdPartyHeaders": 0,
+    "licenseheaderFile": "osu.licenseheader:1-9",
+    "result": "全部 C# 源码首行为同一 MIT 头；未发现 Apache/BSD/GPL/其他第三方版权头"
+  },
+  "evidence": [
+    { "ref": "LICENCE:1-19", "fact": "标准 MIT 全文，Copyright (c) 2025 ppy Pty Ltd" },
+    { "ref": "README.md:143", "fact": "osu! 的代码与 framework 以 MIT 授权" },
+    { "ref": "README.md:145", "fact": "MIT 不覆盖 'osu!' / 'ppy' 品牌使用，受商标法保护" },
+    { "ref": "README.md:147", "fact": "游戏资源适用独立许可，指向 ppy/osu-resources 仓库" },
+    { "ref": "osu.Game.csproj:41-42", "fact": "shader/纹理/字体来自 NuGet 包 ppy.osu.Framework 与 ppy.osu.Game.Resources，本快照无源码" },
+    { "ref": "osu.Game/Localisation/CommonStrings.cs:10-15", "fact": "本地化键前缀 osu.Game.Resources.Localisation.*，英文 fallback 字符串写在 MIT 源码内，译文在资源包" },
+    { "ref": "osu.Game/Graphics/OsuFont.cs:24-40", "fact": "字体族 Torus / TorusAlternate / Venera / Inter，字体二进制不在快照内" },
+    { "ref": "osu.Game/Graphics/OsuIcon.cs:19", "fact": "图标依赖名为 Icons 的图标字体，来自资源包" },
+    { "ref": "osu.Game/Localisation/UserInterfaceStrings.cs:55", "fact": "存在含品牌词的字符串（osu! music theme），需剔除" },
+    { "ref": "CONTRIBUTING.md:5-7", "fact": "上游禁止 AI/LLM 辅助的贡献；衍生资源不得作为贡献回投 ppy/osu" }
+  ],
+  "allowed": [
+    {
+      "category": "colour-tokens",
+      "paths": ["osu.Game/Graphics/OsuColour.cs", "osu.Game/Overlays/OverlayColourProvider.cs", "osu.Game/Overlays/OverlayColourScheme.cs", "osu.Game/Utils/ColourUtils.cs", "osu.Game/Graphics/HSPAColour.cs"],
+      "use": "色板常量、HSL 层级公式、语义色映射、渐变采样与感知亮度算法 → CSS 自定义属性 + JSON 主题配置",
+      "destination": "03-colour-typography/tokens.css, 03-colour-typography/themes/*.json"
+    },
+    {
+      "category": "layout-tokens",
+      "paths": ["osu.Game/Graphics/Containers/ScalingContainer.cs", "osu.Game/Graphics/Containers/ParallaxContainer.cs", "osu.Game/Screens/Footer/ScreenFooter.cs", "osu.Game/Overlays/SettingsPanel.cs", "osu.Game/Graphics/UserInterface/OsuButton.cs", "osu.Game/Overlays/Mods/ShearedOverlayContainer.cs"],
+      "use": "排版常量（SHEAR=0.2、圆角 5/10、控件高 40、footer 50、间距 7/14、边距 10/12、逻辑分辨率 1024x768）与缩放/视差算法思路",
+      "destination": "03-colour-typography/tokens.css, 02-layout/"
+    },
+    {
+      "category": "typography-scale",
+      "paths": ["osu.Game/Graphics/OsuFont.cs", "osu.Game/Graphics/Sprites/OsuSpriteText.cs"],
+      "use": "字号/字重层级与文本阴影等数值（仅数值与结构，不含字体二进制）",
+      "destination": "03-colour-typography/tokens.css"
+    },
+    {
+      "category": "motion-tokens",
+      "paths": ["osu.Game/Graphics/UserInterface/OsuButton.cs", "osu.Game/Graphics/Containers/WaveContainer.cs", "osu.Game/Screens/Backgrounds/BackgroundScreen.cs", "osu.Game/Overlays/Mods/ModSelectOverlay.cs"],
+      "use": "时长/缓动约定（40-200ms 反馈、300-600ms 转场、600-1000ms 编排、OutQuint 主导）与错峰编排思路",
+      "destination": "03-colour-typography/tokens.css, 05-motion/"
+    },
+    {
+      "category": "component-behaviour",
+      "paths": ["osu.Game/Graphics/UserInterface/", "osu.Game/Graphics/UserInterfaceV2/", "osu.Game/Graphics/Cursor/OsuTooltipContainer.cs"],
+      "use": "四态控件状态机、hover/press 视觉反馈、表单语义、tooltip 自适应延迟等行为结构，以原生 JS 重写",
+      "destination": "04-components/"
+    },
+    {
+      "category": "settings-schema",
+      "paths": ["osu.Game/Configuration/OsuConfigManager.cs", "osu.Game/Configuration/ScalingMode.cs", "osu.Game/Configuration/HUDVisibilityMode.cs"],
+      "use": "设置项名称、取值范围与默认值（UIScale / MenuParallaxScale / BlurLevel / DimLevel / HUDVisibilityMode / UIHoldActivationDelay 等）",
+      "destination": "00-overview/settings.json"
+    },
+    {
+      "category": "i18n-keys",
+      "paths": ["osu.Game/Localisation/*Strings.cs"],
+      "use": "本地化键名与英文 fallback 文案（MIT 源码内文本）；中文译文由本项目自行翻译",
+      "destination": "00-overview/i18n/en.json, 00-overview/i18n/zh-CN.json"
+    },
+    {
+      "category": "vfx-algorithms",
+      "paths": ["osu.Game/Graphics/Backgrounds/TrianglesV2.cs", "osu.Game/Graphics/ParticleSpewer.cs", "osu.Game/Graphics/ParticleExplosion.cs", "osu.Game/Rulesets/Mods/ModFlashlight.cs", "osu.Game/Graphics/Sprites/LogoAnimation.cs", "osu.Game/Screens/Menu/LogoVisualisation.cs", "osu.Game/Rulesets/Judgements/DrawableJudgement.cs"],
+      "use": "C# 侧的 UBO 结构、时间纯函数粒子、批量几何、绝对时间序列、池化等算法思路（翻译为 Web 实现，不复制 GLSL）",
+      "destination": "06-vfx/"
+    },
+    {
+      "category": "performance-patterns",
+      "paths": ["osu.Game/Graphics/Carousel/Carousel.cs", "osu.Game/Rulesets/Objects/HitObjectLifetimeEntry.cs", "osu.Game/Rulesets/UI/FrameStabilityContainer.cs", "osu.Game/OsuGame.cs"],
+      "use": "虚拟化、池化、串行异步加载、帧稳定等模式思路",
+      "destination": "08-performance/"
+    }
+  ],
+  "conditional": [
+    { "item": "非英文译文", "reason": "译文位于 ppy/osu.Game.Resources 的 osu.Game.Resources.Localisation.*，适用独立许可且不在本快照内", "action": "仅使用键名与英文 fallback；中文由本项目自行翻译，禁止复制上游 Crowdin 译文" },
+    { "item": "字体文件 Torus / TorusAlternate / Venera / Inter", "reason": "二进制不在快照内，归 osu-resources 独立许可", "action": "CSS 只声明字体族名与系统回退栈，不携带字体文件" },
+    { "item": "Icons 图标字体与 FontAwesome 图标", "reason": "属资源包/第三方图标库，各有独立许可", "action": "改用自绘 SVG 或通用 Unicode 符号" },
+    { "item": "GLSL shader 源码", "reason": "本仓库 0 个 .frag/.vert/.glsl，文本在 framework/osu-resources NuGet 包中", "action": "不复制文本；如需 VFX 用 CSS/Canvas/WebGL 按算法思路重写" },
+    { "item": "NuGet 第三方依赖", "reason": "Realm / Sentry / ImageSharp / Humanizer / AutoMapper / MessagePack / SharpCompress / TagLibSharp / Velopack / DiscordRichPresence / NUnit / Moq / Bogus / BenchmarkDotNet 等各有许可，且本项目为 JS/CSS/Python 重写", "action": "不引入任何二进制或源码，仅参考行为" }
+  ],
+  "excluded": [
+    { "item": "品牌与商标 'osu!' / 'ppy' / 'lazer'", "evidence": "README.md:145", "action": "组件名、类名、文案、文件名一律使用中性前缀 ui-*，不暗示官方背书" },
+    { "item": "assets/lazer.png, assets/lazer-nuget.png, osu.Desktop/lazer.ico, osu.iOS/Assets.car", "action": "不复制" },
+    { "item": "Templates/**/Resources/Textures/character.png (Pippidon 吉祥物), coin.png, Samples/Gameplay/normal-hitnormal.mp3", "action": "吉祥物/品牌图与 gameplay 采样音，不复制" },
+    { "item": "osu.Game.Tests/Resources/ 下 .osu(163) / .osk(35) / .osb / .mp3 / .wav / .png 等测试素材", "reason": "真实谱面、皮肤、音视频，版权归各自作者", "action": "不复制" },
+    { "item": "osu.Game/osu!.res", "reason": "156596 字节自定义二进制，全仓 0 代码引用，来源不明", "action": "不复制" },
+    { "item": "含品牌词的本地化字符串", "evidence": "osu.Game/Localisation/UserInterfaceStrings.cs:55", "action": "不纳入 i18n 语言包" },
+    { "item": ".codebuddy/memory/ 调研报告", "reason": "本项目生成的分析文档，非上游代码", "action": "仅作内部参考，不随资源包分发" }
+  ],
+  "obligations": [
+    "保留 MIT 全文：已复制为 00-overview/LICENSE-MIT.txt，随资源包一起分发",
+    "每个派生 CSS/JS/Python 文件头保留 MIT 版权与许可声明（SPDX-License-Identifier: MIT）及上游出处",
+    "JSON 无注释语法，来源与许可信息写入各文件的 _meta / licence 字段",
+    "合并作品整体按 GPL-3.0 分发时，MIT 部分声明不得删除或改标为 GPL",
+    "不使用商标、不暗示 ppy 背书；不将衍生资源作为 AI 辅助贡献回投上游 ppy/osu（CONTRIBUTING.md:5-7）"
+  ],
+  "naming": {
+    "componentPrefix": "ui-",
+    "forbidden": ["osu", "ppy", "lazer", "pippidon"],
+    "reason": "规避 README.md:145 的商标限制"
+  }
+}

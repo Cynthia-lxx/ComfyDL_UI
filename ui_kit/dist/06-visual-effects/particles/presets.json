@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "source": "osu.Game/Graphics/ParticleSpewer.cs / ParticleExplosion.cs / Screens/Menu/StarFountain.cs:37 / Skinning/Argon/ArgonJudgementPiece.cs:101-168",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt",
+    "note": "参数按 C# 侧行为翻译，供 06-visual-effects/particles/particles.js 使用"
+  },
+  "presets": {
+    "radialSpray": {
+      "perSecond": 24,
+      "duration": 1100,
+      "speed": 0.22,
+      "spread": 1.1,
+      "size": 4,
+      "burstCount": 40,
+      "colourVar": "--colour-1",
+      "autoSpawn": true
+    },
+    "statusBurst": {
+      "perSecond": 0,
+      "duration": 600,
+      "speed": 0.16,
+      "spread": 6.283,
+      "size": 6,
+      "burstCount": 8,
+      "colourVar": "--colour-0",
+      "autoSpawn": false
+    },
+    "pointerTrail": {
+      "perSecond": 60,
+      "duration": 420,
+      "speed": 0.03,
+      "spread": 2.4,
+      "size": 3,
+      "burstCount": 12,
+      "colourVar": "--colour-2",
+      "autoSpawn": true
+    },
+    "emphasisSpray": {
+      "perSecond": 48,
+      "duration": 900,
+      "speed": 0.3,
+      "spread": 1.6,
+      "size": 5,
+      "burstCount": 60,
+      "colourVar": "--colour-0",
+      "autoSpawn": true
+    }
+  }
+}

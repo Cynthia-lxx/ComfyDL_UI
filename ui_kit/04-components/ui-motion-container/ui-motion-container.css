@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: MIT — ShakeContainer / ParallaxContainer / OsuHoverContainer 映射 */
+:host { display: block; position: relative; }
+.stage { display: block; transform-origin: center; }
+
+/* ParallaxContainer：position 100ms OutQuint（主导），scale 由 --parallax-scale 恒定 1+|amount| */
+:host([data-variant='parallax']) .stage {
+  transform: translate(var(--px, 0px), var(--py, 0px)) scale(var(--parallax-scale, 1.02));
+  transition: transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* OsuHoverContainer：idle 白 / hover 黄，500ms OutQuint */
+:host([data-variant='hover']) .stage {
+  color: var(--ui-text, #fff);
+  transition: color 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([data-variant='hover']:hover) .stage { color: var(--state-warning, #ffcc22); }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage { transition-duration: 0ms !important; }
+}

@@ -1,0 +1,127 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * OsuDropdown.cs colour mapping: Background5 -> --ui-surface-sunken, Light4 -> --ui-accent-weak,
+ * Background3 (selection) -> accent color-mix. Header height 40 / corner 5 / padding 10.
+ */
+
+:host {
+  display: inline-block;
+  position: relative;
+  width: 200px;
+  contain: layout style;
+}
+/* 打开的 dropdown 必须整体抬到兄弟控件之上：contain:layout 会创建层叠上下文，
+ * 否则后面的兄弟（如 disabled dropdown）会画在展开菜单之上，看起来像"半透明穿透"。 */
+:host([data-open='true']) { z-index: 100; }
+
+:host([data-disabled='true']) { opacity: 0.3; pointer-events: none; }
+
+/* 头部：OsuDropdownHeader —— 高 40、圆角 5、内边距 10；悬停 -> Light4，常态 Background5 */
+.header {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--corner-radius, 5px);
+  background: var(--ui-surface-sunken, #222);
+  color: var(--ui-text, #fff);
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.header:hover { background: var(--ui-accent-weak, #3399cc); }
+:host([data-open='true']) .header { background: var(--ui-surface-sunken, #222); }
+
+.label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* TruncatingSpriteText */
+}
+
+/* 头部 chevron：打开时纵向翻转（ScaleTo(1,-1) 300ms OutQuint） */
+.chevron {
+  flex: none;
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 300ms var(--easing-out, ease-out);
+}
+:host([data-open='true']) .chevron { transform: scaleY(-1); }
+
+/* 菜单：Background5、圆角 5、内边距 5；开合高度/透明度由 JS WAAPI 驱动（300ms OutQuint） */
+.menu {
+  position: absolute;
+  top: calc(100% + 4px); /* header margin-bottom 4 */
+  left: 0;
+  right: 0;
+  z-index: 60;
+  padding: 5px; /* ItemsContainer.Padding */
+  border-radius: var(--corner-radius, 5px);
+  background: var(--ui-surface-raised, #333); /* 不透明底，避免下层控件文字透出 */
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--gray-0, #000) 45%, transparent);
+  isolation: isolate;
+  overflow: hidden;
+  box-sizing: border-box;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+:host([data-open='true']) .menu {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 选项：圆角 5、前景 padding 2、标签左移 15 给 chevron 留位 */
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 8px 7px;
+  border-radius: var(--corner-radius, 5px);
+  cursor: pointer;
+  /* UpdateBackgroundColour: 进入 100ms / 离开 600ms，均 OutQuint */
+  transition: background-color 600ms var(--easing-out, ease-out);
+}
+.item:hover, .item[data-preselect='true'] { transition-duration: 100ms; }
+.item:hover, .item[data-preselect='true'] { background: var(--ui-accent-weak, #3399cc); }
+.item[data-selected='true'] { background: color-mix(in srgb, var(--ui-accent, #66ccff) 35%, transparent); }
+
+.text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* TruncatingSpriteText */
+}
+
+/* 悬停 chevron：-3px 滑入 400ms OutQuint / 退场 200ms In（Content.Hovering） */
+.chev {
+  flex: none;
+  width: 15px; /* label padding-left 15 */
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition:
+    opacity 200ms ease,
+    transform 200ms var(--easing-in, ease-in);
+}
+.item:hover .chev, .item[data-preselect='true'] .chev {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 400ms var(--easing-out, ease-out),
+    transform 400ms var(--easing-out, ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header, .chevron, .item, .chev { transition-duration: 0ms !important; }
+}

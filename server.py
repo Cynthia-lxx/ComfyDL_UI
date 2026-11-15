@@ -1441,6 +1441,24 @@ class PromptServer():
         )
         if os.path.isdir(p6b_assets):
             self.app.add_routes([web.static('/comfydl/p6b', p6b_assets)])
+        # ComfyDL UI kit (U stick 1 / [0.88]): the osu-derived design-token +
+        # component library lives in its own top-level ui_kit/ directory
+        # (self-contained source + assembler + dist + MIT licence chain) so a
+        # later refactor can move it wholesale.  Only the assembled dist is
+        # served; source tree stays unmounted.
+        ui_kit_dist = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "ui_kit", "dist"
+        )
+        if os.path.isdir(ui_kit_dist):
+            self.app.add_routes([web.static('/comfydl/ui', ui_kit_dist)])
+        # Our own kit-adaptation layer (bridge CSS now; component overrides and
+        # app-side helpers later).  Kept outside ui_kit/ so the kit directory
+        # stays a wholesale-moveable upstream-derived artefact.
+        ui_assets = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "app", "ui_assets"
+        )
+        if os.path.isdir(ui_assets):
+            self.app.add_routes([web.static('/comfydl/ui-assets', ui_assets)])
 
         installed_templates_version = FrontendManager.get_installed_templates_version()
         use_legacy_templates = True

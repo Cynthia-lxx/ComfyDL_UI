@@ -1,0 +1,245 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt and 00-overview/licence-audit.json
+ * Colour constants: osu.Game/Graphics/OsuColour.cs; HSL provider: osu.Game/Overlays/OverlayColourProvider.cs
+ * Layout constants: Graphics/Containers/*, Screens/Footer/ScreenFooter.cs, Overlays/SettingsPanel.cs
+ * Type scale: Graphics/OsuFont.cs. Motion: 调研报告 C2 (durations/easing).
+ * No osu!/ppy branding, no font binaries, no third-party assets are distributed here.
+ */
+
+:root {
+  /* ------------------------------------------------------------------ *
+   * 1. 中性灰阶  (OsuColour.cs:383-398)
+   * ------------------------------------------------------------------ */
+  --gray-0: #000000;
+  --gray-1: #111111;
+  --gray-2: #222222;
+  --gray-3: #333333;
+  --gray-4: #444444;
+  --gray-5: #555555;
+  --gray-6: #666666;
+  --gray-7: #777777;
+  --gray-8: #888888;
+  --gray-9: #999999;
+  --gray-a: #aaaaaa;
+  --gray-b: #bbbbbb;
+  --gray-c: #cccccc;
+  --gray-d: #dddddd;
+  --gray-e: #eeeeee;
+  --gray-f: #ffffff;
+
+  /* ------------------------------------------------------------------ *
+   * 2. Legacy 五组主色  (OsuColour.cs:309-339)
+   * ------------------------------------------------------------------ */
+  --purple: #8866ee;      --purple-light: #aa88ff;   --purple-lighter: #eeeeff;
+  --purple-dark: #6644cc; --purple-darker: #441188;
+  --pink: #ff66aa;        --pink-light: #ff99cc;     --pink-lighter: #ffddee;
+  --pink-dark: #cc5288;   --pink-darker: #bb1177;
+  --blue: #66ccff;        --blue-light: #99eeff;     --blue-lighter: #ddffff;
+  --blue-dark: #44aadd;   --blue-darker: #2299bb;
+  --yellow: #ffcc22;      --yellow-light: #ffdd55;   --yellow-lighter: #ffffdd;
+  --yellow-dark: #eeaa00; --yellow-darker: #cc6600;
+  --green: #88b300;       --green-light: #b3d944;    --green-lighter: #eeffcc;
+  --green-dark: #668800;  --green-darker: #445500;
+
+  /* 六组暗色系：每组 5 档 + 一个高饱和原色 (OsuColour.cs:341-381) */
+  --grey-sky: #405461;          --grey-sky-light: #8ab3cc;    --grey-sky-lighter: #c6e3f4;
+  --grey-sky-dark: #303d47;     --grey-sky-darker: #21272c;   --sky: #6bb5ff;
+  --grey-seafoam: #33413c;      --grey-seafoam-light: #4d7365;--grey-seafoam-lighter: #9ebab1;
+  --grey-seafoam-dark: #2c3532; --grey-seafoam-darker: #1e2422;--seafoam: #05ffa2;
+  --grey-cyan: #293d3e;         --grey-cyan-light: #436d6f;   --grey-cyan-lighter: #77b1b3;
+  --grey-cyan-dark: #243536;    --grey-cyan-darker: #1e2929;  --cyan: #05f4fd;
+  --grey-lime: #3f443a;         --grey-lime-light: #657259;   --grey-lime-lighter: #deff87;
+  --grey-lime-dark: #32352e;    --grey-lime-darker: #2e302b;  --lime: #82ff05;
+  --grey-violet: #46334d;       --grey-violet-light: #685370; --grey-violet-lighter: #ebb8fe;
+  --grey-violet-dark: #2c2230;  --grey-violet-darker: #201823;--violet: #bf04ff;
+  --grey-carmine: #342b2d;      --grey-carmine-light: #644f53;--grey-carmine-lighter: #deaab4;
+  --grey-carmine-dark: #302a2b; --grey-carmine-darker: #241d1e;--carmine: #ff0542;
+
+  /* ------------------------------------------------------------------ *
+   * 3. Basic 主题 8 组 x 5 档  (OsuColour.cs:400-457)
+   * 0 最亮 / 1 品牌主色 / 4 最深
+   * ------------------------------------------------------------------ */
+  --pink-0: #ff99c7; --pink-1: #ff66ab; --pink-2: #eb4791; --pink-3: #cc3378; --pink-4: #6b2e49;
+  --purple-0: #b299ff; --purple-1: #8c66ff; --purple-2: #7047eb; --purple-3: #5933cc; --purple-4: #3d2e6b;
+  --blue-0: #99ddff;  --blue-1: #66ccff;  --blue-2: #47b4eb;  --blue-3: #3399cc;  --blue-4: #2e576b;
+  --green-0: #99ffa2; --green-1: #66ff73; --green-2: #47eb55; --green-3: #33cc40; --green-4: #2e6b33;
+  --lime-0: #ccff99;  --lime-1: #b2ff66;  --lime-2: #99eb47;  --lime-3: #7fcc33;  --lime-4: #4c6b2e;
+  --orange-0: #ffe699; --orange-1: #ffd966; --orange-2: #ebc247; --orange-3: #cca633; --orange-4: #6b5c2e;
+  --dark-orange-0: #ffbb99; --dark-orange-1: #ff9966; --dark-orange-2: #eb7e47; --dark-orange-3: #cc6633; --dark-orange-4: #6b422e;
+  --red-0: #ff9b9b;   --red-1: #ff6666;   --red-2: #eb4747;   --red-3: #cc3333;   --red-4: #6b2e2e;
+
+  /* ------------------------------------------------------------------ *
+   * 4. 语义色：数据 -> 颜色  (OsuColour.cs:81-291)
+   * ------------------------------------------------------------------ */
+  --grade-1: #de31ae; --grade-2: #02b5c3; --grade-3: #88da20;
+  --grade-4: #e3b130;  --grade-5: #ff8e5d; --grade-6: #ff5a5a; --grade-7: #3f3f3f;
+  --state-error: #ed1121;   --state-warning: var(--yellow);  --state-success: var(--green);
+  --state-success-soft: var(--green-light); --state-info: #66ccff;
+  --tag-automation: var(--blue-1); --tag-increase: var(--red-1);
+  --tag-reduction: var(--lime-1); --tag-conversion: var(--purple-1);
+  --tag-creative: var(--pink-1); --tag-system: var(--yellow);
+  --state-approved: #b3ff66; --state-featured: #ff66ab; --state-verified: #66ccff;
+  --state-queued: #ffd966; --state-draft: #ff9966; --state-archived: #000000;
+  --danger: #cc3378; --content-background: #222a28;
+  --foreground-on-light: var(--gray-3); --foreground-on-dark: var(--gray-e);
+
+  /* 星数渐变停靠点：0.1 灰蓝 -> 9/10 黑 (OsuColour.cs:33-57) */
+  --intensity-0: #aaaaaa; --intensity-1: #4290fb; --intensity-2: #4fc0ff; --intensity-3: #4fffd5;
+  --intensity-4: #7cff4f; --intensity-5: #f6f05c; --intensity-6: #ff8068; --intensity-7: #ff4e6f;
+  --intensity-8: #c645b8; --intensity-9: #6563de; --intensity-10: #18158e;
+
+  /* ------------------------------------------------------------------ *
+   * 5. 主题派生层 — 默认值，由 dist/themes.css 的 [data-theme] 覆盖
+   *    (OverlayColourProvider.cs:29-54 = HSL(hue, s, l))
+   * ------------------------------------------------------------------ */
+  --theme-hue: 200;
+  --colour-0: hsl(200 100% 80%);
+  --colour-1: hsl(200 100% 70%);
+  --colour-2: hsl(200 80% 60%);
+  --colour-3: hsl(200 60% 50%);
+  --colour-4: hsl(200 40% 30%);
+  --colour-highlight-1: hsl(200 100% 70%);
+  --colour-content-1: hsl(200 40% 100%);
+  --colour-content-2: hsl(200 40% 90%);
+  --colour-light-1: hsl(200 40% 80%);
+  --colour-light-2: hsl(200 40% 75%);
+  --colour-light-3: hsl(200 40% 70%);
+  --colour-light-4: hsl(200 40% 50%);
+  --colour-dark-1: hsl(200 20% 35%);
+  --colour-dark-2: hsl(200 20% 30%);
+  --colour-dark-3: hsl(200 20% 25%);
+  --colour-dark-4: hsl(200 20% 20%);
+  --colour-dark-5: hsl(200 20% 15%);
+  --colour-dark-6: hsl(200 20% 10%);
+  --colour-foreground-1: hsl(200 10% 60%);
+  --colour-background-1: hsl(200 10% 40%);
+  --colour-background-2: hsl(200 10% 30%);
+  --colour-background-3: hsl(200 10% 25%);
+  --colour-background-4: hsl(200 10% 20%);
+  --colour-background-5: hsl(200 10% 15%);
+  --colour-background-6: hsl(200 10% 10%);
+
+  /* 语义别名：组件只引用这些，不直接引用 --colour-* 数字层级 */
+  --ui-accent: var(--colour-1);
+  --ui-accent-strong: var(--colour-highlight-1);
+  --ui-accent-weak: var(--colour-3);
+  --ui-text: var(--colour-content-1);
+  --ui-text-muted: var(--colour-light-3);
+  --ui-surface: var(--colour-background-4);
+  --ui-surface-raised: var(--colour-background-2);
+  --ui-surface-sunken: var(--colour-background-6);
+  --ui-border: var(--colour-dark-2);
+  --ui-glow: var(--colour-1);
+
+  /* ------------------------------------------------------------------ *
+   * 6. 排版 token
+   * ------------------------------------------------------------------ */
+  --ui-scale: 1;
+  --logical-width: 1024px;   /* ScalingContainer.cs DrawSizePreservingFillContainer */
+  --logical-height: 768px;
+  --control-height: 40px;    /* OsuButton.cs / OsuTextBox.cs */
+  --footer-height: 50px;     /* Screens/Footer/ScreenFooter.cs:26 */
+  --header-height: 70px;     /* ShearedOverlayHeader.cs */
+  --panel-width: 400px;      /* Overlays/SettingsPanel.cs:29 */
+  --corner-radius: 5px;      /* OsuButton / OsuScrollContainer */
+  --corner-radius-large: 10px; /* Panel.CORNER_RADIUS / ScalingContainer */
+  --corner-exponent: 2.5;    /* UserInterfaceV2/FormControlBackground.cs */
+  --border-width: 2px;
+  --border-width-strong: 2.5px;
+  --spacing-xs: 7px;
+  --spacing-sm: 10px;
+  --spacing-md: 14px;
+  --spacing-lg: 20px;
+  --edge-margin: 12px;       /* SCREEN_EDGE_MARGIN */
+  --content-padding-x: 22px;
+  --content-padding-y: 12px;
+  --shear: 0.2;              /* SHEAR = 0.2，斜切布局 */
+  --tooltip-max-width: 500px;
+  --scrollbar-size: 10px;
+
+  /* ------------------------------------------------------------------ *
+   * 7. 字体 token（仅族名与层级；不分发字体文件）
+   *    ComfyDL_UI 落地适配：上游 Torus/Venera 为商业授权字体不分发，
+   *    按拍板改用宿主字体栈（官方 ComfyUI 前端同款系统栈）；如观感不
+   *    佳，后续在设置中提供字体组合切换（见小计划棒 1 拍板记录 4）。
+   * ------------------------------------------------------------------ */
+  --font-family: "Inter", "Segoe UI", system-ui, -apple-system, "Microsoft YaHei", sans-serif;
+  --font-family-numeric: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-family-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-size-title: 32px;
+  --font-size-subtitle: 28px;
+  --font-size-heading1: 22px;
+  --font-size-heading2: 18px;
+  --font-size-body: 16px;
+  --font-size-caption1: 14px;
+  --font-size-caption2: 12px;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+
+  /* ------------------------------------------------------------------ *
+   * 8. 动效 token（调研报告 C2；原仓库无全局 token，此处为翻译时的收拢）
+   * ------------------------------------------------------------------ */
+  --duration-fast: 120ms;
+  --duration-normal: 300ms;
+  --duration-transition: 500ms;
+  --duration-entrance: 800ms;
+  --motion-scale: 1;
+  --easing-out: cubic-bezier(0.22, 1, 0.36, 1);       /* OutQuint 近似 */
+  --easing-in: cubic-bezier(0.64, 0, 0.78, 0);         /* InQuint 近似 */
+  --easing-in-out: cubic-bezier(0.37, 0, 0.63, 1);     /* InOutSine 近似 */
+  --easing-elastic: cubic-bezier(0.34, 1.56, 0.64, 1); /* OutElastic 近似 */
+  --parallax-strength: 1;
+  --hold-delay: 200ms;
+  --tooltip-delay: 250ms;
+
+  /* ------------------------------------------------------------------ *
+   * 9. 光效 / 图形 / 层级 token
+   * ------------------------------------------------------------------ */
+  --blur-level: 0;
+  --dim-level: 0.5;
+  --glow-radius: 8px;
+  --glow-spread: 2px;
+  --backdrop-blur: calc(var(--blur-level) * 20px);
+  --ui-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  --ui-glow-effect: 0 0 var(--glow-radius) var(--glow-spread) var(--ui-glow);
+  --z-background: 0;
+  --z-content: 100;
+  --z-footer: 1000;
+  --z-overlay: 2000;
+  --z-topmost: 2100;
+  --z-tooltip: 3000;
+}
+
+/* -------------------------------------------------------------------- *
+ * 全局动效降级：上游全仓无 reduced-motion，此为本资源包补齐（kit-added）
+ * 所有 duration 通过 calc(var(--duration-*) * var(--motion-scale)) 使用
+ * -------------------------------------------------------------------- */
+:root[data-reduce-motion="true"] {
+  --motion-scale: 0;
+  --parallax-strength: 0;
+  --blur-level: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion="false"]) {
+    --motion-scale: 0;
+    --parallax-strength: 0;
+    --blur-level: 0;
+  }
+}
+
+/* -------------------------------------------------------------------- *
+ * 基础层：仅最小重置，业务样式由各组件 CSS 自行封装（Shadow DOM 友好）
+ * -------------------------------------------------------------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+:root {
+  font-family: var(--font-family);
+  font-size: calc(var(--font-size-body) * var(--ui-scale));
+  color: var(--ui-text);
+  background: var(--ui-surface-sunken);
+}

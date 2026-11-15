@@ -1,0 +1,272 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * Full motion inventory: 05-motion/effect-inventory.json (118 entries)
+ * Geometry primitives translated from ActionRail / WaveContainer / ShearedOverlay /
+ * PopupDialog / Option columns / Entrance sequence / MenuSideFlashes / Matchmaking.
+ * All values come from 03-colour-typography/tokens.css and 05-motion/motion.json.
+ */
+
+:root {
+  --_d-fast: calc(var(--duration-fast, 120ms) * var(--motion-scale, 1));
+  --_d-normal: calc(var(--duration-normal, 300ms) * var(--motion-scale, 1));
+  --_d-transition: calc(var(--duration-transition, 500ms) * var(--motion-scale, 1));
+  --_d-entrance: calc(var(--duration-intro, 800ms) * var(--motion-scale, 1));
+  --_shear: 0.2;
+  --_shear-deg: 11.5deg;
+  --_wave-stagger: 100ms;
+  --_column-stagger: 30ms;
+  --_sidebar-stagger: 40ms;
+}
+
+/* ================================================================ *
+ * 1. 基础入场 / 退场 / 错峰
+ * ================================================================ */
+@keyframes ui-fade-in-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ui-slide-in-right { from { opacity: 0; transform: translateX(50px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ui-slide-in-left { from { opacity: 0; transform: translateX(-50px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ui-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-expand-width { from { width: 0; opacity: 0; } to { opacity: 1; } }
+@keyframes ui-contract-width { from { opacity: 1; } to { width: 0; opacity: 0; } }
+@keyframes ui-explode-width { from { opacity: 1; } to { opacity: 0; } }
+
+.ui-motion-enter { animation: ui-fade-in-up var(--_d-transition) var(--easing-out, ease-out) both; }
+.ui-motion-exit { animation: ui-fade-out var(--_d-transition) var(--easing-in, ease-in) both; }
+.ui-motion-slide-in { animation: ui-slide-in-right var(--_d-transition) var(--easing-in-out, ease-in-out) both; }
+
+.ui-motion-stagger > * {
+  animation: ui-fade-in-up var(--_d-normal) var(--easing-out, ease-out) both;
+  animation-delay: calc(var(--_column-stagger) * var(--ui-index, 0) * var(--motion-scale, 1));
+}
+.ui-motion-stagger[data-stagger='sidebar'] > * { animation-delay: calc(var(--_sidebar-stagger) * var(--ui-index, 0) * var(--motion-scale, 1)); }
+.ui-motion-stagger[data-stagger='footer'] > * { animation-delay: calc(30ms * var(--ui-index, 0) * var(--motion-scale, 1)); }
+
+/* ================================================================ *
+ * 2. 首页横排按钮：楔形 / 宽度状态机 / hover 反馈
+ *    ButtonSystem.cs / MainMenuButton.cs / ButtonArea.cs
+ * ================================================================ */
+.ui-button-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: calc(var(--_wedge, 20px) * -1); /* 相邻 -20px 重叠 */
+}
+.ui-button-row > .ui-wedge { margin-right: calc(var(--_wedge, 20px) * -1); flex: none; }
+
+.ui-wedge {
+  position: relative;
+  height: 100px;
+  width: var(--ui-wedge-width, 160px);
+  overflow: hidden;
+  border-radius: 5px;
+  box-shadow: 0 0 8px rgb(0 0 0 / 20%);
+  transform: skewX(calc(var(--_shear-deg) * -1));
+  transition: width 500ms var(--easing-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+              opacity 500ms linear;
+}
+.ui-wedge__inner {
+  position: absolute;
+  inset: 0;
+  width: 320px;                 /* 防止 OutElastic 过冲露底 */
+  transform: skewX(var(--_shear-deg));
+  transform-origin: left center;
+}
+.ui-wedge[data-state='contracted'] { width: 0; opacity: 0; }
+.ui-wedge[data-state='exploded'] { width: 320px; opacity: 0; transition-duration: 200ms, 150ms; }
+.ui-wedge[data-state='contracted-style1'] { width: 0; opacity: 0; transition: width 400ms var(--easing-in-sine, ease-in), opacity 800ms linear; }
+.ui-wedge[data-hovered='true'][data-state='expanded'] { width: 240px; transition: width 500ms var(--easing-elastic, ease-out); }
+
+.ui-wedge__hover-layer {
+  position: absolute; inset: 0;
+  background: #fff;
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1000ms var(--easing-out, ease-out);
+}
+.ui-wedge[data-pressed='true'] .ui-wedge__hover-layer { opacity: 0.1; }
+.ui-wedge[data-clicked='true'] .ui-wedge__hover-layer { opacity: 0.9; transition: opacity 800ms var(--easing-out-expo, ease-out); }
+
+.ui-wedge__content {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 24px 0 34px;
+  opacity: var(--ui-content-alpha, 1);  /* JS 按 clamp((w/160-.5)/.3) 更新 */
+}
+.ui-wedge__icon {
+  display: inline-block;
+  transform-origin: center;
+  transition: transform 500ms var(--easing-out, ease-out);
+}
+.ui-wedge[data-hovered='true'] .ui-wedge__icon { transform: rotate(var(--ui-pulse-rotation, 8deg)) scale(1.2, 1.08); }
+
+@keyframes ui-pulse-heartbeat {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-10px) scale(1.2); }
+  100% { transform: translateY(0) scale(1.2, 1.08); }
+}
+.ui-wedge[data-pulsing='true'] .ui-wedge__icon {
+  animation: ui-pulse-heartbeat calc(var(--ui-pulse-length, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out) infinite alternate;
+}
+
+/* Logo 心跳 / ripple / emphasis（OsuLogo.cs） */
+@keyframes ui-hub-pulse { from { transform: scale(0.98); } to { transform: scale(1); } }
+@keyframes ui-hub-ripple { from { opacity: 0.15; transform: scale(1); } to { opacity: 0; transform: scale(1.04); } }
+@keyframes ui-side-flash { from { opacity: 0.9; } to { opacity: 0; } }
+
+.ui-hub-pulse { animation: ui-hub-pulse 60ms var(--easing-out, ease-out) both; }
+.ui-hub-ripple { animation: ui-hub-ripple var(--ui-pulse-length, 500ms) var(--easing-out, ease-out) both; }
+.ui-side-flash {
+  position: absolute; top: 0; bottom: 0; width: 400px;
+  background: linear-gradient(90deg, var(--ui-accent), transparent);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: ui-side-flash var(--ui-pulse-length, 500ms) var(--easing-in, ease-in) both;
+}
+.ui-side-flash--left { left: 0; }
+.ui-side-flash--right { right: 0; transform: scaleX(-1); }
+
+/* ================================================================ *
+ * 3. Wave 四层几何揭示（WaveContainer.cs:87-192）
+ * ================================================================ */
+@keyframes ui-wave-sweep {
+  from { transform: rotate(var(--ui-wave-rotation, 0deg)) translateY(100%); }
+  to   { transform: rotate(var(--ui-wave-rotation, 0deg)) translateY(var(--ui-wave-y, -400px)); }
+}
+.ui-wave {
+  position: relative;
+  height: 100%;
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+.ui-wave__layer {
+  position: absolute;
+  left: -20%;
+  width: 150%;
+  height: 150%;
+  border-radius: 40%;
+  background: var(--ui-surface, #2a2a2a);
+  /* 四层用递增亮度区分，否则叠在一起看不出"四层" */
+  filter: brightness(calc(0.82 + var(--ui-wave-tint, 0) * 0.12));
+  box-shadow: 0 0 20px rgb(0 0 0 / 20%);
+  transform: rotate(var(--ui-wave-rotation, 0deg)) translateY(100%);
+  animation: ui-wave-sweep var(--_d-entrance) var(--easing-out-sine, ease-out) both;
+  animation-delay: calc(var(--_wave-stagger) * var(--ui-wave-index, 0) * var(--motion-scale, 1));
+}
+.ui-wave__content {
+  position: relative;
+  z-index: 5;
+  min-width: 55%;
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent, #66ccff) 45%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-raised, #333) 92%, transparent);
+  color: var(--ui-text, #fff);
+  text-align: center;
+  transform: translateY(200%);
+  transition: transform 800ms var(--easing-out, ease-out);
+}
+.ui-wave[data-open='true'] .ui-wave__content { transform: translateY(0); }
+.ui-wave[data-open='false'] .ui-wave__layer { animation-direction: reverse; animation-duration: 500ms; }
+
+/* ================================================================ *
+ * 4. Sheared / 侧栏 / 弹层几何
+ * ================================================================ */
+.ui-sheared {
+  transform: skewX(calc(var(--_shear-deg) * -1));
+}
+.ui-sheared > * { transform: skewX(var(--_shear-deg)); }
+
+.ui-overlay--slide-x { transform: translateX(calc(var(--ui-slide-distance, -570px))); transition: transform 600ms var(--easing-out, ease-out), opacity 300ms var(--easing-out, ease-out); opacity: 0; }
+.ui-overlay--slide-x[data-open='true'] { transform: translateX(0); opacity: 1; }
+.ui-overlay--slide-y { transform: translateY(100%); transition: transform 500ms var(--easing-out, ease-out), opacity 500ms var(--easing-out, ease-out); opacity: 0; }
+.ui-overlay--slide-y[data-open='true'] { transform: translateY(0); opacity: 1; }
+
+@keyframes ui-column-in { from { opacity: 0; transform: translateY(var(--ui-column-distance, 700px)); } to { opacity: 1; transform: translateY(0); } }
+.ui-columns > * {
+  animation: ui-column-in 400ms var(--easing-out, ease-out) both;
+  animation-delay: calc(var(--_column-stagger) * var(--ui-index, 0) * var(--motion-scale, 1));
+}
+.ui-columns > *:nth-child(even) { --ui-column-distance: -700px; }
+
+/* PopupDialog 圆形揭示 / 弹性缩放 */
+@keyframes ui-popup-in { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes ui-ring-grow { from { width: 20px; height: 20px; } to { width: 100px; height: 100px; } }
+.ui-popup { animation: ui-popup-in 750ms var(--easing-elastic, ease-out) both; border-radius: 20px; }
+.ui-popup__ring { animation: ui-ring-grow 750ms var(--easing-out, ease-out) both; border-radius: 50%; border: 5px solid var(--ui-accent); }
+.ui-popup__icon { animation: ui-popup-in 750ms var(--easing-out, ease-out) 100ms both; }
+
+/* ================================================================ *
+ * 5. 弹性 / 波纹 / 旋转 / 循环 / 视差 / 模糊 / 灰度
+ * ================================================================ */
+@keyframes ui-elastic-pop { 0% { transform: scale(0.9); } 100% { transform: scale(1); } }
+@keyframes ui-ripple { from { opacity: 0.6; transform: scale(0.1); } to { opacity: 0; transform: scale(1); } }
+@keyframes ui-pulse-beat { 0% { transform: scale(1); } 18% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes ui-glow-pulse { 0%,100% { box-shadow: 0 0 4px var(--ui-glow, #66ccff); } 50% { box-shadow: 0 0 16px var(--ui-glow, #66ccff); } }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+@keyframes ui-additive-flash { from { opacity: 0.55; } to { opacity: 0; } }
+@keyframes ui-scatter-shape { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-shake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(2px,0); } 75% { transform: translate(-2px,0); } }
+
+.ui-motion-elastic { animation: ui-elastic-pop var(--_d-entrance) var(--easing-elastic, ease-out) both; }
+.ui-motion-ripple { animation: ui-ripple 700ms var(--easing-out-expo, ease-out) both; }
+.ui-motion-pulse { animation: ui-pulse-beat 500ms var(--easing-out, ease-out) both; }
+.ui-motion-glow { animation: ui-glow-pulse 800ms var(--easing-in-out, ease-in-out) infinite; }
+.ui-motion-spin { animation: ui-spin var(--ui-spin-duration, 20000ms) linear infinite; }
+.ui-motion-shake { animation: ui-shake 20ms linear infinite; }
+.ui-flash::after {
+  content: ''; position: absolute; inset: 0;
+  background: var(--ui-accent, #66ccff); mix-blend-mode: screen; pointer-events: none;
+  animation: ui-additive-flash var(--_d-normal) var(--easing-out, ease-out) both;
+}
+.ui-scatter-shape { animation: ui-scatter-shape 120ms linear both; }
+
+.ui-parallax { will-change: transform; transition: transform 100ms var(--easing-out, ease-out); }
+.ui-blur { filter: blur(calc(var(--blur-level, 0) * 20px)); transition: filter 800ms var(--easing-out, ease-out); }
+.ui-grayscale { filter: grayscale(var(--ui-grayscale, 1)); transition: filter 1000ms var(--easing-out-pow10, ease-out); }
+
+/* 非等比变换工具（Y 压扁 / X 镜像） */
+.ui-squash-y { transform: scaleY(0.95); transition: transform 800ms var(--easing-elastic, ease-out); }
+.ui-squash-y[data-reset='true'] { transform: scaleY(1); }
+.ui-mirror-x { transform: scaleX(-1); }
+.ui-mirror-y { transform: scaleY(-1); }
+
+/* 全屏加性白闪 */
+@keyframes ui-full-surface-flash { from { opacity: 0.9; } to { opacity: 0; } }
+.ui-full-surface-flash {
+  position: fixed; inset: 0; z-index: var(--z-topmost, 2100);
+  background: #fff; mix-blend-mode: screen; pointer-events: none;
+  animation: ui-full-surface-flash 1000ms var(--easing-out, ease-out) both;
+}
+
+/* ================================================================ *
+ * 6. 全局降级（上游无此能力，本资源包补齐）
+ * ================================================================ */
+:root[data-reduce-motion='true'] .ui-motion-enter,
+:root[data-reduce-motion='true'] .ui-motion-exit,
+:root[data-reduce-motion='true'] .ui-motion-slide-in,
+:root[data-reduce-motion='true'] .ui-flash,
+:root[data-reduce-motion='true'] .ui-full-surface-flash,
+:root[data-reduce-motion='true'] .ui-wave__layer,
+:root[data-reduce-motion='true'] .ui-columns > *,
+:root[data-reduce-motion='true'] .ui-popup,
+:root[data-reduce-motion='true'] .ui-popup__ring,
+:root[data-reduce-motion='true'] .ui-wedge__icon {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+:root[data-reduce-motion='true'] .ui-motion-pulse,
+:root[data-reduce-motion='true'] .ui-motion-glow,
+:root[data-reduce-motion='true'] .ui-motion-ripple,
+:root[data-reduce-motion='true'] .ui-motion-spin,
+:root[data-reduce-motion='true'] .ui-motion-shake { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='false']) .ui-motion-pulse,
+  :root:not([data-reduce-motion='false']) .ui-motion-glow,
+  :root:not([data-reduce-motion='false']) .ui-motion-spin { animation: none !important; }
+}

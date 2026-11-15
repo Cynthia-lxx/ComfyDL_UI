@@ -1,0 +1,70 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * HoldToConfirmContainer + HoldToConfirmOverlay mapping: ring stroke tracks Progress
+ * (accent; dangerous -> --state-error), the inner disc dims with progress like the
+ * overlay's black Box (alpha = progress * 0.25), fired state shows a check mark.
+ */
+
+:host {
+  display: inline-block;
+  contain: layout style;
+}
+
+.wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+button {
+  position: absolute;
+  inset: 6px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: var(--border-width, 2px) solid var(--ui-border, #444);
+  background: var(--ui-surface-raised, #333);
+  color: var(--ui-text, #fff);
+  font: inherit;
+  font-size: var(--font-size-caption2, 12px);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: transform calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+button:disabled { opacity: 0.3; cursor: not-allowed; }
+button[data-holding='true'] { transform: scale(0.92); }
+
+.label {
+  display: inline-block;
+  max-width: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transform: rotate(-90deg); /* 进度从顶部 12 点方向开始 */
+}
+.ring circle {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.ring .track { stroke: color-mix(in srgb, var(--ui-border, #444) 70%, transparent); }
+.ring .progress { stroke: var(--ui-accent, #66ccff); transition: stroke calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) linear; }
+
+/* HoldToConfirmOverlay：进度以黑色薄层覆盖（alpha = progress * 0.25），dangerous 走错误色 */
+:host([dangerous]) .ring .progress { stroke: var(--state-error, #ed1121); }
+:host([dangerous]) button { border-color: color-mix(in srgb, var(--state-error, #ed1121) 45%, var(--ui-border, #444)); }
+
+button:focus-visible { outline: var(--border-width, 2px) solid var(--ui-accent-strong, #66ccff); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition-duration: 0ms !important; }
+}

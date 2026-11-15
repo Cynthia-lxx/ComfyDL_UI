@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: MIT — RollingCounter / 变体字重与字号映射 */
+:host {
+  display: inline-block;
+  font-variant-numeric: tabular-nums; /* 替代 fixedWidth，滚动时宽度不抖 */
+  font-size: var(--font-size-heading1, 40px);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--ui-text, #fff);
+  line-height: 1.1;
+}
+/* PercentageCounter 20px / ScoreCounter 40px */
+:host([data-format='accuracy']) { font-size: 20px; }
+:host([data-format='separated']), :host([data-format='digits']) { font-size: var(--font-size-heading1, 40px); }

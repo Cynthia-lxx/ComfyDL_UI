@@ -1,0 +1,120 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * RoundedSliderBar.cs:62-129 (track geometry) / Nub.cs:162-178 (filled nub proportions)
+ * Colours: AccentColour -> --ui-accent, BackgroundColour -> --ui-surface-sunken,
+ * nub rim lightened (framework BorderColour White; approximated with a color-mix rim).
+ */
+
+:host {
+  display: inline-block;
+  width: 240px;
+  height: 26px;
+  vertical-align: middle;
+  contain: layout style;
+  touch-action: none;
+  outline: none;
+}
+
+:host(:focus-visible) .track {
+  outline: var(--border-width, 2px) solid var(--ui-accent-strong, #66ccff);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+:host([disabled]) { opacity: 0.3; pointer-events: none; }
+
+.track {
+  position: relative;
+  height: 15px;
+  cursor: pointer;
+}
+
+/* 5px 圆角轨道：左箱 accent / 右箱 Background5，容器 mask 圆角 5 */
+.bar-left, .bar-right {
+  position: absolute;
+  top: 50%;
+  height: 5px;
+  transform: translateY(-50%);
+  border-radius: 3px;
+  transition: width calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.bar-left { left: 0; background: var(--ui-accent, #66ccff); transform-origin: left center; }
+.bar-right { right: 0; background: var(--ui-surface-sunken, #222); transform-origin: right center; }
+
+/* nub：永久 filled 态（slider 场景 Current 恒 true），50×15 圆角胶囊 */
+.nub {
+  position: absolute;
+  width: 50px;
+  height: 15px;
+  top: 0;
+  border-radius: 8px;
+  background: var(--ui-accent, #66ccff);
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--ui-accent, #66ccff) 62%, white 38%);
+  /* UpdateValue: MoveToX(value, 250, OutQuint)；拖拽中由 JS 关掉过渡 */
+  transition:
+    left 250ms var(--easing-out, ease-out),
+    box-shadow 800ms var(--easing-out, ease-out),
+    background-color 800ms var(--easing-out, ease-out);
+}
+.track[data-dragging] .nub { transition: none; }
+
+/* Glowing：40ms 提亮闪烁后 800ms 回落（Nub.cs:82-105 的 CSS 化） */
+:host([data-glow='true']) .nub {
+  background: color-mix(in srgb, var(--ui-accent, #66ccff) 55%, white 45%);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--ui-accent, #66ccff) 30%, white 70%),
+    0 0 8px color-mix(in srgb, var(--ui-accent, #66ccff) 25%, transparent);
+  transition-duration: 40ms, 40ms, 40ms;
+}
+
+/* tooltip：跟随 nub，OsuSliderBar.GetTooltipText 的数值展示 */
+.tooltip {
+  position: absolute;
+  bottom: 100%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--ui-surface-raised, #333);
+  border: 1px solid var(--ui-border, #444);
+  color: var(--ui-text, #fff);
+  font-size: var(--font-size-caption2, 12px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    visibility 0s linear calc(var(--duration-fast, 120ms) * var(--motion-scale, 1));
+}
+.tooltip[data-visible='true'] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out), visibility 0s;
+}
+
+/* ---- 滑块变体族 ---- */
+/* ShearedSliderBar.cs:29-30,68-70 —— 高 30、SHEAR、nub 50x30 描边 8、圆角 5 */
+:host([data-variant='sheared']) { height: 30px; }
+:host([data-variant='sheared']) .track { height: 30px; }
+:host([data-variant='sheared']) .bar-left, :host([data-variant='sheared']) .bar-right {
+  height: 30px;
+  border-radius: 5px;
+  transform: translateY(-50%) skewX(-11.5deg);
+}
+:host([data-variant='sheared']) .nub {
+  width: 50px;
+  height: 30px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--ui-accent, #66ccff) 70%, white 30%);
+  transform: skewX(-11.5deg);
+}
+/* ExpandableSlider.cs:98-109 —— 收起时 caption 淡出、滑块淡入 500ms OutQuint */
+:host([data-variant='expandable']) .nub,
+:host([data-variant='expandable']) .track { transition: opacity 500ms cubic-bezier(0.22, 1, 0.36, 1), left 250ms var(--easing-out, ease-out); }
+:host([data-variant='expandable'][data-expanded='false']) .track { opacity: 0.35; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nub, .bar-left, .bar-right, .tooltip { transition-duration: 0ms !important; }
+}

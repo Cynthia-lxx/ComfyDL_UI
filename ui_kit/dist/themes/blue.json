@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "source": "osu.Game/Overlays/OverlayColourScheme.cs:47 + OverlayColourProvider.cs:29-54",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt"
+  },
+  "id": "blue",
+  "label": "Blue",
+  "hue": 200,
+  "usedBy": ["song-select", "item-listing"],
+  "tokens": {
+    "--colour-0": [1.0, 0.8],
+    "--colour-1": [1.0, 0.7],
+    "--colour-2": [0.8, 0.6],
+    "--colour-3": [0.6, 0.5],
+    "--colour-4": [0.4, 0.3],
+    "--colour-highlight-1": [1.0, 0.7],
+    "--colour-content-1": [0.4, 1.0],
+    "--colour-content-2": [0.4, 0.9],
+    "--colour-light-1": [0.4, 0.8],
+    "--colour-light-2": [0.4, 0.75],
+    "--colour-light-3": [0.4, 0.7],
+    "--colour-light-4": [0.4, 0.5],
+    "--colour-dark-1": [0.2, 0.35],
+    "--colour-dark-2": [0.2, 0.3],
+    "--colour-dark-3": [0.2, 0.25],
+    "--colour-dark-4": [0.2, 0.2],
+    "--colour-dark-5": [0.2, 0.15],
+    "--colour-dark-6": [0.2, 0.1],
+    "--colour-foreground-1": [0.1, 0.6],
+    "--colour-background-1": [0.1, 0.4],
+    "--colour-background-2": [0.1, 0.3],
+    "--colour-background-3": [0.1, 0.25],
+    "--colour-background-4": [0.1, 0.2],
+    "--colour-background-5": [0.1, 0.15],
+    "--colour-background-6": [0.1, 0.1]
+  },
+  "overrides": {}
+}

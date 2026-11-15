@@ -1,0 +1,82 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * BreadcrumbControl mapping: height 32, spacing 10, text 18px / vertical margin 8,
+ * item right margin 20 (padding 10 + chevron 10); hidden crumbs FadeOut + ScaleTo(0.8,1)
+ * at 500ms OutQuint; chevron fades in on crumbs before the selection.
+ */
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* TabContainer.Spacing 10 */
+  height: 32px;
+  overflow: hidden;
+}
+
+.crumb {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-heading2, 18px);
+  color: var(--ui-accent, #66ccff);
+  cursor: pointer;
+  padding: 8px 0; /* Text.Margin vertical 8 */
+  /* State 过渡：500ms OutQuint（显隐 + 横向缩放） */
+  transition:
+    opacity calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    transform calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    color calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.crumb[data-hidden='true'] {
+  opacity: 0;
+  transform: scaleX(0.8);
+  pointer-events: none;
+}
+
+.text {
+  white-space: nowrap;
+  font-weight: var(--font-weight-regular, 400);
+  transition: color calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.crumb[data-active='true'] .text,
+.crumb:hover .text { color: var(--ui-text, #fff); }
+.crumb[data-active='true'] .text { font-weight: var(--font-weight-bold, 700); }
+
+/* Bar：OsuTabItem 底栏，激活/悬停淡入 500ms OutQuint */
+.crumb::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 20px; /* 右侧让位给 chevron 区（padding 10 + chevron 10） */
+  bottom: 0;
+  height: 1px;
+  background: var(--ui-text, #fff);
+  opacity: 0;
+  transition: opacity calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.crumb:hover::after, .crumb[data-active='true']::after { opacity: 1; }
+
+/* 分隔 chevron：仅出现在选中项之前的项上，500ms OutQuint 淡入 */
+.chevron {
+  margin-left: 10px;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.chevron[data-visible='true'] { opacity: 1; }
+
+.crumb:focus-visible { outline: var(--border-width, 2px) solid var(--ui-accent-strong, #66ccff); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .crumb, .crumb::after, .chevron { transition-duration: 0ms !important; }
+}

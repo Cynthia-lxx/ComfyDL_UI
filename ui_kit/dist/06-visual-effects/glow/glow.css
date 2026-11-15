@@ -1,0 +1,91 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * CSS equivalents of framework EdgeEffect / FadeEdgeEffectTo / FlashColour and
+ * BlendingParameters.Additive, as used in:
+ *   Graphics/UserInterface/Nub.cs:64-104, Overlays/NotificationOverlay.cs:230-248,
+ *   Screens/Select/Panel.cs:331-385, Screens/Menu/IntroTriangles.cs:264-280
+ * All values come from 03-colour-typography/tokens.css.
+ */
+
+.ui-additive {
+  mix-blend-mode: screen;
+  isolation: isolate;
+}
+
+.ui-vfx-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ui-vfx-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* EdgeEffect / Glow：两段式 40 -> 800ms 由 JS 的 pulseGlow 驱动 */
+.ui-glow-edge {
+  box-shadow: var(--ui-glow-effect, 0 0 8px 2px #66ccff);
+  transition: box-shadow
+    calc(var(--duration-normal, 300ms) * var(--motion-scale, 1))
+    var(--easing-out, ease-out);
+}
+
+.ui-glow-strong {
+  box-shadow:
+    0 0 var(--glow-radius, 8px) var(--glow-spread, 2px) var(--ui-glow, #66ccff),
+    0 0 calc(var(--glow-radius, 8px) * 2) var(--ui-glow, #66ccff);
+}
+
+.ui-glow-text {
+  text-shadow: 0 0 var(--glow-radius, 8px) var(--ui-glow, #66ccff);
+}
+
+@keyframes ui-flash-colour {
+  from { filter: brightness(1.9) saturate(1.4); }
+  to   { filter: brightness(1) saturate(1); }
+}
+
+@keyframes ui-glow-fade {
+  from { opacity: 0.85; }
+  to   { opacity: 0; }
+}
+
+.ui-flash-colour {
+  animation: ui-flash-colour
+    calc(var(--duration-normal, 300ms) * var(--motion-scale, 1))
+    var(--easing-out, ease-out) both;
+}
+
+.ui-additive-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-accent, #66ccff);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: ui-glow-fade
+    calc(var(--duration-normal, 300ms) * var(--motion-scale, 1))
+    var(--easing-out, ease-out) both;
+}
+
+/* 全屏加性白闪（EntranceSteps.GameWideFlash 的 CSS 版） */
+.ui-full-surface-flash {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-topmost, 2100);
+  background: #fff;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: ui-glow-fade 1000ms var(--easing-out, ease-out) both;
+}
+
+:root[data-reduce-motion='true'] .ui-flash-colour,
+:root[data-reduce-motion='true'] .ui-additive-flash,
+:root[data-reduce-motion='true'] .ui-full-surface-flash {
+  animation-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='false']) .ui-glow-edge { transition-duration: 0ms; }
+}

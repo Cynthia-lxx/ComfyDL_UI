@@ -111,6 +111,21 @@ P6B_LOADER_TAG = (
 )
 P6B_LOADER_MARK = "<!--ComfyDL_UI:p6b-loader-->"
 
+# U stick 1 ([0.88]): the osu-derived design-token + component library.  The
+# kit assets are static CSS only at this stick (tokens + hue themes + our
+# bridge layer); component <script type="module"> tags join later sticks, so
+# the loader is link-only for now.  Injected into <head> - CSS custom
+# properties must exist before the panels' stylesheets resolve their
+# fallbacks.  Served by server.py from /comfydl/ui (kit dist) and
+# /comfydl/ui-assets (our bridge layer).
+UIKIT_LOADER_TAG = (
+    '<!--ComfyDL_UI:uikit-loader-->'
+    '<link rel="stylesheet" href="/comfydl/ui/tokens.css"/>'
+    '<link rel="stylesheet" href="/comfydl/ui/themes.css"/>'
+    '<link rel="stylesheet" href="/comfydl/ui-assets/bridge.css"/>'
+)
+UIKIT_LOADER_MARK = "<!--ComfyDL_UI:uikit-loader-->"
+
 
 def _patch_verbose_loader(web_root: Path) -> bool:
     """Inject the VERBOSE loader exactly once; return True when it changed.
@@ -450,6 +465,14 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("p6b loader")
     except Exception as exc:
         logging.warning(f"{TAG} p6b loader not applied: {exc}")
+
+    # The UI kit (U stick 1 [0.88]): token + hue-theme + bridge stylesheets in
+    # the head, before any panel CSS resolves its fallbacks.
+    try:
+        if _patch_uikit_loader(Path(web_root)):
+            applied.append("uikit loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} uikit loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -1093,6 +1116,29 @@ def _patch_p6b_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", P6B_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} p6b optimizer loader injected into {path.name}")
+    return True
+
+
+def _patch_uikit_loader(web_root: Path) -> bool:
+    """Inject the UI kit's stylesheet loader exactly once (U stick 1, [0.88]).
+
+    The kit assets are plain CSS (tokens + hue themes + our bridge layer), so
+    the loader is link-only and goes into ``<head>`` right after the motion
+    pre-hide block: CSS custom properties must be defined before any panel
+    stylesheet resolves a ``var(--ui-*)`` fallback chain.  Component
+    ``<script type="module">`` tags join in later sticks (UIKIT_LOADER_TAG is
+    kept in one place so they can be appended without touching index.html
+    again).
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if UIKIT_LOADER_MARK in text:
+        logging.debug(f"{TAG} uikit loader already applied")
+        return False
+    if text.count("</head>") != 1:
+        raise ValueError(f"expected exactly one </head> in {path.name}")
+    _write(path, text.replace("</head>", UIKIT_LOADER_TAG + "</head>"))
+    logging.info(f"{TAG} uikit stylesheet loader injected into {path.name}")
     return True
 
 

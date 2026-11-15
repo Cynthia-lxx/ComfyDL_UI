@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "source": "osu.Game/Configuration/OsuConfigManager.cs + 各 UI 组件常量",
+    "licence": "MIT (upstream) / see licence-audit.json",
+    "note": "origin=upstream 表示数值源自上游 MIT 源码；origin=kit-added 表示本资源包为弥补上游缺失而新增"
+  },
+  "settings": [
+    {
+      "id": "theme.scheme",
+      "type": "enum",
+      "default": "argon",
+      "values": [
+        "red",
+        "orange",
+        "lime",
+        "green",
+        "aquamarine",
+        "blue",
+        "purple",
+        "plum",
+        "pink"
+      ],
+      "appliesTo": {
+        "attribute": "data-theme"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Overlays/OverlayColourScheme.cs:8-57"
+    },
+    {
+      "id": "theme.hue",
+      "type": "number",
+      "default": 200,
+      "range": [
+        0,
+        360
+      ],
+      "appliesTo": {
+        "cssVar": "--theme-hue"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Overlays/OverlayColourProvider.cs:20-70"
+    },
+    {
+      "id": "ui.scale",
+      "type": "number",
+      "default": 1.0,
+      "range": [
+        0.8,
+        1.6
+      ],
+      "step": 0.05,
+      "appliesTo": {
+        "cssVar": "--ui-scale"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:192-195 / Graphics/Containers/ScalingContainer.cs:100-115"
+    },
+    {
+      "id": "ui.parallax",
+      "type": "number",
+      "default": 1.0,
+      "range": [
+        0,
+        2
+      ],
+      "step": 0.1,
+      "appliesTo": {
+        "cssVar": "--parallax-strength"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:139-141 / Graphics/Containers/ParallaxContainer.cs:20-93"
+    },
+    {
+      "id": "ui.holdActivationDelay",
+      "type": "integer",
+      "default": 200,
+      "range": [
+        0,
+        2000
+      ],
+      "unit": "ms",
+      "appliesTo": {
+        "cssVar": "--hold-delay"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:197 / Graphics/Containers/HoldToConfirmContainer.cs"
+    },
+    {
+      "id": "ui.hoverFeedback",
+      "type": "boolean",
+      "default": true,
+      "appliesTo": {
+        "attribute": "data-hover-feedback"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Graphics/UserInterface/HoverSounds.cs:21-46 (视觉反馈部分)"
+    },
+    {
+      "id": "ui.tooltipDelay",
+      "type": "integer",
+      "default": 250,
+      "range": [
+        0,
+        2000
+      ],
+      "unit": "ms",
+      "appliesTo": {
+        "cssVar": "--tooltip-delay"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Graphics/Cursor/OsuTooltipContainer.cs:27-55"
+    },
+    {
+      "id": "motion.reduce",
+      "type": "boolean",
+      "default": false,
+      "appliesTo": {
+        "cssVar": "--motion-scale",
+        "attribute": "data-reduce-motion"
+      },
+      "origin": "kit-added",
+      "source": "上游全仓无 ReduceMotion/prefers-reduced-motion（见 licence-audit.json 与调研报告 C4）；此项为本资源包新增的全局动效降级开关"
+    },
+    {
+      "id": "motion.duration.fast",
+      "type": "integer",
+      "default": 120,
+      "unit": "ms",
+      "appliesTo": {
+        "cssVar": "--duration-fast"
+      },
+      "origin": "upstream",
+      "source": "调研报告 C2：短反馈 40-200ms 取中值"
+    },
+    {
+      "id": "motion.duration.normal",
+      "type": "integer",
+      "default": 300,
+      "unit": "ms",
+      "appliesTo": {
+        "cssVar": "--duration-normal"
+      },
+      "origin": "upstream",
+      "source": "调研报告 C2：标准转场 300-600ms 下界"
+    },
+    {
+      "id": "motion.duration.transition",
+      "type": "integer",
+      "default": 500,
+      "unit": "ms",
+      "appliesTo": {
+        "cssVar": "--duration-transition"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Screens/Backgrounds/BackgroundScreen.cs:16-22"
+    },
+    {
+      "id": "motion.duration.intro",
+      "type": "integer",
+      "default": 800,
+      "unit": "ms",
+      "appliesTo": {
+        "cssVar": "--duration-intro"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Graphics/Containers/WaveContainer.cs:19-24"
+    },
+    {
+      "id": "graphics.blur",
+      "type": "number",
+      "default": 0,
+      "range": [
+        0,
+        1
+      ],
+      "step": 0.01,
+      "appliesTo": {
+        "cssVar": "--blur-level"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:343-347,149"
+    },
+    {
+      "id": "graphics.dim",
+      "type": "number",
+      "default": 0.5,
+      "range": [
+        0,
+        1
+      ],
+      "step": 0.01,
+      "appliesTo": {
+        "cssVar": "--dim-level"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:343-347"
+    },
+    {
+      "id": "dock.visibility",
+      "type": "enum",
+      "default": "always",
+      "values": [
+        "always",
+        "hide-during-focus",
+        "never"
+      ],
+      "appliesTo": {
+        "attribute": "data-hud"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:353 / Configuration/HUDVisibilityMode.cs:9-19"
+    },
+    {
+      "id": "backdropMedia.enabled",
+      "type": "boolean",
+      "default": true,
+      "appliesTo": {
+        "attribute": "data-storyboard"
+      },
+      "origin": "upstream",
+      "source": "osu.Game/Configuration/OsuConfigManager.cs:343-347"
+    }
+  ]
+}

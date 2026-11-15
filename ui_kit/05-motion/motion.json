@@ -1,0 +1,653 @@
+{
+  "schemaVersion": 2,
+  "_meta": {
+    "source": "全仓动效普查 2026-11-13；完整档案见 05-motion/motion-inventory.json（140 条）",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt",
+    "note": "本文件为可执行的动效配置（曲线/时长/序列）；inventory 为全量考据档案"
+  },
+  "easings": {
+    "out": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "outExpo": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "outPow10": "cubic-bezier(0.1, 1, 0.2, 1)",
+    "outElastic": "linear(0, 0.6 12%, 1.08 28%, 0.97 45%, 1.01 65%, 1)",
+    "outElasticHalf": "linear(0, 1.12 35%, 0.98 70%, 1)",
+    "outElasticQuarter": "linear(0, 1.06 40%, 1)",
+    "in": "cubic-bezier(0.64, 0, 0.78, 0)",
+    "inSine": "cubic-bezier(0.47, 0, 0.84, 0.54)",
+    "outSine": "cubic-bezier(0.39, 0.575, 0.565, 1)",
+    "inOutQuart": "cubic-bezier(0.76, 0, 0.24, 1)",
+    "inOutSine": "cubic-bezier(0.37, 0, 0.63, 1)",
+    "outCubic": "cubic-bezier(0.33, 1, 0.68, 1)",
+    "inOutCubic": "cubic-bezier(0.65, 0, 0.35, 1)",
+    "outQuad": "cubic-bezier(0.5, 1, 0.89, 1)",
+    "outBounce": "linear(0, 0.6 30%, 0.82 50%, 0.94 70%, 1)"
+  },
+  "customBeziers": {
+    "enter": "cubic-bezier(0, 0.3, 0, 0.65)",
+    "exit": "cubic-bezier(0.8, 0.05, 0.8, 0.8)",
+    "distribution": "cubic-bezier(0.3, 0.5, 0.5, 1)",
+    "progress": "cubic-bezier(0.4, 1, 0.6, 1)",
+    "flyout": "cubic-bezier(0.35, 0.5, 0.6, 1)"
+  },
+  "durations": {
+    "micro": 40,
+    "flashFast": 100,
+    "fast": 120,
+    "press": 200,
+    "normal": 300,
+    "buttonExpand": 500,
+    "buttonExplode": 200,
+    "buttonHover": 500,
+    "buttonHoverLayer": 1000,
+    "waveIn": 800,
+    "waveOut": 500,
+    "settings": 600,
+    "shearedIn": 400,
+    "shearedOut": 500,
+    "modColumn": 400,
+    "popupRing": 750,
+    "notification": 600,
+    "chat": 500,
+    "toolbar": 500,
+    "footerButton": 240,
+    "footerDisappear": 360,
+    "expanding": 500,
+    "menuFade": 280,
+    "transition": 500,
+    "background": 500,
+    "backgroundCrossfade": 800,
+    "entrance": 800,
+    "logoIntro": 3150,
+    "introWelcome": 2142,
+    "entranceSteps": 3000,
+    "accuracyRolling": 3000,
+    "totalScoreRolling": 3000,
+    "fail": 2500,
+    "medalSpinInner": 20000,
+    "medalSpinOuter": 40000,
+    "pointerTrail": 300,
+    "parallaxPosition": 100,
+    "parallaxScale": 1000,
+    "tooltipFollow": 120,
+    "elastic": 750,
+    "accuracy": 3000
+  },
+  "feedback": {
+    "hoverGlowFast": {
+      "duration": 40,
+      "easing": "out"
+    },
+    "hoverGlowSlow": {
+      "duration": 800,
+      "easing": "out"
+    },
+    "hoverWidth": {
+      "duration": 500,
+      "easing": "outElastic"
+    },
+    "hoverIcon": {
+      "duration": "TimeUntilNextBeat",
+      "easing": "inOutSine",
+      "rotation": 8,
+      "scale": [
+        1.2,
+        1.08
+      ]
+    },
+    "press": {
+      "duration": 1000,
+      "easing": "out",
+      "scale": 0.9
+    },
+    "release": {
+      "duration": 1000,
+      "easing": "outElastic",
+      "scale": 1
+    },
+    "clickFlash": {
+      "duration": 800,
+      "easing": "outExpo"
+    },
+    "focus": {
+      "duration": 200,
+      "easing": "out"
+    },
+    "tooltip": {
+      "duration": 300,
+      "easing": "out",
+      "follow": 120
+    },
+    "notificationDelay": 250
+  },
+  "sequences": {
+    "entranceSteps": {
+      "duration": 3000,
+      "source": "osu.Game/Screens/Menu/IntroTriangles.cs:195-280；与 intro.triangles 等价的兼容视图",
+      "steps": [
+        {
+          "at": 200,
+          "action": "reveal-1"
+        },
+        {
+          "at": 400,
+          "action": "reveal-2"
+        },
+        {
+          "at": 700,
+          "action": "reveal-3"
+        },
+        {
+          "at": 900,
+          "action": "scatter-shapes"
+        },
+        {
+          "at": 1060,
+          "action": "accent-stroke"
+        },
+        {
+          "at": 1450,
+          "action": "item-1"
+        },
+        {
+          "at": 1650,
+          "action": "item-2"
+        },
+        {
+          "at": 1850,
+          "action": "item-3"
+        },
+        {
+          "at": 2080,
+          "action": "expand",
+          "params": {
+            "delay": 920
+          }
+        },
+        {
+          "at": 3000,
+          "action": "full-surface-flash",
+          "params": {
+            "duration": 1000
+          }
+        }
+      ]
+    },
+    "actionRail": {
+      "source": "Screens/Menu/ButtonSystem.cs:424-528; MainMenuButton.cs:327-356",
+      "constants": {
+        "BUTTON_WIDTH": 140,
+        "WEDGE_WIDTH": 20,
+        "BUTTON_AREA_HEIGHT": 100,
+        "spacing": -20,
+        "shear": 0.2,
+        "HOVER_SCALE": 1.2,
+        "BOUNCE_COMPRESSION": 0.9,
+        "BOUNCE_ROTATION": 8
+      },
+      "states": {
+        "Expanded": {
+          "width": 160,
+          "opacity": 1,
+          "duration": 500,
+          "easing": "outExpo",
+          "fadeDuration": 83.33
+        },
+        "Contracted": {
+          "width": 0,
+          "opacity": 0,
+          "duration": 500,
+          "easing": "outExpo"
+        },
+        "ContractedStyle1": {
+          "width": 0,
+          "opacity": 0,
+          "duration": 400,
+          "easing": "inSine",
+          "fadeDuration": 800
+        },
+        "Exploded": {
+          "width": 320,
+          "opacity": 0,
+          "duration": 200,
+          "easing": "outExpo",
+          "fadeDuration": 150
+        }
+      },
+      "firstExpandDelay": 150,
+      "hover": {
+        "width": 240,
+        "duration": 500,
+        "easing": "outElastic",
+        "iconRotation": 8,
+        "iconScale": [
+          1.2,
+          1.08
+        ],
+        "beatHeartbeat": true,
+        "additiveLayer": 0.1
+      },
+      "hoverLost": {
+        "rotation": 0,
+        "translate": [
+          0,
+          0
+        ],
+        "scale": 1,
+        "width": 160,
+        "duration": 500,
+        "easing": "out"
+      },
+      "contentAlpha": "clamp((width/160 - 0.5)/0.3, 0, 1)",
+      "logoTracking": {
+        "scale": 0.5,
+        "duration": 200,
+        "easing": "in",
+        "returnDuration": 800,
+        "returnEasing": "outExpo"
+      }
+    },
+    "wave": {
+      "source": "Graphics/Containers/WaveContainer.cs:19-192",
+      "appear": 800,
+      "disappear": 500,
+      "enterEasing": "outSine",
+      "exitEasing": "inSine",
+      "contentEnterEasing": "out",
+      "contentExitEasing": "in",
+      "layers": [
+        {
+          "rotation": 13,
+          "finalY": -930,
+          "anchor": "TopCentre"
+        },
+        {
+          "rotation": -7,
+          "finalY": -560,
+          "anchor": "TopRight"
+        },
+        {
+          "rotation": 4,
+          "finalY": -390,
+          "anchor": "TopCentre"
+        },
+        {
+          "rotation": -2,
+          "finalY": -220,
+          "anchor": "TopRight"
+        }
+      ],
+      "layerWidth": 1.5,
+      "shadowRadius": 20,
+      "shadowOpacity": 0.2,
+      "contentRelativeY": {
+        "in": 0,
+        "out": 2
+      }
+    },
+    "overlays": {
+      "settings": {
+        "translateX": -570,
+        "sidebarX": -170,
+        "duration": 600,
+        "fade": 300,
+        "shadow": 800,
+        "loadDelay": 200,
+        "itemStagger": 40,
+        "itemFade": 500,
+        "easing": "out"
+      },
+      "sheared": {
+        "enter": 400,
+        "exit": 500,
+        "headerY": "headerHeight",
+        "dim": 0.75,
+        "easing": "out"
+      },
+      "modSelectColumns": {
+        "distance": 700,
+        "enter": 400,
+        "exit": 500,
+        "stagger": 30,
+        "alternateDirection": true,
+        "easing": "out",
+        "audioPanByX": true
+      },
+      "popupDialog": {
+        "enter": 500,
+        "exit": 500,
+        "ringFrom": 20,
+        "ringTo": 100,
+        "ringDuration": 750,
+        "ringEasing": "out",
+        "contentScaleFrom": 0.7,
+        "contentEasing": "outElasticHalf",
+        "iconDelay": 100,
+        "cornerRadius": 20,
+        "cornerExponent": 2.5
+      },
+      "notification": {
+        "translateX": 320,
+        "duration": 600,
+        "fade": 300,
+        "shadow": 800,
+        "easing": "out"
+      },
+      "chat": {
+        "translateY": "100%",
+        "enter": 500,
+        "exit": 500,
+        "enterEasing": "out",
+        "exitEasing": "inSine",
+        "cornerRadius": 7
+      },
+      "toolbar": {
+        "translateY": -40,
+        "duration": 500,
+        "fadeIn": 125,
+        "easing": "out",
+        "gradient": 2500
+      },
+      "fullscreen": {
+        "width": 0.85,
+        "shadowIn": 800,
+        "shadowOut": 500,
+        "shadowOpacity": 0.2
+      },
+      "wizard": {
+        "scaleFrom": 0.99,
+        "duration": 400,
+        "easing": "out",
+        "spinnerDelay": 200,
+        "cornerRadius": 14
+      },
+      "popover": {
+        "scaleFrom": 0.7,
+        "duration": 500,
+        "fade": 250,
+        "easing": "outElasticHalf"
+      },
+      "nowPlaying": {
+        "scaleFrom": 0.9,
+        "duration": 500,
+        "easing": "outElasticHalf",
+        "dragReturn": 800
+      },
+      "footerButtons": {
+        "appearFromLeft": -300,
+        "appearFromBottom": 100,
+        "disappearToRight": 300,
+        "enter": 240,
+        "exit": 360,
+        "stagger": 30,
+        "startDelay": 240,
+        "enterEasing": "outCubic",
+        "exitEasing": "inOutCubic"
+      }
+    },
+    "entrance": {
+      "circles": {
+        "trackStartDelay": 600,
+        "menuDelay": 2900,
+        "logoLength": 3150,
+        "logoFade": 200
+      },
+      "welcome": {
+        "stepTwo": 2142,
+        "scaleFrom": 0.9,
+        "fadeIn": 1800,
+        "textScale": 400
+      },
+      "triangles": {
+        "duration": 3000,
+        "steps": [
+          200,
+          400,
+          700,
+          900,
+          1060,
+          1450,
+          1650,
+          1850,
+          2080,
+          3000
+        ],
+        "logoGrow": 920,
+        "flash": 1000,
+        "glitchInterval": 22,
+        "glitchFade": 120
+      },
+      "introSequence": {
+        "smallRing": {
+          "to": 39.6,
+          "duration": 400,
+          "easing": "inOutQuart"
+        },
+        "mediumRing": {
+          "to": 130,
+          "duration": 340,
+          "easing": "outQuad"
+        },
+        "lines": {
+          "angle": 45,
+          "length": 105,
+          "duration": 700
+        },
+        "circles": {
+          "rotation": -180,
+          "easing": "inOutQuart"
+        }
+      },
+      "seasonal": {
+        "bpm": 172,
+        "beatLength": 348.84,
+        "offset": 5924,
+        "beats": 8,
+        "flash": 5000
+      }
+    },
+    "screen": {
+      "background": {
+        "enter": 500,
+        "exit": 500,
+        "offsetX": 50,
+        "enterEasing": "inOutQuart",
+        "exitEasing": "outExpo",
+        "overscanScale": "1 + 100/drawWidth"
+      },
+      "backgroundCrossfade": 800,
+      "beatmapBackground": {
+        "out": 250,
+        "in": 500,
+        "easing": "out"
+      },
+      "blur": {
+        "duration": 800,
+        "easing": "out",
+        "quantize": 0.2,
+        "formula": "-0.18 * ln(0.004 * sigma)"
+      },
+      "parallax": {
+        "defaultAmount": 0.02,
+        "menuAmount": 0.01,
+        "position": 100,
+        "scale": 1000,
+        "easing": "out",
+        "scaleFormula": "1 + abs(amount)"
+      },
+      "logoArriving": {
+        "fade": 300,
+        "easing": "out"
+      }
+    },
+    "pointer": {
+      "press": {
+        "scale": 0.9,
+        "duration": 800,
+        "easing": "out"
+      },
+      "release": {
+        "scale": 1,
+        "duration": 500,
+        "easing": "outElastic"
+      },
+      "rotateBack": {
+        "duration": 400,
+        "easing": "outElasticQuarter"
+      },
+      "dragRotation": {
+        "offsetDeg": 24.3,
+        "duration": 120,
+        "easing": "out"
+      },
+      "ripple": {
+        "scaleFrom": 0.1,
+        "duration": 700,
+        "easing": "outExpo",
+        "pool": 20
+      },
+      "trail": {
+        "maxSprites": 2048,
+        "fadeExponent": 1.7,
+        "fadeDuration": 300
+      },
+      "tooltip": {
+        "maxWidth": 500,
+        "cornerRadius": 5,
+        "fade": 300,
+        "follow": 120
+      }
+    },
+    "liveMetricsAndSummary": {
+      "intensity": {
+        "popScale": 1.1,
+        "breakFlash": 2000
+      },
+      "hitError": {
+        "enter": 200,
+        "exit": 5000,
+        "easing": "out"
+      },
+      "holdForMenu": {
+        "shake": 20,
+        "circularProgress": true
+      },
+      "delayedResume": {
+        "outer": 200,
+        "inner": 400,
+        "pulse": 200
+      },
+      "fail": {
+        "duration": 2500,
+        "scale": 0.85,
+        "rotation": 1,
+        "grayscale": true,
+        "fallY": 400
+      },
+      "accuracy": {
+        "rolling": 3000,
+        "gradedRing": 800,
+        "easing": "outPow10"
+      },
+      "totalScore": {
+        "rolling": 3000,
+        "easing": "outPow10",
+        "sparkleSpin": 36000
+      },
+      "medal": {
+        "innerSpin": 20000,
+        "outerSpin": 40000,
+        "step": 900
+      }
+    },
+    "multiParty": {
+      "vs": {
+        "length": 4200,
+        "firstDelay": 850,
+        "finalDelay": 3350,
+        "coverDistance": 40,
+        "coverDuration": 3000,
+        "exitDistance": 100,
+        "exitDuration": 500
+      },
+      "distribution": {
+        "columnStagger": 50,
+        "starLabelStagger": 100,
+        "columnRise": 300,
+        "roll": 4000,
+        "stdDev": 4500
+      },
+      "playerPanel": {
+        "layout": 1000,
+        "grayscale": 1000,
+        "hoverParallax": 2000,
+        "rankBounce": 800
+      },
+      "resultsCard": {
+        "first": 600,
+        "delay": 300,
+        "second": 800,
+        "scoreRoll": 2000
+      }
+    },
+    "timedFeature": {
+      "entrance": {
+        "titleIn": 300,
+        "titleGlide": 4000,
+        "coverIn": 500,
+        "coverGrow": 4000,
+        "flash": 5000
+      },
+      "carousel": {
+        "stagger": 250,
+        "indicator": 250
+      },
+      "scoreBreakdown": {
+        "pop": 500,
+        "float": 2500
+      }
+    },
+    "intervalSync": {
+      "source": "Graphics/Containers/BeatSyncedContainer.cs:24（31 个子类）",
+      "subclasses": [
+        "OsuLogo",
+        "Action rail item",
+        "MenuSideFlashes",
+        "KiaiMenuFountains",
+        "Panel",
+        "LoadingSpinner",
+        "Entrance seasonal",
+        "OsuTextBox",
+        "GradeedPlayCard.SongPreview"
+      ],
+      "earlyActivation": {
+        "logo": 60,
+        "sideFlashes": 65
+      },
+      "emphasis": {
+        "sideFlashAlternate": true,
+        "fountainWindow": 500
+      }
+    }
+  },
+  "reduceMotion": {
+    "motionScale": 0,
+    "parallax": 0,
+    "blur": 0,
+    "skipActions": [
+      "scatter-shapes",
+      "full-surface-flash",
+      "reveal-1",
+      "reveal-2",
+      "reveal-3",
+      "beat-heartbeat",
+      "spin",
+      "emphasis-fountain"
+    ],
+    "keepActions": [
+      "opacity",
+      "focus",
+      "border"
+    ],
+    "note": "上游全仓无 ReduceMotion；本资源包在 tokens.css / motion.css / effects.js 三层补齐"
+  }
+}

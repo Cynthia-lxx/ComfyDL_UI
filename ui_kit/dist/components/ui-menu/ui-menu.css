@@ -1,0 +1,134 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * OsuMenu + OsuContextMenu + DrawableOsuMenuItem mapping:
+ *   menu background black 50% / ContextMenuGray -> --ui-surface-raised (opaque);
+ *   radius 5 (context flavour) + shadow black 10% r4; items padding 4px 5px;
+ *   item text 17px, margins 10/4; hover bg #172023 -> --ui-surface-sunken;
+ *   hover swaps normal->bold text at 80ms OutQuint (two stacked spans, no width jump);
+ *   destructive -> --state-error, highlighted -> --state-warning; disabled alpha 0.2;
+ *   submenu chevron 8px right; spacer scaleY 0.6 + 2px divider.
+ */
+
+:host {
+  position: fixed;
+  inset: 0;
+  /* host 覆盖全屏只为定位；绝不能吞掉点击，否则外点关闭永远不触发 */
+  pointer-events: none;
+  visibility: hidden;
+  z-index: var(--z-overlay, 2100);
+  contain: layout style;
+}
+
+/* OsuContextMenu：不透明底、圆角 5、阴影 black 10% r4。
+ * overflow 必须 visible：子菜单以 absolute 溢出到右侧，
+ * 滚动容器会裁掉它并顺带生成横向滚动条（一级菜单与滚动条无法同时操作）。 */
+.root {
+  position: absolute;
+  min-width: 140px;
+  max-height: none;
+  overflow: visible;
+  pointer-events: auto;
+  padding: 4px 5px; /* items vertical 4 / base 5 */
+  border-radius: var(--corner-radius, 5px);
+  background: var(--ui-surface-raised, #333);
+  box-shadow:
+    0 0 4px color-mix(in srgb, var(--gray-0, #000) 10%, transparent),
+    0 8px 24px color-mix(in srgb, var(--gray-0, #000) 25%, transparent);
+  display: none;
+}
+
+/* 条目：透明背景，悬停 #172023 -> --ui-surface-sunken；文字 17px、边距 10/4 */
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 34px;
+  border-radius: calc(var(--corner-radius, 5px) - 1px);
+  cursor: pointer;
+  color: var(--ui-text, #fff);
+}
+.item[data-disabled='true'] { opacity: 0.2; pointer-events: none; }
+
+.text {
+  position: relative;
+  flex: 1;
+  padding: 4px 10px; /* MARGIN_HORIZONTAL 10 / MARGIN_VERTICAL 4 */
+  font-size: 17px;
+  white-space: nowrap;
+}
+.normal, .bold { display: block; }
+.bold {
+  position: absolute;
+  inset: 4px 10px;
+  font-weight: var(--font-weight-bold, 700);
+  opacity: 0;
+  transition: opacity calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.normal { transition: opacity calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out); }
+.item:hover { background: var(--ui-surface-sunken, #222); }
+.item:hover .bold { opacity: 1; }
+.item:hover .normal { opacity: 0; }
+
+/* MenuItemType：destructive 红 / highlighted 黄 */
+.item[data-type='destructive'] .normal, .item[data-type='destructive'] .bold { color: var(--state-error, #ed1121); }
+.item[data-type='highlighted'] .normal, .item[data-type='highlighted'] .bold { color: var(--state-warning, #ffcc22); }
+
+.hotkey {
+  margin-right: 10px;
+  font-family: var(--font-family-mono, monospace);
+  font-size: var(--font-size-caption2, 12px);
+  color: var(--ui-text-muted, #aaa);
+}
+
+/* 子菜单 chevron：8px 居右，水平边距 10 */
+.chev {
+  flex: none;
+  margin: 0 10px;
+  font-size: 8px;
+  line-height: 1;
+}
+
+/* 子菜单：锚定右上（上游 TopRight），右侧放不下时翻到左侧 */
+.submenu {
+  position: absolute;
+  top: -4px;
+  left: calc(100% + 2px);
+  min-width: 140px;
+  padding: 4px 5px;
+  border-radius: var(--corner-radius, 5px);
+  background: var(--ui-surface-raised, #333);
+  box-shadow:
+    0 0 4px color-mix(in srgb, var(--gray-0, #000) 10%, transparent),
+    0 8px 24px color-mix(in srgb, var(--gray-0, #000) 25%, transparent);
+  display: none;
+  pointer-events: auto;
+}
+.submenu[data-open='true'] { display: block; }
+.submenu[data-flip='true'] {
+  left: auto;
+  right: calc(100% + 2px);
+}
+
+/* 分隔条：DrawableSpacer —— scaleY 0.6、2px 高、90% 宽 */
+/* StatefulMenuItem：10px 勾选槽（AlwaysPresent，避免文字跳动） */
+.check {
+  flex: none;
+  width: 10px;
+  margin: 0 10px;
+  font-size: 10px;
+  text-align: center;
+  color: var(--ui-accent, #66ccff);
+}
+
+.spacer {
+  height: 2px;
+  margin: 6px auto;
+  width: 90%;
+  background: var(--ui-border, #444);
+  transform: scaleY(0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .normal, .bold { transition-duration: 0ms !important; }
+}

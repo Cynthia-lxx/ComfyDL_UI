@@ -1,0 +1,216 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — WaveContainer.cs:19-192 / ShearedOverlayContainer.cs
+ * / SettingsPanel.cs:170-204 / PopupDialog.cs:324-354 / NotificationOverlay.cs:230-248.
+ * Self-contained inside Shadow DOM; only CSS custom properties are inherited.
+ * Visibility is controlled by [data-visible] (visibility + pointer-events), so the
+ * element always stays in the render tree and CSS transitions have a starting frame.
+ */
+
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 2000);
+  display: block;
+  visibility: hidden;
+  pointer-events: none;
+  --shear-deg: 11.5deg;
+  --d-entrance: calc(var(--duration-intro, 800ms) * var(--motion-scale, 1));
+  --d-normal: calc(var(--duration-normal, 300ms) * var(--motion-scale, 1));
+}
+:host([data-visible='true']) { visibility: visible; pointer-events: auto; }
+
+.dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.5);
+  opacity: 0;
+  transition: opacity 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([data-open='true']) .dim { opacity: 1; }
+
+.panel {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-surface, #2a2a2a);
+  color: var(--ui-text, #fff);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.waves { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+/* Wave 四层：Rotation 13/-7/4/-2, FinalPosition -930/-560/-390/-220, Width 150% */
+.wave {
+  position: absolute;
+  left: -20%;
+  width: 150%;
+  height: 150%;
+  border-radius: 40%;
+  background: var(--ui-surface-raised, #333);
+  box-shadow: 0 0 20px rgb(0 0 0 / 20%);
+  transform: rotate(var(--ui-wave-rotation, 0deg)) translateY(100%);
+  opacity: 0.96;
+  transition:
+    transform 800ms cubic-bezier(0.39, 0.575, 0.565, 1),
+    opacity 500ms cubic-bezier(0.47, 0, 0.84, 0.54);
+  transition-delay: calc(100ms * var(--ui-wave-index, 0) * var(--motion-scale, 1));
+}
+.wave[data-anchor='right'] { left: auto; right: -20%; }
+:host([data-open='true']) .wave {
+  transform: rotate(var(--ui-wave-rotation, 0deg)) translateY(var(--ui-wave-y, -400px));
+}
+
+/* contentContainer：relative Y 0↔2（2×父高，比像素位移更彻底） */
+.content {
+  position: absolute;
+  inset: 0;
+  padding: 32px;
+  overflow: auto;
+  transform: translateY(200%);
+  transition: transform 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([data-open='true']) .content { transform: translateY(0); }
+
+/* ---- sheared: shape and content are separate layers ----
+ * Upstream ShearedOverlayContainer.cs:75-101 is NOT one giant slanted wall: it is a
+ * full-screen dim (Background6 @ 0.75), a sheared header bar on top
+ * (ShearedOverlayHeader.HEIGHT = 70) and a main content area between header and footer.
+ * The plate is inset 4% from the viewport edges ON PURPOSE: the slanted side edges must
+ * land INSIDE the viewport, otherwise the shear is invisible (a bleed larger than
+ * tan(11.5deg) x viewportHeight ≈ 146px hides the diagonal completely). Only the bottom
+ * edge bleeds (-40px) so the bottom silhouette stays off-screen like upstream. */
+.plate { display: none; }
+
+:host([variant='sheared']) .waves { display: none; }
+:host([variant='sheared']) .dim {
+  background: color-mix(in srgb, var(--ui-surface, #2a2a2a) 75%, transparent);
+}
+:host([variant='sheared']) .panel {
+  overflow: visible;
+  background: transparent;
+  transform: none;
+  opacity: 1;
+  transition: none;
+}
+:host([variant='sheared']) .plate {
+  display: block;
+  position: absolute;
+  top: 70px;
+  left: 4%;
+  right: 4%;
+  bottom: -40px;
+  background: var(--ui-surface-raised, #333);
+  border-inline: 1px solid color-mix(in srgb, var(--ui-accent, #66ccff) 28%, transparent);
+  box-shadow: 0 0 30px rgb(0 0 0 / 0.35);
+  transform: skewX(calc(var(--shear-deg) * -1)) translateY(120%);
+  opacity: 0;
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1), opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+/* 头部条：随主体一起从底部升起（处于主体坐标系内，天然继承斜切） */
+:host([variant='sheared']) .plate::before {
+  content: '';
+  position: absolute;
+  top: -34px;
+  left: 0;
+  right: 0;
+  height: 34px;
+  background: var(--ui-surface, #2a2a2a);
+}
+:host([variant='sheared'][data-open='true']) .plate {
+  transform: skewX(calc(var(--shear-deg) * -1)) translateY(0);
+  opacity: 1;
+}
+/* A real content safe area: inset from both slanted edges, never clipped.
+ * tan(11.5deg) x 100vh covers the maximal horizontal run of the slanted edge
+ * within the visible area (CSS trig, Chrome 111+; 14% is the fallback).
+ * Content sequencing: on open the plate rises first, the content fades in with a
+ * 140ms delay; on close the content fades out fast (180ms) BEFORE the plate
+ * retracts (400ms) — no hard cuts in either direction. */
+:host([variant='sheared']) .content {
+  top: 70px;
+  left: 4%;
+  right: 4%;
+  transform: none;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+  overflow: auto;
+  padding-inline: max(32px, 14%, calc(tan(var(--shear-deg)) * 100vh));
+  z-index: 1;
+}
+:host([variant='sheared'][data-open='true']) .content {
+  opacity: 1;
+  transition: opacity 300ms cubic-bezier(0.22, 1, 0.36, 1) 140ms;
+}
+:host([variant='sheared'][data-safe-zone='true']) .content {
+  outline: 1px dashed color-mix(in srgb, var(--ui-accent, #66ccff) 70%, transparent);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--ui-accent, #66ccff) 7%, transparent);
+}
+
+/* ---- variant: slide-x（SettingsPanel / NotificationOverlay） ---- */
+:host([variant='slide-x']) .waves { display: none; }
+:host([variant='slide-x']) .panel {
+  right: auto; width: min(570px, 85%);
+  box-shadow: 0 0 10px rgb(0 0 0 / 20%);
+  transform: translateX(-100%);
+  opacity: 0;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([variant='slide-x']) .content { transform: none; transition: none; }
+:host([variant='slide-x'][data-open='true']) .panel { transform: translateX(0); opacity: 1; }
+
+/* ---- variant: slide-y（ChatOverlay / Toolbar） ---- */
+:host([variant='slide-y']) .waves { display: none; }
+:host([variant='slide-y']) .panel {
+  top: auto; height: 40%;
+  border-radius: 7px 7px 0 0;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), opacity 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([variant='slide-y']) .content { transform: none; transition: none; }
+:host([variant='slide-y'][data-open='true']) .panel { transform: translateY(0); opacity: 1; }
+
+/* ---- variant: pop（PopupDialog 圆形揭示 / OsuPopover / NowPlaying） ---- */
+:host([variant='pop']) .waves { display: none; }
+:host([variant='pop']) .panel {
+  inset: 50% auto auto 50%;
+  width: min(500px, 90%);
+  height: auto;
+  max-height: 80vh;
+  border-radius: 20px;
+  transform: translate(-50%, -50%) scale(0.7);
+  opacity: 0;
+  transition: transform 750ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([variant='pop']) .content { position: relative; transform: none; transition: none; }
+:host([variant='pop'][data-open='true']) .panel { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+
+:host([data-activation='disabled']) { pointer-events: none; }
+
+/* Variant changes swap the closed-state transform. With transitions enabled
+ * the browser would animate old-closed -> new-closed, so the next enter would
+ * start from the previous variant's axis. The JS sets data-switching for one
+ * frame while the new closed state is established without animation. */
+:host([data-switching='true']) .panel,
+:host([data-switching='true']) .plate,
+:host([data-switching='true']) .wave,
+:host([data-switching='true']) .content,
+:host([data-switching='true']) .dim {
+  transition: none !important;
+}
+
+/* 全局动效降级 */
+:host-context([data-reduce-motion='true']) .wave,
+:host-context([data-reduce-motion='true']) .content,
+:host-context([data-reduce-motion='true']) .panel,
+:host-context([data-reduce-motion='true']) .dim {
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave, .content, .panel, .dim { transition-duration: 0.01ms !important; transition-delay: 0ms !important; }
+}

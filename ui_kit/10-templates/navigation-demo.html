@@ -1,0 +1,157 @@
+<!-- SPDX-License-Identifier: MIT
+     Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+     Menu / overlay motion demo fragment injected by assemble.py. -->
+  <section id="navigation-demo">
+    <h2>ActionRail &amp; Overlay Geometry</h2>
+    <p>横排楔形按钮（4 种宽度状态 + 节拍 hover + 加性按压层）与 5 种 overlay 滑入几何。</p>
+
+    <div class="demo-block">
+      <!-- 多组按钮：top / play / edit 各自可见，状态切换才有明显变化 -->
+      <ui-action-rail id="menu-buttons">
+        <span data-menu-item="settings" data-icon="⚙" data-min="primary" data-max="primary" data-colour="#88da20">Settings</span>
+        <span data-menu-item="detail" data-icon="▶" data-min="primary" data-max="primary" data-colour="#66ccff">Open</span>
+        <span data-menu-item="secondary" data-icon="✎" data-min="primary" data-max="primary" data-colour="#ffcc22">Modify</span>
+        <span data-menu-item="browse" data-icon="⌕" data-min="primary" data-max="primary" data-colour="#8c66ff">Explore</span>
+        <span data-menu-item="solo" data-icon="●" data-min="detail" data-max="detail" data-colour="#66ccff">Single</span>
+        <span data-menu-item="group" data-icon="●●" data-min="detail" data-max="detail" data-colour="#ff66ab">Group</span>
+        <span data-menu-item="edit-map" data-icon="▤" data-min="secondary" data-max="secondary" data-colour="#ffcc22">Modify item</span>
+        <span data-menu-item="edit-renderer" data-icon="◈" data-min="secondary" data-max="secondary" data-colour="#ff9966">Modify theme</span>
+      </ui-action-rail>
+      <div class="row demo-row">
+        <span>State:</span>
+        <button type="button" data-state-btn="initial">Initial</button>
+        <button type="button" data-state-btn="primary">Primary</button>
+        <button type="button" data-state-btn="detail">Play</button>
+        <button type="button" data-state-btn="secondary">Edit</button>
+        <button type="button" data-state-btn="transition">Transition</button>
+        <button type="button" data-state-btn="hidden">Exit</button>
+        <strong id="menu-status">state: initial</strong>
+      </div>
+    </div>
+
+    <div class="demo-block">
+      <div class="row demo-row">
+        <span>Overlay geometry:</span>
+        <button type="button" data-overlay="wave">Wave (4 层旋转)</button>
+        <button type="button" data-overlay="sheared">Sheared</button>
+        <button type="button" data-overlay="slide-x">Slide-X (侧栏)</button>
+        <button type="button" data-overlay="slide-y">Slide-Y (聊天)</button>
+        <button type="button" data-overlay="pop">Pop (环形揭示)</button>
+        <strong id="overlay-status">overlay: closed</strong>
+      </div>
+      <div class="row demo-row">
+        <button type="button" id="btn-stagger">列错峰 ±700</button>
+        <button type="button" id="btn-roll">数字滚动 3000ms</button>
+        <button type="button" id="btn-glitch">Glitch 三角</button>
+        <button type="button" id="btn-ripple">Ripple</button>
+        <span id="roll-value">0</span>
+      </div>
+      <div id="stagger-columns" class="demo-columns"></div>
+      <div id="glitch-host" class="demo-glitch"></div>
+    </div>
+
+    <div class="demo-block">
+      <h3>全量动效档案</h3>
+      <p id="inventory-summary">loading motion-inventory.json…</p>
+    </div>
+
+    <ui-reveal-overlay id="demo-overlay" variant="wave">
+      <h3>Overlay content</h3>
+      <p>Variant 由按钮切换；按 Esc 或点击遮罩关闭。</p>
+      <button type="button" id="overlay-close">Close</button>
+    </ui-reveal-overlay>
+  </section>
+
+  <style>
+    #navigation-demo { max-width: 960px; margin-primary: 28px; }
+    .demo-block { margin: 14px 0; padding: 14px; border: 1px solid var(--ui-border, #444); border-radius: var(--corner-radius, 5px); }
+    .demo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .demo-row button { height: 34px; padding: 0 10px; border: 1px solid var(--ui-border, #444); border-radius: 5px;
+      background: var(--ui-surface-raised, #333); color: var(--ui-text, #fff); cursor: pointer; font-size: 13px;
+      transition: border-color 150ms ease, transform 150ms ease; }
+    .demo-row button:hover { border-color: var(--ui-accent, #66ccff); }
+    .demo-row button:active { transform: scale(0.94); }
+    .demo-row strong { color: var(--ui-accent, #66ccff); font-size: 13px; }
+    .demo-columns { display: flex; gap: 8px; margin-top: 12px; min-height: 60px; }
+    .demo-columns > div { flex: 1; height: 56px; border-radius: 5px; background: var(--ui-accent, #66ccff); opacity: 0.9; }
+    .demo-glitch { position: relative; height: 120px; margin-top: 12px; overflow: hidden; }
+  </style>
+
+  <script type="module">
+    import './04-components/ui-action-rail/ui-action-rail.js';
+    import './04-components/ui-reveal-overlay/ui-reveal-overlay.js';
+    import { shearSlide, rollingNumber, ripple, scatterShapes } from './05-motion/effects.js';
+
+    const menu = document.getElementById('menu-buttons');
+    const overlay = document.getElementById('demo-overlay');
+    const menuStatus = document.getElementById('menu-status');
+    const overlayStatus = document.getElementById('overlay-status');
+
+    document.querySelectorAll('[data-state-btn]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const state = button.dataset.stateBtn;
+        menu.setState(state);
+        menuStatus.textContent = `state: ${state}`;
+      });
+    });
+
+    menu.addEventListener('ui-menu-state', (e) => {
+      menuStatus.textContent = `state: ${e.detail.state}`;
+    });
+    menu.addEventListener('ui-menu-press', (e) => {
+      menuStatus.textContent = `pressed: ${e.detail.id} (state ${e.detail.state})`;
+    });
+
+    document.querySelectorAll('[data-overlay]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const variant = button.dataset.overlay;
+        overlay.setAttribute('variant', variant);
+        overlay.open();
+        overlayStatus.textContent = `overlay: ${variant} / open`;
+      });
+    });
+    overlay.addEventListener('ui-overlay-close', () => { overlayStatus.textContent = 'overlay: closed'; });
+    document.getElementById('overlay-close').addEventListener('click', () => overlay.close());
+
+    const columns = document.getElementById('stagger-columns');
+    columns.innerHTML = '<div></div>'.repeat(5);
+    document.getElementById('btn-stagger').addEventListener('click', () => {
+      shearSlide(columns.children, { distance: 700, step: 30, duration: 400 });
+      overlayStatus.textContent = 'columns staggered';
+    });
+
+    const rollValue = document.getElementById('roll-value');
+    document.getElementById('btn-roll').addEventListener('click', () => {
+      rollingNumber(rollValue, 0, 1234567, { duration: 3000 });
+    });
+
+    const glitchHost = document.getElementById('glitch-host');
+    let glitch = null;
+    document.getElementById('btn-glitch').addEventListener('click', () => {
+      glitch?.stop();
+      glitch = scatterShapes(glitchHost, { interval: 22, fade: 120 });
+      overlayStatus.textContent = 'glitch triangles running';
+      window.setTimeout(() => glitch?.stop(), 900);
+    });
+
+    document.getElementById('btn-ripple').addEventListener('click', (event) => {
+      const rect = glitchHost.getBoundingClientRect();
+      ripple(glitchHost, event.clientX - rect.left, event.clientY - rect.top);
+    });
+
+    document.getElementById('theme-select')?.addEventListener('change', (e) => {
+      menu.setTheme(e.target.value);
+      overlay.setTheme(e.target.value);
+    });
+
+    fetch('./05-motion/effect-inventory.json')
+      .then((r) => r.json())
+      .then((data) => {
+        const count = Object.values(data.entries).reduce((n, list) => n + list.length, 0);
+        document.getElementById('inventory-summary').textContent =
+          `${data.statistics.filesWithTransforms} 个文件含 Transform · ${data.statistics.easingEnumTypes} 种缓动 · ` +
+          `${data.statistics.namedDurationConstants} 处具名时长 · ${count} 条已归档动效 · ` +
+          `${data.coverage.thisInventory}`;
+      })
+      .catch(() => { document.getElementById('inventory-summary').textContent = 'inventory 未加载'; });
+  </script>

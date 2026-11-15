@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "source": "osu.Game/Overlays/OverlayColourScheme.cs:53 + OverlayColourProvider.cs:29-54",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt"
+  },
+  "id": "plum",
+  "label": "Plum",
+  "hue": 320,
+  "usedBy": ["online-play", "multiplayer"],
+  "tokensFrom": "blue",
+  "overrides": {}
+}

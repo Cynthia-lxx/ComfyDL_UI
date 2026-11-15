@@ -1,0 +1,205 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * Colours map to tokens.css: BackgroundUnfocused -> --ui-surface-sunken,
+ * BackgroundFocused -> --ui-surface, BackgroundCommit/Border -> --ui-accent-strong,
+ * Placeholder -> --ui-text-muted. Durations use calc(var(--duration-*) * var(--motion-scale,1)).
+ */
+
+:host {
+  display: inline-block;
+  width: 240px;
+  contain: layout style;
+}
+
+.box {
+  position: relative;
+  width: 100%;
+}
+
+input {
+  width: 100%;
+  height: var(--control-height, 40px);
+  padding: 0 10px;
+  border: 0 solid var(--ui-accent-strong, #66ccff);
+  border-radius: var(--corner-radius, 5px);
+  background: var(--ui-surface-sunken, #222);
+  color: var(--ui-text, #fff);
+  font: inherit;
+  caret-color: var(--ui-accent, #66ccff);
+  box-sizing: border-box;
+  transition:
+    background-color calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    border-color calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+
+/* search 变体：SearchTextBox.cs:15-19 高 35 */
+.box[data-variant='search'] input { height: 35px; }
+
+input::placeholder {
+  color: var(--ui-text-muted, #aaa);
+  font-style: italic; /* OsuTextBox.CreatePlaceholder: italics */
+}
+
+/* 聚焦：BackgroundFocused + 3px 描边（OnFocus: BorderThickness = 3） */
+:host([data-focused='true']) input {
+  background: var(--ui-surface, #2a2a2a);
+  border-width: 3px;
+  border-color: var(--ui-accent-strong, #66ccff);
+  padding: 0 7px; /* 10 - 3，避免文字跳动 */
+}
+
+/* 提交（Enter）：BackgroundCommit 闪烁 */
+:host([data-commit='true']) input {
+  border-color: var(--ui-accent-strong, #66ccff);
+  background: var(--ui-accent-weak, #3399cc);
+}
+
+/* 非法输入：短促红色闪烁（上游为 key-invalid 采样的视觉替身） */
+:host([data-invalid='true']) input {
+  border-color: var(--state-error, #ed1121);
+  background: color-mix(in srgb, var(--state-error, #ed1121) 18%, var(--ui-surface-sunken, #222));
+}
+
+input:disabled { opacity: 0.3; }
+input:focus { outline: none; }
+
+/* 镜像测宽层：与 input 同字体同内边距，用来给坠落字符定位 */
+.mirror {
+  position: absolute;
+  left: 10px;
+  top: 0;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+
+/* 逐字坠落（FallingDownContainer 替身）：-10px 落入 + 淡入 */
+.char-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--corner-radius, 5px);
+  pointer-events: none;
+}
+.char-layer span {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ui-text, #fff);
+  pointer-events: none;
+  animation: ui-char-drop calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out) both;
+}
+@keyframes ui-char-drop {
+  from { opacity: 0; transform: translateY(calc(-50% - 10px)); }
+  to { opacity: 1; transform: translateY(-50%); }
+}
+
+/* 光标节拍脉冲：光标随节拍呼吸的替身（最低节拍间隔 300ms ≈ 500ms 周期近似） */
+.focus-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ui-accent, #66ccff);
+  opacity: 0;
+  pointer-events: none;
+}
+:host([data-focused='true']) .focus-line {
+  animation: ui-caret-pulse 500ms var(--easing-in-out, ease-in-out) infinite;
+}
+@keyframes ui-caret-pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 0.4; }
+  100% { opacity: 0.7; }
+}
+
+/* ---- 输入框变体族 ---- */
+/* OsuPasswordTextBox.cs:21-69 —— 密码圆点 + CapsLock 警告（20x20、YellowLight） */
+.box[data-variant='password'] input { -webkit-text-security: disc; padding-right: 34px; }
+.box[data-variant='password'][data-caps='true']::after {
+  content: '⚠';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  color: var(--state-warning, #ffdd55);
+  animation: ui-caps-in 250ms var(--easing-out, ease-out) both;
+}
+@keyframes ui-caps-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* FocusedTextBox.cs:54-58 —— 聚焦/失焦同底色、无 3px 边框 */
+.box[data-variant='focused'] input,
+:host([data-focused='true']) .box[data-variant='focused'] input {
+  background: var(--ui-surface-sunken, #222);
+  border-width: 0;
+  padding: 0 10px;
+}
+
+/* BasicSearchTextBox.cs:10-24 —— 右侧 20px 搜索图标、文字右留白 35 */
+.box[data-variant='basic-search'] input { padding-right: 35px; }
+.box[data-variant='basic-search']::before {
+  content: '⌕';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: var(--ui-text-muted, #aaa);
+  pointer-events: none;
+}
+
+/* ShearedSearchTextBox.cs:19-149 / ShearedFilterTextBox.cs:11-51 —— 斜切外框 + 图标列 + 状态行 */
+.box[data-variant='sheared-search'], .box[data-variant='sheared-filter'] {
+  height: 42px;
+  border-radius: 7px;
+  background: var(--ui-surface-raised, #333);
+  transform: skewX(-11.5deg);
+}
+.box[data-variant='sheared-filter'] { height: 54px; }
+.box[data-variant='sheared-search'] input, .box[data-variant='sheared-filter'] input {
+  height: 100%;
+  background: transparent;
+  transform: skewX(11.5deg);
+  padding-left: 20px;
+  padding-right: 56px;
+}
+.box[data-variant='sheared-search']::after, .box[data-variant='sheared-filter']::after {
+  content: '⌕';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%) skewX(11.5deg);
+  font-size: 16px;
+  color: var(--ui-text-muted, #aaa);
+  pointer-events: none;
+}
+/* 状态行：12 SemiBold 黄色，置于输入行下方（filter 变体） */
+.box[data-variant='sheared-filter'] .focus-line {
+  bottom: 4px;
+  background: transparent;
+  color: var(--state-warning, #ffcc22);
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold, 600);
+  text-align: left;
+  padding-left: 20px;
+  transform: skewX(11.5deg);
+  animation: none;
+  opacity: 1;
+}
+.box[data-variant='sheared-filter'] .focus-line::before { content: attr(data-status); }
+:host([data-focused='true']) .box[data-variant='sheared-search'] input,
+:host([data-focused='true']) .box[data-variant='sheared-filter'] input { border-width: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .char-layer span, .focus-line { animation: none; }
+  input { transition-duration: 0ms; }
+}

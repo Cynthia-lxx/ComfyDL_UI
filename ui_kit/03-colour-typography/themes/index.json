@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "source": "osu.Game/Overlays/OverlayColourScheme.cs:23-57 + osu.Game/Overlays/OverlayColourProvider.cs:29-54",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt",
+    "note": "上游各视图硬编码 scheme 且 ChangeColourScheme() 不广播；本资源包改为可切换的 JSON 主题"
+  },
+  "default": "blue",
+  "fallbackTheme": "blue",
+  "tokenFormat": "tokens 中每个值为 [saturation, lightness] (0-1)；装配器按 hue 生成 hsl(h s% l%)",
+  "inheritFormat": "主题文件可用 tokensFrom 指向另一主题 id 复用 tokens，仅覆盖 hue / usedBy / overrides",
+  "schemes": [
+    {
+      "id": "red",
+      "hue": 0
+    },
+    {
+      "id": "orange",
+      "hue": 45
+    },
+    {
+      "id": "lime",
+      "hue": 90
+    },
+    {
+      "id": "green",
+      "hue": 125
+    },
+    {
+      "id": "aquamarine",
+      "hue": 160
+    },
+    {
+      "id": "blue",
+      "hue": 200
+    },
+    {
+      "id": "purple",
+      "hue": 255
+    },
+    {
+      "id": "plum",
+      "hue": 320
+    },
+    {
+      "id": "pink",
+      "hue": 333
+    }
+  ],
+  "aliases": {
+    "--ui-accent": "var(--colour-1)",
+    "--ui-accent-strong": "var(--colour-highlight-1)",
+    "--ui-accent-weak": "var(--colour-3)",
+    "--ui-text": "var(--colour-content-1)",
+    "--ui-text-muted": "var(--colour-light-3)",
+    "--ui-surface": "var(--colour-background-4)",
+    "--ui-surface-raised": "var(--colour-background-2)",
+    "--ui-surface-sunken": "var(--colour-background-6)",
+    "--ui-border": "var(--colour-dark-2)",
+    "--ui-glow": "var(--colour-1)"
+  },
+  "usage": {
+    "blue": "List view / ItemListing（上游 SongSelect.cs:116）",
+    "purple": "Player / View loader / SettingsPanel（上游 Player.cs:128, SettingsPanel.cs:75）",
+    "plum": "OnlinePlay",
+    "pink": "UserProfile（上游 UserProfileOverlay.cs 可被 ProfileHue 覆盖）",
+    "aquamarine": "Editor / ScreenFooter 退出 overlay 时重置（上游 ScreenFooter.cs:70,391）"
+  }
+}

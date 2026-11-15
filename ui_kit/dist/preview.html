@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en" data-theme="blue">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>UI Reference Kit · Preview</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="05-motion/motion.css">
+  <link rel="stylesheet" href="04-components/ui-action-rail/ui-action-rail.css">
+  <link rel="stylesheet" href="04-components/ui-reveal-overlay/ui-reveal-overlay.css">
+  <link rel="stylesheet" href="06-visual-effects/glow/glow.css">
+  <link rel="stylesheet" href="06-visual-effects/compositions/status-pulse.css">
+  <link rel="stylesheet" href="components/ui-panel/ui-panel.css" data-ui-panel-styles>
+  <link rel="stylesheet" href="05-motion/motion.css">
+  <link rel="stylesheet" href="05-motion/layered-view.css">
+  <link rel="stylesheet" href="04-components/ui-action-rail/ui-action-rail.css">
+  <link rel="stylesheet" href="04-components/ui-reveal-overlay/ui-reveal-overlay.css">
+  <link rel="stylesheet" href="06-visual-effects/glow/glow.css">
+  <link rel="stylesheet" href="06-visual-effects/compositions/status-pulse.css">
+  <link rel="stylesheet" href="preview/preview.css">
+</head>
+<body>
+  <div class="pv-shell">
+    <aside class="pv-side">
+      <div class="pv-brand">
+        <span class="pv-brand-mark">UR</span>
+        <span class="pv-brand-text"><span data-i18n="brand">UI Reference Kit</span><small>preview / 2026-11-13</small></span>
+      </div>
+      <nav class="pv-nav" id="pv-nav" aria-label="Preview views"></nav>
+      <div class="pv-side-foot">
+        <div class="pv-side-row"><span class="pv-dot" id="pv-server-dot"></span><span id="pv-server-status">checking server…</span></div>
+        <div class="pv-side-row pv-muted" id="pv-api-note">static mode fallback available</div>
+        <div class="pv-side-row pv-muted" data-i18n="footer">MIT-derived · GPL-3.0 target</div>
+      </div>
+    </aside>
+
+    <main class="pv-main">
+      <header class="pv-top">
+        <div class="pv-head-title">
+          <h1 id="pv-view-title">总览</h1>
+          <p id="pv-view-desc"></p>
+        </div>
+        <div class="pv-controls">
+          <label><span data-i18n="theme">Theme</span><ui-dropdown id="pv-theme" value="blue">            <ui-option value="red" label="Red"></ui-option>
+            <ui-option value="orange" label="Orange"></ui-option>
+            <ui-option value="lime" label="Lime"></ui-option>
+            <ui-option value="green" label="Green"></ui-option>
+            <ui-option value="aquamarine" label="Aquamarine"></ui-option>
+            <ui-option value="blue" label="Blue"></ui-option>
+            <ui-option value="purple" label="Purple"></ui-option>
+            <ui-option value="plum" label="Plum"></ui-option>
+            <ui-option value="pink" label="Pink"></ui-option></ui-dropdown></label>
+          <label><span data-i18n="lang">Lang</span><ui-dropdown id="pv-lang" value="en">            <ui-option value="en" label="en"></ui-option>
+            <ui-option value="zh-CN" label="zh-CN"></ui-option></ui-dropdown></label>
+          <label><span data-i18n="speed">Speed</span><ui-dropdown id="pv-rate" value="1">
+            <ui-option value="0.5" label="0.5×"></ui-option>
+            <ui-option value="1" label="1×"></ui-option>
+            <ui-option value="1.5" label="1.5×"></ui-option>
+            <ui-option value="2" label="2×"></ui-option>
+          </ui-dropdown></label>
+          <ui-button id="pv-reduce" label="Reduced motion: off"></ui-button>
+          <ui-button id="pv-log-toggle"><span data-i18n="log">Log</span> <span id="pv-log-count">0</span></ui-button>
+        </div>
+      </header>
+
+      <div class="pv-view" id="pv-view"></div>
+
+      <footer class="pv-foot">
+        <span id="pv-foot-left">ready</span>
+        <span id="pv-foot-right">hash-route · no build step</span>
+      </footer>
+    </main>
+  </div>
+
+  <aside class="pv-log-panel" id="pv-log-panel">
+    <header><strong data-i18n="eventLog">Event log</strong><span><ui-button id="pv-log-clear" label="clear"></ui-button> <ui-button id="pv-log-close" label="×"></ui-button></span></header>
+    <ul id="pv-log-list"></ul>
+  </aside>
+
+  <script type="application/json" id="pv-config">{"theme": "blue", "lang": "en", "themes": ["red", "orange", "lime", "green", "aquamarine", "blue", "purple", "plum", "pink"], "languages": ["en", "zh-CN"], "build": "2026-11-13", "files": ["04-components/ui-action-rail/ui-action-rail.css", "04-components/ui-action-rail/ui-action-rail.js", "04-components/ui-reveal-overlay/ui-reveal-overlay.css", "04-components/ui-reveal-overlay/ui-reveal-overlay.js", "05-motion/effect-inventory.json", "05-motion/effects.js", "05-motion/expansion-inventory.json", "05-motion/layered-view.css", "05-motion/layered-view.js", "05-motion/layered-view.json", "05-motion/motion.css", "05-motion/motion.json", "05-motion/timeline.js", "06-visual-effects/compositions/entrance-timeline.js", "06-visual-effects/compositions/status-pulse.css", "06-visual-effects/compositions/status-pulse.js", "06-visual-effects/geometry/edge-geometry.js", "06-visual-effects/geometry/focus-mask.js", "06-visual-effects/glow/glow.css", "06-visual-effects/glow/glow.js", "06-visual-effects/particles/particles.js", "06-visual-effects/particles/presets.json", "LICENSE-MIT.txt", "components/ui-action-rail/ui-action-rail.css", "components/ui-action-rail/ui-action-rail.js", "components/ui-breadcrumb/ui-breadcrumb.css", "components/ui-breadcrumb/ui-breadcrumb.js", "components/ui-button/ui-button.css", "components/ui-button/ui-button.js", "components/ui-checkbox/ui-checkbox.css", "components/ui-checkbox/ui-checkbox.js", "components/ui-counter/ui-counter.css", "components/ui-counter/ui-counter.js", "components/ui-dropdown/ui-dropdown.css", "components/ui-dropdown/ui-dropdown.js", "components/ui-graph/ui-graph.css", "components/ui-graph/ui-graph.js", "components/ui-hold-button/ui-hold-button.css", "components/ui-hold-button/ui-hold-button.js", "components/ui-hotkey/ui-hotkey.css", "components/ui-hotkey/ui-hotkey.js", "components/ui-layered-view/ui-layered-view.css", "components/ui-layered-view/ui-layered-view.js", "components/ui-menu/ui-menu.css", "components/ui-menu/ui-menu.js", "components/ui-motion-container/ui-motion-container.css", "components/ui-motion-container/ui-motion-container.js", "components/ui-panel/ui-panel.css", "components/ui-panel/ui-panel.js", "components/ui-progress/ui-progress.css", "components/ui-progress/ui-progress.js", "components/ui-range-slider/ui-range-slider.css", "components/ui-range-slider/ui-range-slider.js", "components/ui-reveal-overlay/ui-reveal-overlay.css", "components/ui-reveal-overlay/ui-reveal-overlay.js", "components/ui-scroll/ui-scroll.css", "components/ui-scroll/ui-scroll.js", "components/ui-sections/ui-sections.css", "components/ui-sections/ui-sections.js", "components/ui-slider/ui-slider.css", "components/ui-slider/ui-slider.js", "components/ui-spinner/ui-spinner.css", "components/ui-spinner/ui-spinner.js", "components/ui-tabs/ui-tabs.css", "components/ui-tabs/ui-tabs.js", "components/ui-textbox/ui-textbox.css", "components/ui-textbox/ui-textbox.js", "i18n/en.json", "i18n/zh-CN.json", "index.html", "licence-audit.json", "manifest.json", "preview.html", "preview/app.js", "preview/preview.css", "preview/view-components.js", "preview/view-data.js", "preview/view-effects.js", "preview/view-layers.js", "preview/view-motion.js", "preview/view-overview.js", "preview/view-theme.js", "preview/views.js", "preview_server.py", "settings.json", "themes.css", "themes/aquamarine.json", "themes/blue.json", "themes/green.json", "themes/index.json", "themes/lime.json", "themes/orange.json", "themes/pink.json", "themes/plum.json", "themes/purple.json", "themes/red.json", "tokens.css"]}</script>
+  <script type="module" src="preview/app.js"></script>
+</body>
+</html>

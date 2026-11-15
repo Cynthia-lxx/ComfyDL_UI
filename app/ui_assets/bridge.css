@@ -1,0 +1,41 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* ComfyDL UI-kit bridge — U stick 1 [0.88] (our code, this repo).
+ *
+ * Sits between the osu-derived kit assets and the official ComfyUI theme:
+ *   tokens.css (kit) -> themes.css (kit hue themes) -> bridge.css (this file)
+ * so it wins the alias layer while every --colour-* derived relation inside
+ * the kit keeps working.
+ *
+ * Mapping policy (small-plan decision 2/4):
+ *   - surfaces / text / border follow the OFFICIAL ComfyUI theme (so kit
+ *     components blend into the official light or dark theme instead of
+ *     forcing the kit's dark surfaces);
+ *   - the accent family is deliberately NOT mapped: the nine kit hue themes
+ *     keep full control of --ui-accent / --ui-glow;
+ *   - our three-gate motion switches join the kit's reduced-motion coverage
+ *     (tokens.css already covers prefers-reduced-motion and
+ *     [data-reduce-motion="true"]).
+ */
+
+:root {
+  --ui-surface: var(--comfy-menu-bg, var(--colour-background-4));
+  --ui-surface-raised: var(--comfy-input-bg, var(--colour-background-2));
+  --ui-surface-sunken: var(--comfy-input-bg, var(--colour-background-6));
+  --ui-text: var(--input-text, var(--colour-content-1));
+  --ui-text-muted: var(--input-text-read-only, var(--colour-light-3));
+  --ui-border: var(--border-color, var(--colour-dark-2));
+}
+
+/* Motion gates (U stick 1, small-plan item: motion-scale folds into the
+ * existing three-gate system).  Specificity beats the kit's :root block, and
+ * this file is injected last. */
+html.cdl-motion-off {
+  --motion-scale: 0;
+  --parallax-strength: 0;
+  --blur-level: 0;
+}
+body.cdlapp-motion-off {
+  --motion-scale: 0;
+  --parallax-strength: 0;
+  --blur-level: 0;
+}

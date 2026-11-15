@@ -1,0 +1,106 @@
+# -*- coding: utf-8 -*-
+"""Regenerate i18n packs with the expanded key set (UTF-8, LF, ensure_ascii=False).
+en fallbacks from MIT source Localisation/*Strings.cs; zh-CN self-translated
+(upstream Crowdin not copied). Game-domain wording avoided per naming-map policy:
+use the mapped neutral vocabulary (条目/主题/首页/预设), never the raw domain words."""
+import json
+import io
+
+EN = {
+    "common.back": "Back", "common.next": "Next", "common.finish": "Finish",
+    "common.enabled": "Enabled", "common.disabled": "Disabled", "common.default": "Default",
+    "common.rename": "Rename", "common.export": "Export", "common.width": "Width",
+    "common.height": "Height", "common.download": "Download", "common.downloading": "Downloading...",
+    "common.importing": "Importing...", "common.deselect_all": "Deselect All",
+    "common.select_all": "Select All", "common.items": "Items", "common.results": "Results",
+    "common.themes": "Themes", "common.collections": "Collections", "common.presets": "Presets",
+    "common.name": "Name", "common.description": "Description", "common.file": "File",
+    "common.menu_bar_file": "File", "common.menu_bar_edit": "Edit",
+    "common.menu_bar_view": "View", "common.undo": "Undo", "common.redo": "Redo",
+    "common.cut": "Cut", "common.copy": "Copy", "common.paste": "Paste", "common.clone": "Clone",
+    "common.caps_lock": "Caps Lock", "common.caps_lock_is_active": "Caps Lock is active",
+    "common.revert_to_default": "Revert to default", "common.general": "General",
+    "common.open_link": "Open", "common.copy_link": "Copy link", "common.manage": "Manage",
+    "common.details": "Details", "common.mapper": "Mapper", "common.go_to_item": "Go to item",
+    "common.view_in_browser": "View in browser", "common.create_copy": "Create copy",
+    "common.items_count": "{0} item|{0} items",
+    "ui.user_interface": "User Interface", "ui.rotate_cursor": "Rotate cursor when dragging",
+    "ui.menu_cursor_size": "Menu cursor size", "ui.tips": "Tips", "ui.parallax": "Parallax",
+    "ui.hold_to_confirm": "Hold-to-confirm activation time", "ui.home": "Home",
+    "ui.interface_voices": "Interface voices", "ui.entrance_sequence": "Entrance sequence",
+    "ui.entrance_random": "Random", "ui.background_source": "Background source",
+    "ui.seasonal_backgrounds": "Seasonal backgrounds", "ui.song_select_header": "Song Select",
+    "ui.right_mouse_scroll": "Right mouse drag to absolute scroll", "ui.show_converts": "Show converts",
+    "ui.random_selection_algorithm": "Random selection algorithm", "ui.no_limit": "no limit",
+    "ui.never_repeat_random": "Never repeat", "ui.true_random": "True random",
+    "ui.selected_mods": "Selected Mods", "ui.hold_for_menu": "hold for menu",
+    "ui.press_for_menu": "press for menu", "ui.device": "Device", "ui.show_hidden": "Show hidden",
+    "ui.currently_online": "Currently online", "ui.user_search": "User search",
+    "ui.item_with_storyboard": "Item (with storyboard / video)",
+    "ui.always_seasonal_backgrounds": "Always", "ui.sometimes_seasonal_backgrounds": "Sometimes",
+    "ui.never_seasonal_backgrounds": "Never", "ui.mods_sequential_hotkeys": "Sequential",
+    "ui.mods_classic_hotkeys": "Classic",
+    "dialog.header_text": "Caution",
+    "dialog.deletion_header_text": "Are you sure you want to delete the following:",
+    "dialog.confirm": "Yes. Go for it.", "dialog.cancel": "No! Abort mission",
+    "dialog.confirm_discard_changes_header_text": "Are you sure you want to go back?",
+    "dialog.confirm_discard_changes_body_text": "This will discard any unsaved changes",
+    "dialog.confirm_discard_changes_cancel_button": "No I didn't mean to",
+    "dialog.confirm_exit_multiplayer_match_body_text": "Are you sure you want to leave this multiplayer match?",
+    "context.view_profile": "View profile", "context.view_item": "View item",
+    "context.invite_player": "Invite to room", "context.spectate_player": "Spectate",
+    "context.duel_player": "Duel",
+}
+
+ZH = {
+    "common.back": "返回", "common.next": "下一步", "common.finish": "完成",
+    "common.enabled": "已启用", "common.disabled": "已禁用", "common.default": "默认",
+    "common.rename": "重命名", "common.export": "导出", "common.width": "宽度",
+    "common.height": "高度", "common.download": "下载", "common.downloading": "正在下载…",
+    "common.importing": "正在导入…", "common.deselect_all": "取消全选",
+    "common.select_all": "全选", "common.items": "项目", "common.results": "结果",
+    "common.themes": "主题", "common.collections": "收藏夹", "common.presets": "预设",
+    "common.name": "名称", "common.description": "描述", "common.file": "文件",
+    "common.menu_bar_file": "文件", "common.menu_bar_edit": "编辑",
+    "common.menu_bar_view": "视图", "common.undo": "撤销", "common.redo": "重做",
+    "common.cut": "剪切", "common.copy": "复制", "common.paste": "粘贴", "common.clone": "克隆",
+    "common.caps_lock": "大写锁定", "common.caps_lock_is_active": "大写锁定已开启",
+    "common.revert_to_default": "恢复默认", "common.general": "常规",
+    "common.open_link": "打开", "common.copy_link": "复制链接", "common.manage": "管理",
+    "common.details": "详情", "common.mapper": "条目作者", "common.go_to_item": "前往条目",
+    "common.view_in_browser": "在浏览器中查看", "common.create_copy": "创建副本",
+    "common.items_count": "{0} 个项目",
+    "ui.user_interface": "用户界面", "ui.rotate_cursor": "拖动时旋转光标",
+    "ui.menu_cursor_size": "菜单光标大小", "ui.tips": "提示", "ui.parallax": "视差",
+    "ui.hold_to_confirm": "长按确认时长", "ui.home": "首页",
+    "ui.interface_voices": "界面音效", "ui.entrance_sequence": "入场序列",
+    "ui.entrance_random": "随机", "ui.background_source": "背景来源",
+    "ui.seasonal_backgrounds": "季节性背景", "ui.song_select_header": "曲目选择",
+    "ui.right_mouse_scroll": "右键拖拽绝对滚动", "ui.show_converts": "显示转换条目",
+    "ui.random_selection_algorithm": "随机选取算法", "ui.no_limit": "无上限",
+    "ui.never_repeat_random": "不重复", "ui.true_random": "真随机",
+    "ui.selected_mods": "已选模组", "ui.hold_for_menu": "长按打开首页",
+    "ui.press_for_menu": "点按打开首页", "ui.device": "设备", "ui.show_hidden": "显示隐藏项",
+    "ui.currently_online": "当前在线", "ui.user_search": "用户搜索",
+    "ui.item_with_storyboard": "条目（含故事板/视频）",
+    "ui.always_seasonal_backgrounds": "始终", "ui.sometimes_seasonal_backgrounds": "有时",
+    "ui.never_seasonal_backgrounds": "从不", "ui.mods_sequential_hotkeys": "顺序式",
+    "ui.mods_classic_hotkeys": "经典式",
+    "dialog.header_text": "注意",
+    "dialog.deletion_header_text": "确定要删除以下内容吗：",
+    "dialog.confirm": "好，就这么办。", "dialog.cancel": "不！马上撤",
+    "dialog.confirm_discard_changes_header_text": "确定要返回吗？",
+    "dialog.confirm_discard_changes_body_text": "这将丢弃未保存的更改",
+    "dialog.confirm_discard_changes_cancel_button": "不，我手滑了",
+    "dialog.confirm_exit_multiplayer_match_body_text": "确定要离开这场多人对局吗？",
+    "context.view_profile": "查看主页", "context.view_item": "查看条目",
+    "context.invite_player": "邀请进房", "context.spectate_player": "观战",
+    "context.duel_player": "对决",
+}
+
+assert set(EN) == set(ZH), f"key mismatch: {set(EN) ^ set(ZH)}"
+base = "P:/Dev/osu/UIReference/00-overview/i18n"
+for code, pack in (("en", EN), ("zh-CN", ZH)):
+    text = json.dumps(pack, ensure_ascii=False, indent=2) + "\n"
+    io.open(rf"{base}/{code}.json", "wb").write(text.encode("utf-8"))
+    print(code, len(pack), "keys")

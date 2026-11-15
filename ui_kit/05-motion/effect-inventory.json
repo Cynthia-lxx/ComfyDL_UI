@@ -1,0 +1,1477 @@
+{
+  "schemaVersion": 2,
+  "generated": "2026-11-13",
+  "_meta": {
+    "purpose": "全仓动效普查档案：供目标仓库逐条挑选与翻译；每条均为实测源码",
+    "source": "p:/Dev/osu (MIT)",
+    "licence": "MIT (upstream) / see 00-overview/LICENSE-MIT.txt",
+    "legend": "d=domain, n=名称, t=触发, a=属性 from→to, ms=时长, e=缓动, g=几何/渲染标签, s=源码文件:行号",
+    "note": "523 个文件含 Transform 调用；本档案收录 140 条关键条目 + 全域模式表，非逐行穷举"
+  },
+  "statistics": {
+    "filesWithTransforms": 523,
+    "easingEnumTypes": 27,
+    "easingEnumCounts": {
+      "OutQuint": 1368,
+      "Out": 112,
+      "In": 76,
+      "OutExpo": 76,
+      "OutPow10": 49,
+      "OutElastic": 32,
+      "OutElasticHalf": 28,
+      "OutCubic": 28,
+      "InQuint": 26,
+      "InOutQuart": 22,
+      "InOutSine": 19,
+      "InOutCubic": 18,
+      "OutSine": 17,
+      "OutQuart": 16,
+      "OutElasticQuarter": 15,
+      "None": 15,
+      "InSine": 14,
+      "OutQuad": 14,
+      "InOutExpo": 12,
+      "InQuad": 10,
+      "InCubic": 9,
+      "InOutQuint": 5,
+      "InQuart": 3,
+      "InOutQuad": 1,
+      "OutBounce": 1
+    },
+    "nonEnumEasings": [
+      "CubicBezierEasingFunction",
+      "SplitEasingFunction",
+      "Interpolation.ValueAt(Easing.Out)",
+      "Interpolation.DampContinuously",
+      "DoubleSpring"
+    ],
+    "namedDurationConstants": 173,
+    "transformToCustomProperties": 85,
+    "beatSyncedSubclasses": 31,
+    "alwaysPresentUsages": 278,
+    "edgeEffectTransitions": 23,
+    "staticShearUsages": 197,
+    "animatedShearUsages": 1,
+    "topDensityFiles": [
+      [
+        "Matchmaking/Match/PlayerPanel.cs",
+        44
+      ],
+      [
+        "Play/PlayerLoader.cs",
+        39
+      ],
+      [
+        "RankedPlay/ResultsScreen.MainPanel.cs",
+        38
+      ],
+      [
+        "RankingV2/Argon/ArgonTotalScorePanel.cs",
+        36
+      ],
+      [
+        "Menu/OsuLogo.cs",
+        36
+      ],
+      [
+        "Matchmaking/RankedPlay/Intro/VsSequence.cs",
+        33
+      ],
+      [
+        "Menu/IntroSequence.cs",
+        33
+      ],
+      [
+        "Play/DelayedResumeOverlay.cs",
+        33
+      ],
+      [
+        "Overlays/AfToggleSection.cs",
+        31
+      ],
+      [
+        "Menu/IntroTriangles.cs",
+        28
+      ],
+      [
+        "Menu/MainMenuButton.cs",
+        27
+      ],
+      [
+        "Graphics/UserInterface/ShearedButton.cs",
+        26
+      ],
+      [
+        "RankingV2/Argon/ArgonScoreRankDisplay.cs",
+        26
+      ],
+      [
+        "Footer/ScreenFooterButton.cs",
+        23
+      ],
+      [
+        "Skinning/LegacyJudgementPieceOld.cs",
+        23
+      ],
+      [
+        "Seasonal/IntroChristmas.cs",
+        23
+      ],
+      [
+        "Select/BeatmapLeaderboardWedge.cs",
+        21
+      ]
+    ]
+  },
+  "easingMap": {
+    "OutQuint": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "OutExpo": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "OutPow10": "cubic-bezier(0.1, 1, 0.2, 1)",
+    "InQuint": "cubic-bezier(0.64, 0, 0.78, 0)",
+    "InSine": "cubic-bezier(0.47, 0, 0.84, 0.54)",
+    "OutSine": "cubic-bezier(0.39, 0.575, 0.565, 1)",
+    "InOutQuart": "cubic-bezier(0.76, 0, 0.24, 1)",
+    "InOutSine": "cubic-bezier(0.37, 0, 0.63, 1)",
+    "OutElastic": "linear() 弹性关键帧或 spring()",
+    "OutElasticHalf": "linear() 半周期弹性",
+    "OutElasticQuarter": "linear() 四分之一周期弹性",
+    "OutBounce": "linear() 弹跳关键帧"
+  },
+  "customBeziers": [
+    {
+      "source": "VsSequence.cs:159-182",
+      "curves": [
+        "CB(0,0.3,0,0.65)",
+        "CB(0.8,0.05,0.8,0.8)"
+      ]
+    },
+    {
+      "source": "StarRatingSequence.cs:181-183",
+      "curves": [
+        "CB(0.3,0.5)",
+        "CB(0.1,0.8)",
+        "CB(0.2,0.7)"
+      ]
+    },
+    {
+      "source": "ResultsScreen.MainPanel.cs:469,618-619",
+      "curves": [
+        "CB(0.4,1)",
+        "CB(0.35,0.5)"
+      ]
+    },
+    {
+      "source": "CoverReveal.cs:94 / StageDisplay.cs:273-274 / BeatmapSelectGrid.cs:222",
+      "curves": [
+        "CB(0.2,0.75)",
+        "SplitEasingFunction"
+      ]
+    }
+  ],
+  "durationCatalog": {
+    "waveIn": 800,
+    "waveOut": 500,
+    "settingsTransition": 600,
+    "settingsSidebarFade": 500,
+    "settingsSidebarStagger": 40,
+    "shearedIn": 400,
+    "shearedOut": 500,
+    "modColumnDistance": 700,
+    "modColumnStagger": 30,
+    "popupDialogEnter": 500,
+    "popupDialogExit": 500,
+    "popupRing": 750,
+    "notificationTransition": 600,
+    "chatTransition": 500,
+    "toolbarTransition": 500,
+    "footerButton": 240,
+    "footerDisappear": 360,
+    "footerStagger": 30,
+    "footerStartDelay": 240,
+    "expandingContainer": 500,
+    "osuMenuFade": 280,
+    "osuMenuResize": 300,
+    "mainMenuFadeIn": 300,
+    "mainMenuFadeOut": 400,
+    "mainMenuExit": 3000,
+    "buttonExpand": 500,
+    "buttonExplode": 200,
+    "buttonContractStyle1": 400,
+    "buttonHoverWidth": 500,
+    "buttonHoverLayer": 1000,
+    "buttonClick": 800,
+    "logoIntro": 3150,
+    "introCirclesDelay": 2900,
+    "introWelcome": 2142,
+    "introTrianglesLogo": 920,
+    "accuracyRolling": 3000,
+    "totalScoreRolling": 3000,
+    "failAnimation": 2500,
+    "medalSpinInner": 20000,
+    "medalSpinOuter": 40000,
+    "starFountainShoot": 800,
+    "cursorTrailFade": 300,
+    "parallaxPosition": 100,
+    "parallaxScale": 1000,
+    "tooltipFollow": 120,
+    "backgroundCrossfade": 800,
+    "beatmapBackgroundIn": 500,
+    "beatmapBackgroundOut": 250,
+    "blurTransition": 800
+  },
+  "entries": {
+    "actionRail": [
+      {
+        "n": "state→Expanded",
+        "t": "ActionRailState 切换",
+        "a": "width 0→160, opacity 0→1 (83.33ms)",
+        "ms": 500,
+        "e": "OutExpo",
+        "g": "shear,flow",
+        "s": "Screens/Menu/MainMenuButton.cs:348-350"
+      },
+      {
+        "n": "state→Contracted",
+        "t": "Initial/Exit",
+        "a": "width 160→0, opacity 1→0",
+        "ms": 500,
+        "e": "OutExpo",
+        "s": "MainMenuButton.cs:335-336"
+      },
+      {
+        "n": "state→Contracted style1",
+        "t": "Transition",
+        "a": "width 160→0, opacity 1→0",
+        "ms": 400,
+        "e": "InSine",
+        "s": "MainMenuButton.cs:339-341"
+      },
+      {
+        "n": "state→Exploded",
+        "t": "state>Max",
+        "a": "width 160→320, opacity 1→0 (150ms)",
+        "ms": 200,
+        "e": "OutExpo",
+        "s": "MainMenuButton.cs:354-356"
+      },
+      {
+        "n": "首次展开延迟",
+        "t": "Initial→Primary",
+        "a": "全体按钮 BeginDelayedSequence(150)",
+        "ms": 150,
+        "e": "-",
+        "s": "ButtonSystem.cs:439-441"
+      },
+      {
+        "n": "ButtonArea 底板",
+        "t": "Show/Hide",
+        "a": "opacity 0↔1; background scaleY 0↔1 (scaleX=2)",
+        "ms": "300/400/300",
+        "e": "OutQuint/InSine",
+        "s": "ButtonArea.cs:83,120-132"
+      },
+      {
+        "n": "楔形几何",
+        "t": "静态",
+        "a": "skewX 0.2 / 内容 -0.2; spacing -20px; 超宽底图 320",
+        "ms": "-",
+        "e": "-",
+        "g": "shear,mask",
+        "s": "MainMenuButton.cs:180-188; ButtonArea.cs:42"
+      },
+      {
+        "n": "hover 宽度",
+        "t": "State==Expanded + hover",
+        "a": "width 160→240 (1.5x)",
+        "ms": 500,
+        "e": "OutElastic",
+        "s": "MainMenuButton.cs:228"
+      },
+      {
+        "n": "hover 图标",
+        "t": "hover",
+        "a": "rotate ±8°, scale (1,1)→(1.2,1.08) 非等比",
+        "ms": "TimeUntilNextBeat",
+        "e": "InOutSine/Out",
+        "g": "rotation,nonUniformScale",
+        "s": "MainMenuButton.cs:217-225"
+      },
+      {
+        "n": "hover 节拍心跳",
+        "t": "hover + OnNewBeat",
+        "a": "icon translateY 0→-10→0, scale 1→1.2→(1.2,1.08), rotate ±8° 交替",
+        "ms": "CycleLength/2 x2",
+        "e": "Out→In",
+        "s": "MainMenuButton.cs:196-214"
+      },
+      {
+        "n": "hoverLost",
+        "t": "mouse leave",
+        "a": "rotate→0, translate→0, scale→1, width→160",
+        "ms": "500/500/200/500",
+        "e": "Out/OutElastic",
+        "s": "MainMenuButton.cs:233-241"
+      },
+      {
+        "n": "内容可见度",
+        "t": "每帧",
+        "a": "content.alpha = clamp((width/160-0.5)/0.3,0,1)",
+        "ms": "-",
+        "e": "-",
+        "s": "MainMenuButton.cs:300-302"
+      },
+      {
+        "n": "press 高亮",
+        "t": "mouse down/up",
+        "a": "additive white layer opacity 0→0.1→0",
+        "ms": 1000,
+        "e": "OutQuint",
+        "s": "MainMenuButton.cs:251-259"
+      },
+      {
+        "n": "click 闪光",
+        "t": "click",
+        "a": "alpha=0.9→0",
+        "ms": 800,
+        "e": "OutExpo",
+        "s": "MainMenuButton.cs:263-292"
+      },
+      {
+        "n": "hub 心跳",
+        "t": "每拍",
+        "a": "scale 1-0.02*amp→1; ripple scale×(1+0.04amp)+fade",
+        "ms": "60→CycleLength*2",
+        "e": "Out→OutQuint",
+        "s": "OsuLogo.cs:321-329"
+      },
+      {
+        "n": "hub emphasis",
+        "t": "emphasis 拍",
+        "a": "flash/visualizer opacity; triangles velocity += amp*(emphasis?6:3)",
+        "ms": "60→CycleLength",
+        "e": "Out",
+        "s": "OsuLogo.cs:331-346"
+      },
+      {
+        "n": "hub hover/press",
+        "t": "交互",
+        "a": "hover 1→1.1 (500 OutElastic); press 1→0.9 (1000 Out)→1 (500 OutElastic)",
+        "ms": "500/1000",
+        "e": "OutElastic",
+        "s": "OsuLogo.cs:385-426"
+      },
+      {
+        "n": "hub 拖拽橡皮筋",
+        "t": "drag",
+        "a": "change ×= pow(len,0.6)/len; release MoveTo(0,800,OutElastic)",
+        "ms": 800,
+        "e": "OutElastic",
+        "s": "OsuLogo.cs:436-452"
+      },
+      {
+        "n": "hub 追踪",
+        "t": "State 变化",
+        "a": "scale→0.5 (200 In), facade 位置按 easing Lerp; Impact 0.94→1.12",
+        "ms": "200/250",
+        "e": "In/linear",
+        "s": "ButtonSystem.cs:491-502; LogoTrackingContainer.cs:94-118"
+      },
+      {
+        "n": "Primary view 入场",
+        "t": "OnEntering",
+        "a": "Buttons.FadeInFromZero(500); hub FadeColour(White,100)",
+        "ms": "500/100",
+        "e": "OutQuint",
+        "s": "MainMenu.cs:254-285"
+      },
+      {
+        "n": "Primary view 恢复",
+        "t": "OnResuming",
+        "a": "FadeIn 300; buttonsContainer.MoveTo(0) 300; sideFlashes Delay(300).FadeIn(64,InQuint)",
+        "ms": "300/64",
+        "e": "OutQuint/InQuint",
+        "s": "MainMenu.cs:289-296"
+      },
+      {
+        "n": "Primary view 挂起",
+        "t": "OnSuspending",
+        "a": "FadeOut 400; MoveToX(-800) 400; bottomElements scale→0.9 (1000)",
+        "ms": "400/1000",
+        "e": "InSine/OutQuint",
+        "s": "MainMenu.cs:361-374"
+      },
+      {
+        "n": "Primary view 退出",
+        "t": "OnExiting",
+        "a": "FadeOut(3000)",
+        "ms": 3000,
+        "e": "-",
+        "s": "MainMenu.cs:404-450"
+      },
+      {
+        "n": "Idle 回 Initial",
+        "t": "IdleTracker",
+        "a": "全部按钮 Contracted; hub 回中心 800 OutExpo",
+        "ms": "500/800",
+        "e": "OutExpo",
+        "s": "ButtonSystem.cs:270-276,465-478"
+      },
+      {
+        "n": "侧闪光带",
+        "t": "每拍/左右声道",
+        "a": "200px 加性渐变带, alpha 0.1..1→0, emphasis 奇偶拍交替",
+        "ms": "65→CycleLength",
+        "e": "linear→In",
+        "g": "additive,gradient",
+        "s": "MenuSideFlashes.cs:36-141"
+      },
+      {
+        "n": "emphasis 星泉",
+        "t": "emphasis 起点",
+        "a": "240/s 粒子, gravity 800, velocity Y -1400±100, endScale 2.2",
+        "ms": 800,
+        "e": "-",
+        "g": "particles",
+        "s": "StarFountain.cs:39-97; KiaiMenuFountains.cs:30-87"
+      },
+      {
+        "n": "DailyChallengeButton",
+        "t": "常驻",
+        "a": "封面 3000ms InOutSine 循环 scale/rotate±4°/move; gradient 1500+1500",
+        "ms": 3000,
+        "e": "InOutSine",
+        "s": "DailyChallengeButton.cs:117-132"
+      },
+      {
+        "n": "右键菜单",
+        "t": "open/close",
+        "a": "Fade 280; Resize 300; Delay(330).ResizeTo(0)",
+        "ms": "280/300",
+        "e": "OutQuint",
+        "s": "OsuMenu.cs:21-107"
+      },
+      {
+        "n": "ExpandingContainer",
+        "t": "hover",
+        "a": "width contracted↔expanded",
+        "ms": 500,
+        "e": "OutQuint",
+        "s": "ExpandingContainer.cs:17-110"
+      }
+    ],
+    "overlayGeometry": [
+      {
+        "n": "Wave 四层揭示",
+        "t": "PopIn",
+        "a": "4 层 translateY(-930/-560/-390/-220), rotate(13/-7/4/-2), width 150%, mask, shadow R20",
+        "ms": 800,
+        "e": "OutSine",
+        "g": "rotation,mask,shadow",
+        "s": "Graphics/Containers/WaveContainer.cs:87-110,162-192"
+      },
+      {
+        "n": "Wave 内容上推",
+        "t": "PopIn/Out",
+        "a": "contentContainer relative Y 0↔2 (=2x 父高)",
+        "ms": "800/500",
+        "e": "OutQuint/In",
+        "s": "WaveContainer.cs:114-138"
+      },
+      {
+        "n": "WaveOverlayContainer",
+        "t": "Show/Hide",
+        "a": "opacity 0→1 (100) / 1→0 (500)",
+        "ms": "100/500",
+        "e": "OutQuint/InQuint",
+        "s": "Overlays/WaveOverlayContainer.cs:35-49"
+      },
+      {
+        "n": "FullscreenOverlay",
+        "t": "Show/Hide",
+        "a": "Hollow Shadow 0→0.2→0, width 85%, mask",
+        "ms": "800/500",
+        "e": "Out/In",
+        "s": "Overlays/FullscreenOverlay.cs:47-125"
+      },
+      {
+        "n": "SettingsPanel 滑入",
+        "t": "PopIn",
+        "a": "translateX(-570→0), sidebar 0→-170, shadow 0.2, loadSections Delay(200)",
+        "ms": "600/300/800",
+        "e": "OutQuint",
+        "s": "Overlays/SettingsPanel.cs:170-204"
+      },
+      {
+        "n": "Settings 侧栏错峰",
+        "t": "异步加载完",
+        "a": "每按钮 FadeOut().Delay(i*40).FadeInFromZero(500)",
+        "ms": 500,
+        "e": "OutQuint",
+        "s": "SettingsPanel.cs:249-259"
+      },
+      {
+        "n": "Settings 子面板",
+        "t": "切换",
+        "a": "translateX(0↔-400) + opacity",
+        "ms": "300/500",
+        "e": "OutQuint",
+        "s": "SettingsOverlay.cs:130-152"
+      },
+      {
+        "n": "ShearedOverlayContainer",
+        "t": "PopIn/Out",
+        "a": "opacity; header translateY 0↔-height; 本地 0.75 dim",
+        "ms": "400/500",
+        "e": "OutQuint",
+        "g": "shear",
+        "s": "Overlays/Mods/ShearedOverlayContainer.cs:80-174"
+      },
+      {
+        "n": "Option columns 列错峰",
+        "t": "PopIn",
+        "a": "逐列 translateY(±700→0) 交替 + Delay(i*30) + fade; 声像按 X 计算",
+        "ms": 400,
+        "e": "OutQuint",
+        "g": "shear,stagger",
+        "s": "ModSelectOverlay.cs:477-531"
+      },
+      {
+        "n": "Option columns 列退场",
+        "t": "PopOut",
+        "a": "translateY(±700) + fade; aboveColumns -700",
+        "ms": "500/250",
+        "e": "OutQuint",
+        "s": "ModSelectOverlay.cs:541-576"
+      },
+      {
+        "n": "Shear 父子抵消",
+        "t": "静态/布局",
+        "a": "SHEAR=(0.2,0) 父斜切, 子 -0.2 回正, ShearAligningWrapper 补 padding",
+        "ms": "-",
+        "e": "-",
+        "g": "shear",
+        "s": "OsuGame.cs:116; ShearAligningWrapper.cs:47; ModSelectOverlay.cs:756"
+      },
+      {
+        "n": "唯一剪切形变",
+        "t": "CoverReveal",
+        "a": "TransformTo(nameof(Shear)) 0.1→-0.15→-0.25 / 0.3→0.5",
+        "ms": "2800-3000/500",
+        "e": "OutPow10/InCubic",
+        "g": "shear,transformTo",
+        "s": "Matchmaking/RankedPlay/Intro/CoverReveal.cs:91-116"
+      },
+      {
+        "n": "WizardOverlay",
+        "t": "PopIn/Out",
+        "a": "scale 0.99↔1, CornerRadius 14 mask; spinner Delay(200)",
+        "ms": 400,
+        "e": "OutQuint",
+        "s": "Overlays/WizardOverlay.cs:84-214"
+      },
+      {
+        "n": "ChatOverlay",
+        "t": "PopIn/Out",
+        "a": "translateY(0↔100%) + fade, corner 7 隐藏下圆角",
+        "ms": 500,
+        "e": "OutQuint/InSine",
+        "s": "Overlays/ChatOverlay.cs:78-305"
+      },
+      {
+        "n": "NotificationOverlay",
+        "t": "PopIn/Out",
+        "a": "translateX(320↔0), opacity, Hollow Shadow",
+        "ms": "600/300/800",
+        "e": "OutQuint/In",
+        "s": "Overlays/NotificationOverlay.cs:76-248"
+      },
+      {
+        "n": "DialogOverlay dim",
+        "t": "Push/Dismiss",
+        "a": "黑幕 opacity 0→0.5→0 + 音乐 Duck 100/100",
+        "ms": 500,
+        "e": "OutQuint",
+        "s": "Overlays/DialogOverlay.cs:59-173"
+      },
+      {
+        "n": "PopupDialog 环形揭示",
+        "t": "Push",
+        "a": "scale 0.7→1 (750 OutElasticHalf), ring 20→100, icon Delay(100), 超椭圆 R20",
+        "ms": "750/500",
+        "e": "OutElasticHalf/OutQuint",
+        "g": "circular,mask",
+        "s": "Overlays/Dialog/PopupDialog.cs:147-354"
+      },
+      {
+        "n": "Media panel",
+        "t": "Show/Hide",
+        "a": "scale 0.9↔1 + fade; 拖拽回弹 800 OutElastic; 换曲 MoveToX ±400→0",
+        "ms": "500/800",
+        "e": "OutElasticHalf/OutCubic",
+        "s": "Overlays/NowPlayingOverlay.cs:289-301,394-403,520"
+      },
+      {
+        "n": "OsuPopover",
+        "t": "open/close",
+        "a": "scale 0.7↔1, opacity, R10, shadow(0,2)/R5",
+        "ms": "500/250",
+        "e": "OutElasticHalf/OutQuint",
+        "s": "Graphics/UserInterfaceV2/OsuPopover.cs:37-75"
+      },
+      {
+        "n": "Login/AccountCreation",
+        "t": "Show/Hide",
+        "a": "fade 400 + Hollow Shadow 0.2 (800/500)",
+        "ms": 400,
+        "e": "OutQuint",
+        "s": "LoginOverlay.cs:75-91; AccountCreationOverlay.cs:92-109"
+      },
+      {
+        "n": "Toolbar",
+        "t": "Show/Hide",
+        "a": "translateY(0↔-40), fade 125/500, 渐变 2500/200",
+        "ms": 500,
+        "e": "OutQuint/InQuint",
+        "s": "Overlays/Toolbar/Toolbar.cs:244-299"
+      },
+      {
+        "n": "VolumeOverlay",
+        "t": "音量键",
+        "a": "opacity 0↔1, Delay(1000) 自动收起",
+        "ms": 100,
+        "e": "-",
+        "s": "Overlays/VolumeOverlay.cs:163-205"
+      },
+      {
+        "n": "OnScreenDisplay",
+        "t": "Toast",
+        "a": "height 99→110→99 + fade, R20",
+        "ms": "500/1500",
+        "e": "OutQuint/InQuint",
+        "s": "Overlays/OnScreenDisplay.cs:39-123"
+      },
+      {
+        "n": "MedalAnimation",
+        "t": "解锁成就",
+        "a": "disc scale→1 800 OutElastic; 双层 Spin 20s/40s; 条带 width 0→1 900; 粒子飞散 500",
+        "ms": "400/800/900",
+        "e": "OutElastic/OutQuint",
+        "g": "spin,circular,particles",
+        "s": "Overlays/MedalAnimation.cs:160-311"
+      },
+      {
+        "n": "ScreenFooter",
+        "t": "Show/Hide",
+        "a": "translateY(0↔75) + Then().FadeOut()",
+        "ms": 500,
+        "e": "OutQuint",
+        "s": "Screens/Footer/ScreenFooter.cs:197-214"
+      },
+      {
+        "n": "Footer 四向进出",
+        "t": "SetButtons",
+        "a": "AppearFromLeft/Bottom ±300/100→0 (240 OutCubic); DisappearToRight 300/360 InOutCubic",
+        "ms": "240/360",
+        "e": "OutCubic/InOutCubic",
+        "s": "ScreenFooterButton.cs:258-298; ShearedButton.cs:202-250"
+      },
+      {
+        "n": "OverlayActivation 门控",
+        "t": "三态",
+        "a": "Disabled 时 PopIn 不执行, 强制 Hidden; mode!=All 触发 CloseAllOverlays",
+        "ms": "-",
+        "e": "-",
+        "s": "OsuFocusedOverlayContainer.cs:115-150; OsuGame.cs:1308-1311"
+      }
+    ],
+    "screenTransition": [
+      {
+        "n": "背景入场",
+        "t": "BackgroundScreenStack.Push",
+        "a": "FadeIn(500 InOutQuart) + MoveToX(50→0); 首屏禁用",
+        "ms": 500,
+        "e": "InOutQuart",
+        "s": "Screens/BackgroundScreen.cs:53-64"
+      },
+      {
+        "n": "背景挂起/退出/恢复",
+        "t": "suspend/exit/resume",
+        "a": "MoveToX ∓50, exit +50 + FadeOut(500 OutExpo)",
+        "ms": 500,
+        "e": "InOutQuart/OutExpo",
+        "s": "BackgroundScreen.cs:16-88"
+      },
+      {
+        "n": "背景超扫",
+        "t": "每帧",
+        "a": "scale = 1 + 50/DrawWidth*2 防黑边",
+        "ms": "-",
+        "e": "-",
+        "s": "BackgroundScreen.cs:47-51"
+      },
+      {
+        "n": "8 图交叉淡入",
+        "t": "轮换",
+        "a": "旧层 FadeOut(800 OutQuint)+Expire, 新层叠加, RNG 0-7",
+        "ms": 800,
+        "e": "OutQuint",
+        "s": "Backgrounds/BackgroundScreenDefault.cs:29-196"
+      },
+      {
+        "n": "切条目背景",
+        "t": "Item setter",
+        "a": "旧 FadeOut(250), 新 FadeInFromZero(500 OutQuint)",
+        "ms": "250/500",
+        "e": "OutQuint",
+        "s": "BackgroundScreenBeatmap.cs:83-118"
+      },
+      {
+        "n": "背景模糊",
+        "t": "BlurTo",
+        "a": "按需 BufferedContainer, FrameBufferScale 降采样, sigma 按 -0.18ln(0.004σ) 量化到 0.2",
+        "ms": 800,
+        "e": "OutQuint",
+        "g": "blur,buffer",
+        "s": "Graphics/Backgrounds/Background.cs:56-113"
+      },
+      {
+        "n": "dim/blur 联动",
+        "t": "设置变更",
+        "a": "USER_BLUR_FACTOR=25; FadeColour(Gray(1-Dim),800)",
+        "ms": 800,
+        "e": "OutQuint",
+        "s": "BackgroundScreenBeatmap.cs:168-203; UserDimContainer.cs:22-107"
+      },
+      {
+        "n": "Storyboard 几何",
+        "t": "条目有 SB",
+        "a": "SB 层 FadeInFromZero(500); 与底图互斥 FadeTo(500); 挂起 500ms 卸载",
+        "ms": 500,
+        "e": "OutQuint",
+        "s": "BeatmapBackgroundWithStoryboard.cs:45-137"
+      },
+      {
+        "n": "屏幕级视差",
+        "t": "鼠标移动",
+        "a": "0.02 × BackgroundParallaxAmount; Position 100ms OutQuint, Scale 1000ms OutQuint; scale=1+|a|",
+        "ms": "100/1000",
+        "e": "OutQuint",
+        "g": "parallax",
+        "s": "OsuScreenStack.cs:61-67; ParallaxContainer.cs:20-92"
+      },
+      {
+        "n": "菜单弱视差",
+        "t": "Primary view",
+        "a": "ParallaxAmount=0.01 包裹 ActionRail",
+        "ms": "-",
+        "e": "-",
+        "s": "MainMenu.cs:145-147"
+      },
+      {
+        "n": "侧栏偏移让位",
+        "t": "侧栏开启",
+        "a": "ScreenOffsetContainer.X damp(100), overlayContent.X ×1.2",
+        "ms": 100,
+        "e": "Damp",
+        "s": "OsuGame.cs:1764-1780"
+      },
+      {
+        "n": "屏幕 hub 队列",
+        "t": "OnEntering/Exiting",
+        "a": "AppendAnimatingAction: waitForPrevious→DelayUntilTransformsFinished; 否则 ClearTransforms",
+        "ms": "-",
+        "e": "-",
+        "s": "OsuLogo.cs:258-275; OsuScreen.cs:277-300"
+      },
+      {
+        "n": "LogoArriving 默认",
+        "t": "进场",
+        "a": "FadeOut(300 OutQuint), ChangeAnchor(TopLeft), Triangles=Ripple=true",
+        "ms": 300,
+        "e": "OutQuint",
+        "s": "OsuScreen.cs:263-275"
+      },
+      {
+        "n": "blocking overlay dim",
+        "t": "IOverlayManager",
+        "a": "ScreenContainer.FadeColour(Gray(0.5),500 OutQuint)",
+        "ms": 500,
+        "e": "OutQuint",
+        "s": "OsuGame.cs:283-284"
+      }
+    ],
+    "pointer": [
+      {
+        "n": "光标按下",
+        "t": "mouse down",
+        "a": "scale 1→0.90 (800 OutQuint), 加性层 FadeInFromZero(800)",
+        "ms": 800,
+        "e": "OutQuint",
+        "s": "Graphics/Cursor/MenuCursorContainer.cs:175-197"
+      },
+      {
+        "n": "光标抬起",
+        "t": "mouse up",
+        "a": "scale→1 (500 OutElastic), rotate→0 (400 OutElasticQuarter)",
+        "ms": "500/400",
+        "e": "OutElastic",
+        "s": "MenuCursorContainer.cs:199-217"
+      },
+      {
+        "n": "拖拽指向旋转",
+        "t": "移动 >80",
+        "a": "degrees = Atan2(-dx,dy)+24.3°, RotateTo 120ms",
+        "ms": 120,
+        "e": "OutQuint",
+        "g": "rotation",
+        "s": "MenuCursorContainer.cs:135-169"
+      },
+      {
+        "n": "光标显隐",
+        "t": "PopIn/Out",
+        "a": "Fade 250/400, PopOut scale→0.6 (250 In)",
+        "ms": "250/400",
+        "e": "OutQuint/In",
+        "s": "MenuCursorContainer.cs:219-235"
+      },
+      {
+        "n": "Tooltip 跟随",
+        "t": "hover",
+        "a": "maxWidth 500, R5+Shadow R5, Fade 300, Move 120ms OutQuint, FlashColour 1000",
+        "ms": "300/120/1000",
+        "e": "OutQuint",
+        "s": "Graphics/Cursor/OsuTooltipContainer.cs:27-114"
+      },
+      {
+        "n": "Cursor Ripple",
+        "t": "OsuAction",
+        "a": "池 20, scale 0.1→1 (700 Out), FadeOutFromOne(700), RingPiece(3) Additive",
+        "ms": 700,
+        "e": "Out",
+        "g": "circular,additive",
+        "s": "osu.Game.Rulesets.Osu/UI/Cursor/CursorRippleVisualiser.cs:24-108"
+      },
+      {
+        "n": "CursorTrail shader",
+        "t": "移动",
+        "a": "max 2048 片, FadeExponent 1.7, FadeDuration 300, UBO m_CursorTrailParameters",
+        "ms": 300,
+        "e": "pow",
+        "g": "shader,vertexBatch",
+        "s": "CursorTrail.cs:30-35,102,268-302"
+      },
+      {
+        "n": "Legacy 光标粒子",
+        "t": "break/emphasis",
+        "a": "star2 星形, 20/s 或 60/s, gravity 240, EndScale 0-2",
+        "ms": "300-1000",
+        "e": "-",
+        "g": "particles",
+        "s": "LegacyCursorParticles.cs:45-235"
+      }
+    ],
+    "entrance": [
+      {
+        "n": "Entrance rings",
+        "t": "LogoArriving",
+        "a": "TRACK_START_DELAY 600, delay_for_menu 2900, PlayEntrance 3150+200",
+        "ms": 3150,
+        "e": "-",
+        "s": "IntroCircles.cs:22-67; OsuLogo.cs:350-359"
+      },
+      {
+        "n": "Entrance welcome",
+        "t": "LogoArriving",
+        "a": "scale .9→1 (2142), FadeInFromZero(1800), welcomeText scaleY 0→1 (400)",
+        "ms": 2142,
+        "e": "Out",
+        "s": "IntroWelcome.cs:28-167"
+      },
+      {
+        "n": "Entrance steps 时间轴",
+        "t": "BeginAbsoluteSequence",
+        "a": "文字 200/400/700/900/1060, extensions 1450/1650/1850, hub 2080(+920), 白闪 3000",
+        "ms": 3000,
+        "e": "mixed",
+        "g": "timeline,glitch,additive",
+        "s": "IntroTriangles.cs:171-280"
+      },
+      {
+        "n": "Triangles 几何细节",
+        "t": "节点",
+        "a": "Spacing→(50,0) 5000; extensions Spacing 200→30→10, Scale 0.8→1.3; lazerLogo Progress→1 (920)",
+        "ms": "920/5000/1000",
+        "e": "InQuint/InQuad",
+        "g": "transformTo",
+        "s": "IntroTriangles.cs:197-252"
+      },
+      {
+        "n": "Glitch 三角",
+        "t": "每 22ms",
+        "a": "随机实心/空心三角, size (RNG+0.2)*80, FadeOutFromOne(120), Buffered+Additive",
+        "ms": 120,
+        "e": "-",
+        "g": "particles,additive",
+        "s": "IntroTriangles.cs:352-412"
+      },
+      {
+        "n": "Entrance sequence 环与线",
+        "t": "Intensityt(3150)",
+        "a": "小环→39.6 (400 InOutQuint), 中环→130 (340 OutQuad), 4 条 ±45° 线 105×1.5",
+        "ms": "400/340/700",
+        "e": "InOutQuint/OutQuad",
+        "g": "circular,rotation",
+        "s": "IntroSequence.cs:169-215"
+      },
+      {
+        "n": "Entrance sequence 四色圆",
+        "t": "0.56×length 后",
+        "a": "RotateTo(-90/-180, InOutQuart), ResizeTo(414), ScaleTo(1,InOutCubic), Delay 80/110",
+        "ms": "remaining",
+        "e": "InOutQuart/InOutCubic",
+        "g": "circular,rotation",
+        "s": "IntroSequence.cs:217-267"
+      },
+      {
+        "n": "Entrance outtro",
+        "t": "OnResuming",
+        "a": "exit_delay 3000, VolumeTo(0.03,200)→(0,2800 In), Game.FadeTo(0.01)",
+        "ms": 3000,
+        "e": "In",
+        "g": "audioVisualSync",
+        "s": "IntroScreen.cs:64-284"
+      },
+      {
+        "n": "Entrance 音轨",
+        "t": "IntensitytTrack",
+        "a": "PrepareTrackForPreview(-2600), VolumeTo(1,2600,InCubic)",
+        "ms": 2600,
+        "e": "InCubic",
+        "s": "IntroScreen.cs:303-319"
+      },
+      {
+        "n": "Entrance 兜底",
+        "t": "OnEntering",
+        "a": "Scheduler.AddDelayed(8000) 强制进菜单",
+        "ms": 8000,
+        "e": "-",
+        "s": "IntroScreen.cs:190-236"
+      },
+      {
+        "n": "Entrance seasonal",
+        "t": "172BPM 逐拍",
+        "a": "beat 349ms, 8 拍 scale 0.2→0.5, Progress→(i+1)/10, 白闪 5000",
+        "ms": 349,
+        "e": "OutQuint",
+        "g": "intervalSync",
+        "s": "Seasonal/IntroChristmas.cs:33-243"
+      },
+      {
+        "n": "季节灯光",
+        "t": "HitObject 起点",
+        "a": "12px 圆 + Glow R80, 250/150 淡入 + 1000 淡出, MoveToOffset ±20 (1400)",
+        "ms": "150-1400",
+        "e": "Out/In",
+        "g": "glow,additive",
+        "s": "Seasonal/MainMenuSeasonalLighting.cs:115-203"
+      },
+      {
+        "n": "Logo 频谱",
+        "t": "50ms 采样",
+        "a": "256 频段 → 200 bars ×5 圈极坐标, decay 0.0024/ms, emphasis 1/0.5",
+        "ms": 50,
+        "e": "-",
+        "g": "additive,geometry",
+        "s": "Menu/LogoVisualisation.cs:31-241"
+      }
+    ],
+    "liveMetrics": [
+      {
+        "n": "ArgonIntensityCounter",
+        "t": "intensity 变化",
+        "a": "scale 1→1.1 弹; 断连闪红 2s",
+        "ms": "58/2000",
+        "e": "-",
+        "s": "Screens/Play/HUD/ArgonComboCounter.cs:43-58"
+      },
+      {
+        "n": "Argon 血条",
+        "t": "血量变化",
+        "a": "主条+glow 双层 DampContinuously(50), PathRadius 10/40, GlowPortion .6/.9",
+        "ms": "-",
+        "e": "Damp",
+        "g": "shader,damp",
+        "s": "HUD/ArgonHealthDisplay.cs:60-259; ArgonHealthDisplayBar.cs:99-178"
+      },
+      {
+        "n": "FailingLayer",
+        "t": "低血量",
+        "a": "左右加性红渐变",
+        "ms": "-",
+        "e": "-",
+        "g": "gradient,additive",
+        "s": "HUD/FailingLayer.cs:34-108"
+      },
+      {
+        "n": "HitError 彩点",
+        "t": "状态",
+        "a": "MoveToY(-8)→0 (200 OutQuint), LayoutDuration 200",
+        "ms": 200,
+        "e": "OutQuint",
+        "s": "HUD/HitErrorMeters/ColourHitErrorMeter.cs:89-200"
+      },
+      {
+        "n": "HitError 竖线",
+        "t": "状态",
+        "a": "FadeTo .6 + width→1 (100 OutQuint).Then().FadeOut 5000 + width→0 (InQuint)",
+        "ms": "100/5000",
+        "e": "OutQuint/InQuint",
+        "s": "BarHitErrorMeter.cs:468-485"
+      },
+      {
+        "n": "Hold to confirm",
+        "t": "长按",
+        "a": "CircularProgress + icon scale 1+0.2p; 危险红闪 + shake 20ms/8p",
+        "ms": 20,
+        "e": "-",
+        "g": "circular,shake",
+        "s": "HUD/HoldForMenuButton.cs:165-287"
+      },
+      {
+        "n": "DelayedResumeOverlay",
+        "t": "恢复倒计时",
+        "a": "双层弹性 200 OutQuint / 400 OutElasticHalf; CircularProgress scale→2 (300); 每秒脉冲 + Flash 400",
+        "ms": "200/400/300",
+        "e": "OutQuint/OutElasticHalf",
+        "s": "Screens/Play/DelayedResumeOverlay.cs:117-181"
+      },
+      {
+        "n": "FailAnimation",
+        "t": "失败",
+        "a": "scale .85 + rotate 1° + grayscale, 2500 OutQuart; trackFreq 1→0; lowpass→300",
+        "ms": 2500,
+        "e": "OutQuart",
+        "g": "grayscale,rotation,audioSync",
+        "s": "Screens/Play/FailAnimationContainer.cs:111-153"
+      },
+      {
+        "n": "物件坠落",
+        "t": "失败",
+        "a": "BeginAbsoluteSequence(failTime), rotate ±90, scale×.5, MoveTo y+400",
+        "ms": 2500,
+        "e": "-",
+        "s": "FailAnimationContainer.cs:194-229"
+      },
+      {
+        "n": "View loader 跨模态",
+        "t": "入场",
+        "a": "lowpass→1000 (650 OutQuint), highpass 300→0 (1250), content .7→1 (650)",
+        "ms": "650/1250",
+        "e": "OutQuint",
+        "g": "audioVisualSync",
+        "s": "Screens/Play/PlayerLoader.cs:615-642"
+      },
+      {
+        "n": "View loader hub 追踪",
+        "t": "入场",
+        "a": "hub scale→0.15 (300 OutQuint), IntensitytTracking(500 InOutExpo)",
+        "ms": "300/500",
+        "e": "OutQuint/InOutExpo",
+        "s": "PlayerLoader.cs:458-475"
+      },
+      {
+        "n": "Kiai 闪光",
+        "t": "emphasis 拍",
+        "a": "FadeTo .3 .Then().FadeOut(max(80,CycleLength-80),OutSine)",
+        "ms": "CycleLength",
+        "e": "OutSine",
+        "s": "Skinning/LegacyKiaiFlashingDrawable.cs:46-55"
+      },
+      {
+        "n": "Legacy status-pulse",
+        "t": "状态",
+        "a": "scale 0.6→1.1→0.9→0.95→1 (96/24/24), Miss 1.6→1, rotate ±8.6°",
+        "ms": "120/500/600",
+        "e": "In",
+        "g": "keyframes",
+        "s": "Skinning/LegacyJudgementPieceOld.cs:38-96"
+      }
+    ],
+    "summary": [
+      {
+        "n": "AccuracyCircle",
+        "t": "结算",
+        "a": "Progress→target (3000 OutPow10, delay 450); 分段环 delay150→1 (800)",
+        "ms": "3000/800",
+        "e": "OutPow10",
+        "g": "circular",
+        "s": "Ranking/Expanded/Accuracy/AccuracyCircle.cs:213-284"
+      },
+      {
+        "n": "GradeBadge",
+        "t": "结算",
+        "a": "FadeIn 50 + 极坐标 -π/2-(1-p)2π + additive glow 500",
+        "ms": 500,
+        "e": "In",
+        "g": "polar,glow",
+        "s": "Ranking/Expanded/Accuracy/RankBadge.cs:89-104"
+      },
+      {
+        "n": "GradeText",
+        "t": "结算",
+        "a": "OutBounce 200; ≥S 1.05→1 (3000 OutQuint); ≥X BlurSigma 35/85 + FadeOut 3000/800",
+        "ms": "200/3000",
+        "e": "OutBounce/OutQuint",
+        "g": "blur",
+        "s": "RankText.cs:100-135"
+      },
+      {
+        "n": "总分滚动",
+        "t": "结算",
+        "a": "RollingDuration 3000 OutPow10; Perfect 指示 750 OutElasticHalf + Flash 1000",
+        "ms": 3000,
+        "e": "OutPow10",
+        "g": "counter",
+        "s": "RankingV2/Argon/ArgonTotalScorePanel.cs:249-394"
+      },
+      {
+        "n": "Perfect 星旋",
+        "t": "结算",
+        "a": "sparkle Spin(36000), 星 ±4° 2000 InOutSine .Loop(), 加性层循环",
+        "ms": "2000/36000",
+        "e": "InOutSine",
+        "g": "spin,loop",
+        "s": "ArgonTotalScorePanel.cs:351-367"
+      },
+      {
+        "n": "PB 徽章",
+        "t": "破纪录",
+        "a": "FadeIn 400, scale 1.6→1 (400 In), Delay(400).FadeOutFromOne(2600)",
+        "ms": "400/2600",
+        "e": "OutQuint",
+        "s": "ArgonTotalScorePanel.cs:269-283"
+      },
+      {
+        "n": "ArgonResultGradeDisplay",
+        "t": "结算",
+        "a": "Progress 属性动画联动 FrequencyTo/VolumeTo; glowLayer FlashColour(GradientHorizontal,1000)",
+        "ms": "1000/2000",
+        "e": "OutSine",
+        "g": "gradient,transformTo",
+        "s": "ArgonScoreRankDisplay.cs:229-348"
+      },
+      {
+        "n": "GradedCirclesV2",
+        "t": "结算",
+        "a": "InnerRadius .08, RoundedCaps, Rotation=start*360, Progress=clamp(v,s,e)-s",
+        "ms": "-",
+        "e": "-",
+        "g": "circular",
+        "s": "RankingV2/Argon/GradedCirclesV2.cs:42-85"
+      }
+    ],
+    "multiParty": [
+      {
+        "n": "Participant panel 三态",
+        "t": "版式切换",
+        "a": "ResizeTo (300,100)/(150,200)/(80) 1000 OutPow10 + 四组文字 MoveTo",
+        "ms": 1000,
+        "e": "OutPow10",
+        "g": "layout",
+        "s": "Matchmaking/Match/PlayerPanel.cs:350-392"
+      },
+      {
+        "n": "Participant panel 退赛",
+        "t": "退赛",
+        "a": "GrayscaleTo(1/0,1000,OutPow10) 灰度化背景与头像",
+        "ms": 1000,
+        "e": "OutPow10",
+        "g": "grayscale",
+        "s": "PlayerPanel.cs:407-413"
+      },
+      {
+        "n": "Participant panel 悬停视差",
+        "t": "hover",
+        "a": "ScaleTo(1.03,2000) + MoveTo(offset*0.5,2000)",
+        "ms": 2000,
+        "e": "-",
+        "g": "parallax",
+        "s": "PlayerPanel.cs:427-447"
+      },
+      {
+        "n": "Participant panel 名次跳",
+        "t": "名次变化",
+        "a": "非等比 Y 压扁 (1,0.95)/(1,1.05)→(1,1) 800 OutElastic",
+        "ms": 800,
+        "e": "OutElastic",
+        "g": "nonUniformScale",
+        "s": "PlayerPanel.cs:480-509"
+      },
+      {
+        "n": "Results 卡片展开",
+        "t": "结算",
+        "a": "ResizeTo(950×30,600 OutExpo).Delay(300).ResizeHeightTo(550,800 OutExpo)",
+        "ms": "600/800",
+        "e": "OutExpo",
+        "s": "RankedPlay/ResultsScreen.MainPanel.cs:389-420"
+      },
+      {
+        "n": "伤害飞字",
+        "t": "结算",
+        "a": "MoveTo + ScaleTo(.75) + RotateTo(12*sign,400 CB(.35,.5)) + Balance 声像",
+        "ms": 400,
+        "e": "CubicBezier",
+        "g": "rotation,audioSync",
+        "s": "ResultsScreen.MainPanel.cs:613-621"
+      },
+      {
+        "n": "VsSequence",
+        "t": "VS 入场",
+        "a": "FadeInFromZero(500); AnimationProgress→1 (1000 OutExpo); 四层 ±40→∓40 (3000 CB) .Then() ±100 (500 CB)",
+        "ms": "500/1000/3000/500",
+        "e": "OutExpo/CubicBezier",
+        "g": "transformTo,sequence",
+        "s": "RankedPlay/Intro/VsSequence.cs:130-190"
+      },
+      {
+        "n": "IntensitySequence",
+        "t": "星级入场",
+        "a": "100 柱 delay=|SR-5|*50, height→.1 (300 OutExpo); starRating/amplitude/stdDev 4000-4500 贝塞尔",
+        "ms": "300/4000/4500",
+        "e": "OutExpo/CubicBezier",
+        "g": "transformTo,gaussian",
+        "s": "RankedPlay/Intro/StarRatingSequence.cs:176-289"
+      },
+      {
+        "n": "ItemSelectGrid roll",
+        "t": "抽卡",
+        "a": "hide 800 / arrange 1000 / roll 4000 / stagger 30 / SplitEasingFunction",
+        "ms": 4000,
+        "e": "SplitEasing",
+        "g": "sequence",
+        "s": "Match/BeatmapSelect/BeatmapSelectGrid.cs:29-326"
+      },
+      {
+        "n": "StageDisplay",
+        "t": "回合舞台",
+        "a": "ScaleTo(6)+MoveToY(300) 回弹; CircularProgress.ProgressTo(500,InOutQuart); 状态文字 Loop",
+        "ms": 500,
+        "e": "InOutQuart",
+        "g": "circular,loop",
+        "s": "Match/StageDisplay.cs:162-312"
+      },
+      {
+        "n": "Corner ornament",
+        "t": "展开",
+        "a": "Scale(±1,±1), Rotation -2, Shear -.5, PopOut Rotate ∓25 (500 CB(.2,.75))",
+        "ms": 500,
+        "e": "CubicBezier",
+        "g": "shear,rotation",
+        "s": "RankedPlay/Components/RankedPlayCornerPiece.cs:37-158"
+      },
+      {
+        "n": "ResultCounter 弹簧",
+        "t": "分数变化",
+        "a": "DoubleSpring(2.5,0.8,1) + 速度模糊 clamp(|v*.1|-5,0,10)",
+        "ms": "-",
+        "e": "Spring",
+        "g": "spring,blur",
+        "s": "RankedPlay/Components/RankedPlayScoreCounter.cs:130-239"
+      }
+    ],
+    "timedFeatureAndList": [
+      {
+        "n": "Timed feature entrance",
+        "t": "进入",
+        "a": "双标题 ±260→±20 (300 OutQuint).Then()→0 (4000); 封面 3→1 (500 In)→1.1 (4000); 白闪 5000",
+        "ms": "300/4000/5000",
+        "e": "OutQuint/In",
+        "g": "additive",
+        "s": "DailyChallenge/DailyChallengeIntro.cs:386-462"
+      },
+      {
+        "n": "TimeRemainingRing",
+        "t": "倒计时",
+        "a": "双层 CircularProgress + 告急红 FadeColour/FlashColour (300 OutQuint)",
+        "ms": 300,
+        "e": "OutQuint",
+        "g": "circular",
+        "s": "DailyChallengeTimeRemainingRing.cs:31-157"
+      },
+      {
+        "n": "ResultBreakdown 浮动文字",
+        "t": "得分",
+        "a": "ScaleTo(.8,500,OutElasticHalf) + MoveToOffset(-50,2500)",
+        "ms": "500/2500",
+        "e": "OutElasticHalf",
+        "s": "DailyChallengeScoreBreakdown.cs:117-121"
+      },
+      {
+        "n": "收藏爱心",
+        "t": "收藏成功",
+        "a": "scale .5→10 (750 OutQuint) + FadeOut(1400 OutCubic); 8 向粒子 MoveTo(1300)",
+        "ms": "750/1300/1400",
+        "e": "OutQuint",
+        "g": "circular,particles",
+        "s": "Select/BeatmapTitleWedge.FavouriteButton.cs:319-379"
+      },
+      {
+        "n": "排行榜逐条滑入",
+        "t": "加载",
+        "a": "delay 200+30*i; FadeIn/MoveToX(-20→0) 300 OutQuint",
+        "ms": 300,
+        "e": "OutQuint",
+        "g": "stagger",
+        "s": "Select/BeatmapLeaderboardWedge.cs:339-377"
+      },
+      {
+        "n": "ItemMetadataWedge",
+        "t": "PopIn/Out",
+        "a": "FadeIn(300).MoveToX(0,300); 子 wedge 错峰 100ms + MoveToX(-50)",
+        "ms": 300,
+        "e": "OutQuint",
+        "g": "shear,stagger",
+        "s": "Select/BeatmapMetadataWedge.cs:83-344"
+      },
+      {
+        "n": "Footer option button",
+        "t": "mod 变化",
+        "a": "MoveToY(±20/5) + Fade; ResizeWidthTo(240); 倍率 FadeColour 红/绿/白",
+        "ms": 240,
+        "e": "OutQuint",
+        "s": "Select/FooterButtonMods.cs:211-388"
+      },
+      {
+        "n": "Panel 选中",
+        "t": "选中/节拍",
+        "a": "additive selectionLayer + FadeEdgeEffectTo + X 位移; BeatSynced 按层级脉冲",
+        "ms": "-",
+        "e": "-",
+        "g": "glow,intervalSync",
+        "s": "Select/Panel.cs:135-205,331-385"
+      }
+    ],
+    "feedback": [
+      {
+        "n": "hover 两段 Glow",
+        "t": "hover",
+        "a": "FadeEdgeEffectTo 40ms 快进 → 800ms 慢出 OutQuint",
+        "ms": "40/800",
+        "e": "OutQuint",
+        "g": "glow",
+        "s": "Graphics/UserInterface/Nub.cs:64-101; ShearedNub.cs:205-211"
+      },
+      {
+        "n": "OsuButton press",
+        "t": "press",
+        "a": "ScaleTo(.9,4000) → ScaleTo(1,1000,OutElastic); click FadeOutFromOne(500)",
+        "ms": "4000/1000/500",
+        "e": "OutElastic",
+        "s": "Graphics/UserInterface/OsuButton.cs:133-176"
+      },
+      {
+        "n": "TextBox 按拍",
+        "t": "focus",
+        "a": "caret FadeTo(.7)↔FadeTo(.4, CycleLength, InOutSine)",
+        "ms": "CycleLength",
+        "e": "InOutSine",
+        "g": "intervalSync",
+        "s": "Graphics/UserInterface/OsuTextBox.cs:323-395"
+      },
+      {
+        "n": "AfToggleSection 整活",
+        "t": "复选框",
+        "a": "负 Scale 镜像, Y 压扁到 0 (50ms), 整屏 Rotate 360 (1000), 随机色 Loop, 声像 Loop",
+        "ms": "50/1000/4000",
+        "e": "various",
+        "g": "nonUniformScale,rotation,loop",
+        "s": "Overlays/AfToggleSection.cs:115-323"
+      },
+      {
+        "n": "Notification 拖拽",
+        "t": "drag dismiss",
+        "a": "change^0.8 橡皮筋, Rotation=min(0,X*0.1), 抛掷 v=-0.3..-0.8 + gravity",
+        "ms": 800,
+        "e": "OutElastic",
+        "g": "rotation,physics",
+        "s": "Overlays/Notifications/Notification.cs:121-397"
+      },
+      {
+        "n": "通知灯脉动",
+        "t": "常驻",
+        "a": "Loop(500, FadeTo .4 1000 In → FadeTo 1 1000 Out), Glow R14",
+        "ms": 1000,
+        "e": "In/Out",
+        "g": "loop,glow",
+        "s": "Notification.cs:455-519"
+      },
+      {
+        "n": "LoadingSpinner",
+        "t": "加载",
+        "a": "Spin(3150) + BeatSynced 按拍",
+        "ms": 3150,
+        "e": "-",
+        "g": "spin,intervalSync",
+        "s": "Graphics/UserInterface/LoadingSpinner.cs:26-204"
+      },
+      {
+        "n": "RollingCounter",
+        "t": "数值变化",
+        "a": "Interpolation.ValueAt + TransformValueTo 滚动",
+        "ms": "varies",
+        "e": "-",
+        "g": "counter",
+        "s": "Graphics/UserInterface/RollingCounter.cs:37-164"
+      }
+    ]
+  },
+  "patternCatalog": {
+    "transformToCustomProperties": [
+      "Progress",
+      "ProgressRange",
+      "AnimationProgress",
+      "Value",
+      "Shear",
+      "BlurSigma",
+      "Spacing",
+      "Padding",
+      "BorderColour",
+      "GradientTop/Bottom",
+      "BarColour",
+      "GlowColour",
+      "healthBarValue",
+      "trackFreq",
+      "tickPlaybackRate",
+      "EdgeEffect",
+      "CornerRadius"
+    ],
+    "hiddenDynamics": [
+      "自定义属性 TransformTo 插值（CSS 无直接对应，需 rAF + 缓动函数）",
+      "shader / 逐帧阻尼（DampContinuously、exp(-k·dt)、DoubleSpring）",
+      "音频与画面同步（BeginAbsoluteSequence + LatestTransformEndTime + Duck + 分级 tick 去抖）",
+      "自定义贝塞尔与 SplitEasingFunction（27 种枚举之外）",
+      "逐帧布局属性（content.alpha 随宽度、Padding/Margin/Spacing 插值）"
+    ],
+    "geometryPrimitives": [
+      "skew/shear 0.2 与反向抵消",
+      "rotation ±8°/±45°/-90°/-180°/20°",
+      "non-uniform scale (1.2,1.08)/(1,0.95)/(±1,±1)",
+      "mask + CornerRadius/CornerExponent",
+      "CircularProgress / ring / polar",
+      "wave 4 层旋转 + 绝对/相对双轨位移",
+      "parallax 0.02/0.01 + 超扫缩放",
+      "blur 降采样 FBO",
+      "grayscale",
+      "additive blending",
+      "gradient horizontal/vertical",
+      "spin/loop",
+      "glitch triangles",
+      "particle fountains"
+    ]
+  },
+  "coverage": {
+    "previousKit": "motion.json 6 个 duration / 5 条曲线 / 6 条 sequence + 06-vfx 6 个效果，估算覆盖 <10%",
+    "thisInventory": "140 条关键动效 + 27 缓动 + 40 具名时长 + 15 类几何原语 + 85 处自定义属性模式",
+    "remaining": "523 文件中未逐条收录的低密度调用（多为 1-3 处 Transform 的小组件），按 patternCatalog 归类复用"
+  }
+}

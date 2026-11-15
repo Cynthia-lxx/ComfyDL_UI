@@ -1,0 +1,149 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — MainMenuButton.cs:97-356 / ButtonArea.cs:26-132
+ * / ButtonSystem.cs:38-137 / OsuLogo.cs:291-452.
+ * Self-contained inside Shadow DOM; only CSS custom properties are inherited.
+ */
+
+:host {
+  display: block;
+  position: relative;
+  --wedge-width: 160px;
+  --wedge-height: 100px;
+  --wedge-overlap: 20px;
+  --shear: 0.2;
+  --shear-deg: 11.5deg;
+  --d-fast: calc(var(--duration-fast, 120ms) * var(--motion-scale, 1));
+  --d-normal: calc(var(--duration-normal, 300ms) * var(--motion-scale, 1));
+  --d-wave: calc(var(--duration-intro, 800ms) * var(--motion-scale, 1));
+}
+
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  padding: 24px 0;
+}
+
+.hub {
+  flex: none;
+  width: 120px;
+  height: 120px;
+  margin-right: calc(var(--wedge-overlap) * -1);
+  border: 10px solid var(--ui-accent, #66ccff);
+  border-radius: 50%;
+  background: var(--ui-surface-sunken, #111);
+  color: var(--ui-accent, #66ccff);
+  font-size: 48px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+}
+.hub:hover { transform: scale(1.1); }
+.hub:active { transform: scale(0.9); }
+.hub:focus-visible { outline: 3px solid var(--ui-accent-strong, #66ccff); outline-offset: 4px; }
+
+/* 横排：-20px 负间距让相邻平行四边形交叠（Flow.Spacing = (-20,0)） */
+.row { display: flex; align-items: center; }
+.row > .wedge { margin-right: calc(var(--wedge-overlap) * -1); }
+
+.wedge {
+  position: relative;
+  flex: none;
+  height: var(--wedge-height);
+  width: var(--wedge-width);
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text, #fff);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgb(0 0 0 / 20%);
+  transform: skewX(calc(var(--shear-deg) * -1));
+  transform-origin: center;
+  transition:
+    width 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 500ms linear;
+  isolation: isolate;
+}
+
+.wedge__inner {
+  position: absolute;
+  inset: 0;
+  width: 320px;                 /* 超宽底图，防 OutElastic 过冲露底 */
+  transform: skewX(var(--shear-deg));
+  transform-origin: left center;
+  background: color-mix(in srgb, var(--ui-accent, #66ccff) 28%, var(--ui-surface-raised, #333));
+  border-right: 2px solid rgb(0 0 0 / 20%);
+}
+
+.wedge__hover {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1000ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wedge__content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px 0 34px;
+  opacity: var(--ui-content-alpha, 1);
+  white-space: nowrap;
+}
+.wedge__icon { font-size: 32px; line-height: 1; transform-origin: center; transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1); }
+.wedge__label { font-size: var(--font-size-body, 16px); font-weight: var(--font-weight-semibold, 600); }
+
+/* 四种宽度状态 */
+.wedge[data-state='contracted'] { width: 0; opacity: 0; pointer-events: none; }
+.wedge[data-state='contracted-style1'] {
+  width: 0; opacity: 0; pointer-events: none;
+  transition: width 400ms cubic-bezier(0.47, 0, 0.84, 0.54), opacity 800ms linear;
+}
+.wedge[data-state='exploded'] { width: 320px; opacity: 0; pointer-events: none; transition-duration: 200ms, 150ms; }
+.wedge[data-state='expanded'] { width: var(--wedge-width); opacity: 1; }
+
+/* hover：宽度 160→240 OutElastic、图标 ±8° + 非等比缩放 */
+.wedge[data-hovered='true'][data-state='expanded'] { width: 240px; transition: width 500ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.wedge[data-hovered='true'][data-state='expanded'] .wedge__icon {
+  transform: rotate(var(--ui-pulse-rotation, 8deg)) scale(1.2, 1.08);
+}
+.wedge[data-pressed='true'] .wedge__hover { opacity: 0.1; }
+.wedge[data-clicked='true'] .wedge__hover { opacity: 0.9; transition: opacity 800ms cubic-bezier(0.16, 1, 0.3, 1); }
+.wedge:focus-visible { outline: 3px solid var(--ui-accent, #66ccff); outline-offset: 2px; }
+
+@keyframes ui-pulse-heartbeat {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-10px) scale(1.2); }
+  100% { transform: translateY(0) scale(1.2, 1.08); }
+}
+.wedge[data-pulsing='true'] .wedge__icon {
+  animation: ui-pulse-heartbeat calc(var(--ui-pulse-length, 500ms) * var(--motion-scale, 1)) cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
+}
+
+@keyframes ui-hub-pulse { 0% { transform: scale(0.98); } 100% { transform: scale(1); } }
+:host([data-state='primary']) .hub { animation: ui-hub-pulse 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+:host([data-theme]) { color: var(--ui-text, #fff); }
+
+/* 全局动效降级 */
+:host-context([data-reduce-motion='true']) .wedge,
+:host-context([data-reduce-motion='true']) .wedge__hover,
+:host-context([data-reduce-motion='true']) .hub {
+  transition-duration: 0.01ms !important;
+}
+:host-context([data-reduce-motion='true']) .wedge__icon { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wedge, .wedge__hover, .hub { transition-duration: 0.01ms !important; }
+  .wedge__icon { animation: none !important; }
+}

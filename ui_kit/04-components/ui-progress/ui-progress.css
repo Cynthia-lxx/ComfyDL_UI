@@ -1,0 +1,53 @@
+/* SPDX-License-Identifier: MIT — ProgressBar / Bar / ExpandingBar 映射 */
+:host {
+  display: block;
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ui-surface-sunken, #222);
+  overflow: hidden;
+}
+:host([seek]) { cursor: pointer; }
+
+.track { position: absolute; inset: 0; }
+.fill {
+  position: absolute;
+  height: 100%;
+  width: var(--progress, 0%);
+  /* Bar.cs:78-107 —— 250ms InOutCubic 双向尺寸插值；FillColour 过渡 150ms OutQuint */
+  transition:
+    width 250ms cubic-bezier(0.65, 0, 0.35, 1),
+    height 250ms cubic-bezier(0.65, 0, 0.35, 1),
+    background-color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--ui-accent, #66ccff);
+}
+
+/* BarDirection 四向：靠 anchor/origin 切换生长起点 */
+:host([data-direction='ltr']) .fill { left: 0; top: 0; }
+:host([data-direction='rtl']) .fill { right: 0; top: 0; }
+:host([data-direction='ttb']) .fill { top: 0; left: 0; width: 100% !important; height: var(--progress, 0%) !important; }
+:host([data-direction='btt']) .fill { bottom: 0; left: 0; width: 100% !important; height: var(--progress, 0%) !important; }
+
+/* ExpandingBar：4px ↔ 2px，展开 OutElastic / 收起 Out，收起时半透明 */
+:host([data-variant='expanding']) { height: 4px; background: transparent; overflow: visible; }
+:host([data-variant='expanding']) .track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ui-accent, #66ccff);
+  transform-origin: center;
+  transition:
+    height 400ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([data-variant='expanding'][data-expanded='false']) .track {
+  height: 2px;
+  opacity: 0.5;
+  transition:
+    height 400ms ease-out,
+    opacity 100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:host([data-variant='expanding']) .fill { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fill, :host([data-variant='expanding']) .track { transition-duration: 0ms !important; }
+}

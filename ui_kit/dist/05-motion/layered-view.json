@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "_meta": {
+    "purpose": "可执行的多图层展开/收起编排；每层独立时长/缓动/延迟，进出场非对称",
+    "legend": "layer.closed/open 为该层的起止 CSS 值；enter/exit 为该层自己的时长与缓动；upstream 是上游实测原值，demo 值按舞台尺寸换算",
+    "sourceNote": "source 指向上游 C# 文件，属考据出处；对外命名一律中性"
+  },
+  "engine": {
+    "phaseAttribute": "data-phase",
+    "phases": ["closed", "opening", "open", "closing"],
+    "cssVars": ["--lv-closed-transform", "--lv-open-transform", "--lv-closed-opacity", "--lv-open-opacity", "--lv-enter-ms", "--lv-exit-ms", "--lv-enter-ease", "--lv-exit-ease", "--lv-delay"],
+    "fence": "close() 等待 getAnimations({subtree:true}) 全部 finished 后再隐藏，等价 OnComplete(PopOutComplete)",
+    "depth": "层序用 z-index 表达；上游用 Depth = -Clock.CurrentTime 单调递增"
+  },
+  "presets": {
+    "catalogReveal": {
+      "label": "浏览视图展开 / 收起（用户点名）",
+      "source": "osu.Game/Overlays/BeatmapListingOverlay.cs:34,133,204-239；Graphics/Containers/WaveContainer.cs:19-192；Overlays/WaveOverlayContainer.cs:35-48；Overlays/FullscreenOverlay.cs:47-129；OsuGame.cs:283-284,1440-1455",
+      "duration": { "enter": 800, "exit": 500 },
+      "asymmetry": "800/OutSine·OutQuint 对 500/InSine·InQuint·In；根淡入 100 对淡出 500；3 处 OnComplete 延迟清理",
+      "layers": [
+        { "id": "dim", "name": "屏幕层暗化", "class": "lv-dim", "z": 0,
+          "closed": { "opacity": 0 }, "open": { "opacity": 1 },
+          "enter": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)" },
+          "upstream": "FadeColour(Gray(0.5), 500, OutQuint)", "source": "osu.Game/OsuGame.cs:283-284" },
+        { "id": "surface", "name": "视窗裁切与边缘阴影", "class": "lv-surface", "z": 1,
+          "closed": { "opacity": 0, "transform": "translateY(-14px)" }, "open": { "opacity": 1, "transform": "none" },
+          "enter": { "ms": 100, "ease": "cubic-bezier(0.22,1,0.36,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.42,0,1,1)" },
+          "upstream": "FadeIn(100, OutQuint) / FadeOut(500, InQuint) + FadeEdgeEffectTo(0.2, 800) → 0 (500, In)",
+          "source": "osu.Game/Overlays/WaveOverlayContainer.cs:35-48；FullscreenOverlay.cs:115-129" },
+        { "id": "wave1", "name": "波片 1", "class": "lv-wave", "z": 2,
+          "css": { "--lv-rotation": "13deg", "--lv-y": "-372px" },
+          "closed": { "transform": "rotate(13deg) translateY(120%)", "opacity": 0.96 },
+          "open": { "transform": "rotate(13deg) translateY(var(--lv-y))", "opacity": 0.96 },
+          "enter": { "ms": 800, "ease": "cubic-bezier(0.39,0.575,0.565,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.47,0,0.84,0.54)" },
+          "upstream": "Rotation 13°, FinalPosition -930, 800 OutSine / 500 InSine", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:87-91,184-192" },
+        { "id": "wave2", "name": "波片 2", "class": "lv-wave", "z": 3,
+          "css": { "--lv-rotation": "-7deg", "--lv-y": "-224px", "--lv-anchor": "right" },
+          "closed": { "transform": "rotate(-7deg) translateY(120%)", "opacity": 0.96 },
+          "open": { "transform": "rotate(-7deg) translateY(var(--lv-y))", "opacity": 0.96 },
+          "enter": { "ms": 800, "ease": "cubic-bezier(0.39,0.575,0.565,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.47,0,0.84,0.54)" },
+          "upstream": "Rotation -7°, FinalPosition -560", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:92-98" },
+        { "id": "wave3", "name": "波片 3", "class": "lv-wave", "z": 4,
+          "css": { "--lv-rotation": "4deg", "--lv-y": "-156px" },
+          "closed": { "transform": "rotate(4deg) translateY(120%)", "opacity": 0.96 },
+          "open": { "transform": "rotate(4deg) translateY(var(--lv-y))", "opacity": 0.96 },
+          "enter": { "ms": 800, "ease": "cubic-bezier(0.39,0.575,0.565,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.47,0,0.84,0.54)" },
+          "upstream": "Rotation 4°, FinalPosition -390", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:99-103" },
+        { "id": "wave4", "name": "波片 4", "class": "lv-wave", "z": 5,
+          "css": { "--lv-rotation": "-2deg", "--lv-y": "-88px", "--lv-anchor": "right" },
+          "closed": { "transform": "rotate(-2deg) translateY(120%)", "opacity": 0.96 },
+          "open": { "transform": "rotate(-2deg) translateY(var(--lv-y))", "opacity": 0.96 },
+          "enter": { "ms": 800, "ease": "cubic-bezier(0.39,0.575,0.565,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.47,0,0.84,0.54)" },
+          "upstream": "Rotation -2°, FinalPosition -220", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:104-110" },
+        { "id": "content", "name": "内容承载层（相对位移 2×父高）", "class": "lv-content", "z": 6,
+          "closed": { "transform": "translateY(200%)", "opacity": 1 },
+          "open": { "transform": "translateY(0)", "opacity": 1 },
+          "enter": { "ms": 800, "ease": "cubic-bezier(0.22,1,0.36,1)" },
+          "exit": { "ms": 500, "ease": "cubic-bezier(0.42,0,1,1)" },
+          "upstream": "RelativePositionAxes=Both; MoveToY(0,800,OutQuint) / MoveToY(2,500,In)", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:114-138" },
+        { "id": "header", "name": "固定头部 / 搜索层", "class": "lv-header", "z": 7,
+          "html": "<div class='lv-header-title'>浏览视图 <span class='lv-badge'>12 层并行</span></div><div class='lv-search'>搜索…</div>",
+          "closed": { "transform": "translateY(-24px)", "opacity": 0 },
+          "open": { "transform": "none", "opacity": 1 },
+          "enter": { "ms": 400, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 180 },
+          "exit": { "ms": 250, "ease": "cubic-bezier(0.42,0,1,1)" },
+          "upstream": "Header.Depth = float.MinValue；UpdateAfterChildren 每帧算 Padding.Top = max(0, Header.H - Current)",
+          "source": "osu.Game/Overlays/OnlineOverlay.cs:57,86-92；Overlays/OverlayHeader.cs:39-90" },
+        { "id": "filters", "name": "过滤 / 排序层", "class": "lv-filters", "z": 8,
+          "html": "<div class='lv-chip'>全部</div><div class='lv-chip'>已验证</div><div class='lv-chip'>升序</div><div class='lv-chip'>卡片尺寸</div>",
+          "closed": { "transform": "translateY(-16px)", "opacity": 0 },
+          "open": { "transform": "none", "opacity": 1 },
+          "enter": { "ms": 300, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 260 },
+          "exit": { "ms": 200, "ease": "cubic-bezier(0.42,0,1,1)" },
+          "upstream": "封面淡入 200 OutQuint / 淡出 600；Tab FadeColour(200)；排序箭头 ScaleTo((1,-1),300)",
+          "source": "osu.Game/Overlays/BeatmapListing/BeatmapListingSearchControl.cs:58,63；BeatmapListingSortTabControl.cs:140" },
+        { "id": "cards", "name": "卡片流层（逐项错峰）", "class": "lv-cards", "z": 9,
+          "html": "<div class='lv-card' style='--lv-delay:0ms'></div><div class='lv-card' style='--lv-delay:30ms'></div><div class='lv-card' style='--lv-delay:60ms'></div><div class='lv-card' style='--lv-delay:90ms'></div><div class='lv-card' style='--lv-delay:120ms'></div><div class='lv-card' style='--lv-delay:150ms'></div>",
+          "closed": { "opacity": 0 }, "open": { "opacity": 1 },
+          "enter": { "ms": 200, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 320 },
+          "exit": { "ms": 120, "ease": "cubic-bezier(0.42,0,1,1)" },
+          "upstream": "FadeIn(200, OutQuint) 分页追加；卡片 hover ScaleTo(1.03,500) 延迟 100；下拉 360/120；阴影 TweenEdgeEffectTo 360",
+          "source": "osu.Game/Overlays/BeatmapListingOverlay.cs:199,239；Beatmaps/Drawables/Cards/BeatmapCardContent.cs:119-161" },
+        { "id": "toTop", "name": "回到顶部按钮", "class": "lv-to-top", "z": 10,
+          "html": "↑",
+          "closed": { "opacity": 0, "transform": "scale(0.75)" },
+          "open": { "opacity": 1, "transform": "scale(1)" },
+          "enter": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 480 },
+          "exit": { "ms": 200, "ease": "cubic-bezier(0.42,0,1,1)" },
+          "upstream": "滚动 >200 显示 FadeIn(500)；按下 0.75/2000 OutQuint，松开 1/1000 OutElastic",
+          "source": "osu.Game/Overlays/OverlayScrollContainer.cs:71,111,215,221" },
+        { "id": "footer", "name": "页脚按钮层（逐项错峰）", "class": "lv-footer", "z": 11,
+          "html": "<span style='--lv-delay:0ms'>返回</span><span style='--lv-delay:30ms'>刷新</span><span style='--lv-delay:60ms'>筛选</span>",
+          "closed": { "opacity": 0, "transform": "translateY(50px)" },
+          "open": { "opacity": 1, "transform": "none" },
+          "enter": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 380 },
+          "exit": { "ms": 240, "ease": "cubic-bezier(0.65,0,0.35,1)" },
+          "upstream": "HEIGHT=50, delay_per_button=30, transition_duration=500；按钮 240 OutCubic / 360 InOutCubic",
+          "source": "osu.Game/Screens/Footer/ScreenFooter.cs:42-46,197-216；ScreenFooterButton.cs:262-297" }
+      ],
+      "math": [
+        { "name": "波片裁切高度", "formula": "max(0, H - (contentH - contentY * H))", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:151" },
+        { "name": "相对位移", "formula": "RelativePositionAxes=Both → Y=2 表示 2×父高", "source": "osu.Game/Graphics/Containers/WaveContainer.cs:117-120" },
+        { "name": "列表阻尼", "formula": "Interpolation.DampContinuously(DrawYPosition, target, 50, elapsed)，double 精度", "source": "osu.Game/Graphics/Carousel/Carousel.cs:995-996" },
+        { "name": "列表几何插值", "formula": "dist=|1-(y+BleedTop)/halfH|; (3-√max(0,9-dist²))*halfH", "source": "osu.Game/Graphics/Carousel/Carousel.cs:1027-1049" },
+        { "name": "深度", "formula": "DepthLayer + |ΔY|/DrawHeight", "source": "osu.Game/Graphics/Carousel/Carousel.cs:992-993" },
+        { "name": "滚动裁剪", "formula": "round(clamp(Current/height,0,1),3)", "source": "osu.Game/Overlays/OverlayScrollContainer.cs:62-63" },
+        { "name": "视差阻尼", "formula": "Damp(0,1,0.999,|d|) + clamp(elapsed,0,100) + ValueAt(OutQuint)", "source": "osu.Game/Graphics/Containers/ParallaxContainer.cs:76-92" }
+      ]
+    },
+    "sidePanel": {
+      "label": "四轨侧栏（内容 / 侧栏 / 分区 / 搜索）",
+      "source": "osu.Game/Overlays/SettingsPanel.cs:36,170-204",
+      "duration": { "enter": 600, "exit": 600 },
+      "layers": [
+        { "id": "dim", "name": "屏幕暗化", "class": "lv-dim", "z": 0, "closed": { "opacity": 0 }, "open": { "opacity": 1 }, "enter": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 500, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "panel", "name": "内容轨", "class": "lv-surface lv-side", "z": 1, "closed": { "transform": "translateX(-100%)", "opacity": 0 }, "open": { "transform": "none", "opacity": 1 }, "enter": { "ms": 600, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 600, "ease": "cubic-bezier(0.22,1,0.36,1)" } },
+        { "id": "sidebar", "name": "侧栏轨", "class": "lv-sidebar", "z": 2, "closed": { "transform": "translateX(-60px)", "opacity": 0 }, "open": { "transform": "none", "opacity": 1 }, "enter": { "ms": 600, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 60 }, "exit": { "ms": 600, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "sections", "name": "分区轨（延迟 200 载入）", "class": "lv-content", "z": 3, "closed": { "opacity": 0 }, "open": { "opacity": 1 }, "enter": { "ms": 300, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 200 }, "exit": { "ms": 300, "ease": "cubic-bezier(0.42,0,1,1)" } }
+      ]
+    },
+    "notificationRail": {
+      "label": "右侧通知抽屉",
+      "source": "osu.Game/Overlays/NotificationOverlay.cs:38,230-247",
+      "duration": { "enter": 600, "exit": 600 },
+      "layers": [
+        { "id": "dim", "name": "屏幕暗化", "class": "lv-dim", "z": 0, "closed": { "opacity": 0 }, "open": { "opacity": 1 }, "enter": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 500, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "rail", "name": "抽屉", "class": "lv-surface lv-right", "z": 1, "closed": { "transform": "translateX(320px)", "opacity": 0 }, "open": { "transform": "none", "opacity": 1 }, "enter": { "ms": 600, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 600, "ease": "cubic-bezier(0.22,1,0.36,1)" } },
+        { "id": "toasts", "name": "通知条目（转存 400px 再淡入）", "class": "lv-content", "z": 2, "closed": { "opacity": 0, "transform": "translateX(400px)" }, "open": { "opacity": 1, "transform": "none" }, "enter": { "ms": 600, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 100 }, "exit": { "ms": 300, "ease": "cubic-bezier(0.42,0,1,1)" } }
+      ]
+    },
+    "columnStagger": {
+      "label": "选项列错峰飞入（±700 / 30ms 步进）",
+      "source": "osu.Game/Overlays/Mods/ModSelectOverlay.cs:477-563",
+      "duration": { "enter": 400, "exit": 500 },
+      "layers": [
+        { "id": "dim", "name": "屏幕暗化", "class": "lv-dim", "z": 0, "closed": { "opacity": 0 }, "open": { "opacity": 1 }, "enter": { "ms": 400, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 250, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "surface", "name": "视窗", "class": "lv-surface", "z": 1, "closed": { "opacity": 0, "transform": "translateY(-700px)" }, "open": { "opacity": 1, "transform": "none" }, "enter": { "ms": 400, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 250, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "columns", "name": "列组（30ms 步进）", "class": "lv-cards lv-columns", "z": 2,
+          "html": "<div class='lv-card' style='--lv-delay:0ms'></div><div class='lv-card' style='--lv-delay:30ms'></div><div class='lv-card' style='--lv-delay:60ms'></div><div class='lv-card' style='--lv-delay:90ms'></div><div class='lv-card' style='--lv-delay:120ms'></div>",
+          "closed": { "opacity": 0, "transform": "translateY(-700px)" }, "open": { "opacity": 1, "transform": "none" },
+          "enter": { "ms": 400, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 500, "ease": "cubic-bezier(0.42,0,1,1)" } }
+      ]
+    },
+    "popDialog": {
+      "label": "环形弹性揭示（0.7→1 + ring 20→100）",
+      "source": "osu.Game/Overlays/Dialog/PopupDialog.cs:27-28,324-354",
+      "duration": { "enter": 750, "exit": 500 },
+      "layers": [
+        { "id": "dim", "name": "遮罩（音乐 duck 100ms）", "class": "lv-dim", "z": 0, "closed": { "opacity": 0 }, "open": { "opacity": 1 }, "enter": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 500, "ease": "cubic-bezier(0.22,1,0.36,1)" } },
+        { "id": "dialog", "name": "对话框", "class": "lv-surface lv-pop", "z": 1, "closed": { "opacity": 0, "transform": "scale(0.7)" }, "open": { "opacity": 1, "transform": "scale(1)" }, "enter": { "ms": 750, "ease": "cubic-bezier(0.34,1.56,0.64,1)" }, "exit": { "ms": 500, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "ring", "name": "环形揭示", "class": "lv-ring", "z": 2, "closed": { "opacity": 0, "transform": "scale(0.2)" }, "open": { "opacity": 1, "transform": "scale(1)" }, "enter": { "ms": 750, "ease": "cubic-bezier(0.22,1,0.36,1)" }, "exit": { "ms": 300, "ease": "cubic-bezier(0.42,0,1,1)" } },
+        { "id": "icon", "name": "图标（延迟 100）", "class": "lv-content", "z": 3, "closed": { "opacity": 0, "transform": "scale(0)" }, "open": { "opacity": 1, "transform": "scale(1)" }, "enter": { "ms": 750, "ease": "cubic-bezier(0.22,1,0.36,1)", "delay": 100 }, "exit": { "ms": 300, "ease": "cubic-bezier(0.42,0,1,1)" } }
+      ]
+    }
+  }
+}

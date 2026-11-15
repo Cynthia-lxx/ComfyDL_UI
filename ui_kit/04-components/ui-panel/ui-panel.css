@@ -1,0 +1,99 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * Screens/Select/Panel.cs:135-205,331-385 / Graphics/Containers/BeatSyncedContainer.cs
+ * Colours, durations and easing all come from 03-colour-typography/tokens.css.
+ */
+
+.ui-panel {
+  --_fast: calc(var(--duration-fast, 120ms) * var(--motion-scale, 1));
+  --_normal: calc(var(--duration-normal, 300ms) * var(--motion-scale, 1));
+  --_beat: 500ms;
+
+  position: relative;
+  display: block;
+  min-height: 64px;
+  padding: var(--spacing-md, 14px);
+  border: var(--border-width, 2px) solid var(--ui-border, #444);
+  border-radius: var(--corner-radius-large, 10px);
+  background: var(--ui-surface, #2a2a2a);
+  color: var(--ui-text, #fff);
+  font-family: var(--font-family, sans-serif);
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform var(--_fast) var(--easing-out, ease-out),
+    border-color var(--_fast) var(--easing-out, ease-out),
+    box-shadow var(--_normal) var(--easing-out, ease-out),
+    background-color var(--_fast) var(--easing-out, ease-out);
+}
+
+.ui-panel__glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ui-glow, #66ccff);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--_normal) var(--easing-out, ease-out);
+}
+
+.ui-panel__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ui-panel__title {
+  font-size: var(--font-size-heading2, 18px);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.ui-panel__description {
+  font-size: var(--font-size-caption1, 14px);
+  color: var(--ui-text-muted, #aaa);
+}
+
+.ui-panel:hover,
+.ui-panel:focus-visible {
+  border-color: var(--ui-accent, #66ccff);
+  transform: translateX(4px);
+  outline: none;
+}
+
+.ui-panel:hover .ui-panel__glow,
+.ui-panel:focus-visible .ui-panel__glow { opacity: 0.08; }
+
+.ui-panel[data-selected='true'] {
+  border-color: var(--ui-accent-strong, #66ccff);
+  box-shadow: var(--ui-glow-effect, 0 0 8px 2px #66ccff);
+  background: color-mix(in srgb, var(--ui-accent, #66ccff) 10%, var(--ui-surface, #2a2a2a));
+}
+
+.ui-panel[data-selected='true'] .ui-panel__glow { opacity: 0.16; }
+
+/* BeatSyncedContainer 的脉冲：显式由 data-pulse 打开，避免常驻动画 */
+@keyframes ui-panel-pulse {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.32; }
+}
+
+.ui-panel[data-pulse='true'] .ui-panel__glow {
+  animation: ui-panel-pulse var(--_beat) var(--easing-in-out, ease-in-out) infinite;
+}
+
+/* 与全局动效降级联动 */
+@media (prefers-reduced-motion: reduce) {
+  .ui-panel { transition-duration: 0ms; }
+  .ui-panel:hover, .ui-panel:focus-visible { transform: none; }
+  .ui-panel[data-pulse='true'] .ui-panel__glow { animation: none; }
+}
+
+:root[data-reduce-motion='true'] .ui-panel {
+  transition-duration: 0ms;
+}
+
+:root[data-reduce-motion='true'] .ui-panel[data-pulse='true'] .ui-panel__glow {
+  animation: none;
+}

@@ -1,0 +1,110 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * OsuTabControl/OsuTabItem colour mapping: AccentColour -> --ui-accent (inactive text),
+ * active/hover text white, Bar white 1px, strip white (alpha via --tab-strip-alpha).
+ */
+
+:host {
+  display: block;
+  position: relative; /* strip 的定位上下文（strip 与 .tabs 同级） */
+  min-width: 0;
+}
+
+.tabs {
+  position: relative;
+  display: flex;
+  gap: 10px; /* HORIZONTAL_SPACING = 10 */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  position: relative;
+  flex: none;
+  padding: 5px 0; /* TabItem: Top 5 / Bottom 5 */
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px; /* OsuFont size 14 */
+  color: var(--ui-accent, #66ccff);
+  cursor: pointer;
+}
+
+.text {
+  display: block;
+  white-space: nowrap;
+  font-weight: var(--font-weight-regular, 400);
+  /* FadeUnhovered/FadeHovered/OnActivated: text colour + weight, 500ms OutQuint */
+  transition:
+    color calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    font-weight 0s;
+}
+.tab:hover .text, .tab[data-active='true'] .text { color: var(--ui-text, #fff); }
+.tab[data-active='true'] .text { font-weight: var(--font-weight-bold, 700); }
+
+/* Bar：底部 1px 白线，悬停/激活淡入 500ms OutQuint，离开淡出 */
+.bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--ui-text, #fff);
+  opacity: 0;
+  transition: opacity calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+}
+.tab:hover .bar, .tab[data-active='true'] .bar { opacity: 1; }
+
+/* strip：整行底部 1px 线，宽度/位置 500ms OutQuint 跟随激活项（上游默认不可见，加 strip 属性启用） */
+.strip {
+  position: absolute;
+  bottom: 0;
+  height: 1px;
+  background: var(--ui-text, #fff);
+  opacity: 0;
+  transition:
+    left calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    width calc(var(--duration-transition, 500ms) * var(--motion-scale, 1)) var(--easing-out, ease-out),
+    opacity calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) var(--easing-out, ease-out);
+  pointer-events: none;
+}
+:host([strip]) .strip { opacity: 0.25; }
+
+.tab:focus-visible { outline: var(--border-width, 2px) solid var(--ui-accent-strong, #66ccff); outline-offset: 2px; }
+
+/* ---- 标签变体族 ---- */
+/* PageTabControl.cs:29,40,63-85,88-126 —— 高 30、5px 黄底条、100ms 缩放指示 */
+:host([data-variant='page']) .tabs { height: 30px; }
+:host([data-variant='page']) .bar { height: 5px; background: var(--state-warning, #ffcc22); }
+:host([data-variant='page']) .bar { transition-duration: 100ms; }
+:host([data-variant='page']) .tab:hover .bar, :host([data-variant='page']) .tab[data-active='true'] .bar { transform: scaleY(1); }
+:host([data-variant='page']) .bar { transform: scaleY(0); transform-origin: bottom; }
+
+/* GradientLineTabControl.cs:39-71 —— 0.8 宽双段渐变的底部装饰线 */
+:host([data-variant='gradient-line']) { padding-bottom: 1px; }
+:host([data-variant='gradient-line']) .strip {
+  left: 10%;
+  right: 10%;
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ui-accent, #66ccff) 25%, var(--ui-accent, #66ccff) 75%, transparent);
+  opacity: 1;
+}
+:host([data-variant='gradient-line']) .bar { display: none; }
+
+/* OsuTabControlCheckbox.cs:49,92-96,126-140 —— 14px 勾选图标 + 1px 下划线 + 500ms */
+:host([data-variant='checkbox']) .tab { font-size: 14px; }
+:host([data-variant='checkbox']) .text::before {
+  content: '○';
+  display: inline-block;
+  width: 14px;
+  margin-right: 5px;
+  font-size: 14px;
+}
+:host([data-variant='checkbox']) .tab[data-active='true'] .text::before { content: '◉'; }
+:host([data-variant='checkbox']) .bar { height: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .text, .bar, .strip { transition-duration: 0ms !important; }
+}

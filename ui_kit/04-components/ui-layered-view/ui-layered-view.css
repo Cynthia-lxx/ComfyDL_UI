@@ -1,0 +1,22 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * Host box only; layer geometry is injected from 05-motion/layered-view.css.
+ */
+
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 380px;
+  min-height: 240px;
+  overflow: hidden;
+  border-radius: var(--corner-radius-large, 14px);
+  border: 1px solid var(--ui-border, #444);
+  background:
+    radial-gradient(circle at 22% 18%, color-mix(in srgb, var(--colour-1, #66ccff) 24%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--ui-surface-sunken, #141414), var(--ui-surface, #2a2a2a));
+}
+
+.lv-stage { position: absolute; inset: 0; }
+
+:host([data-theme]) .lv-root { color: var(--ui-text, #fff); }

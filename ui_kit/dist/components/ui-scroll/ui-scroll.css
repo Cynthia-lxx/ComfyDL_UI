@@ -1,0 +1,51 @@
+/* SPDX-License-Identifier: MIT
+ * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
+ * OsuScrollContainer scrollbar mapping: width 10 + 3px margins (track 16), radius 5,
+ * Gray8 -> --gray-8, GrayF hover -> --ui-text, Highlight1 drag -> --ui-accent-strong.
+ * Native scrollbar is hidden; the custom thumb mirrors scrollTop/scrollHeight.
+ */
+
+:host {
+  display: block;
+  position: relative;
+  height: 240px;
+  contain: layout style;
+}
+
+.viewport {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-right: 6px; /* 给滚动条留出呼吸空间（上游 margin 3） */
+}
+.viewport::-webkit-scrollbar { display: none; }
+
+.flow { min-height: 100%; }
+
+.track {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  display: none;
+  cursor: pointer;
+}
+.track[data-visible='true'] { display: block; }
+
+/* OsuScrollbar：宽 10、圆角 5、内缩 3；Gray8，悬停 GrayF（100ms），拖拽 Highlight1 */
+.thumb {
+  position: absolute;
+  right: 3px;
+  width: 10px;
+  min-height: 30px; /* MinimumDimSize = 10 * 3 */
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--gray-8, #888) 85%, transparent);
+  transition: background-color calc(var(--duration-fast, 120ms) * var(--motion-scale, 1)) linear;
+}
+.thumb:hover { background: var(--ui-text, #fff); }
+.track[data-dragging] .thumb { background: var(--ui-accent-strong, #66ccff); }
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb { transition-duration: 0ms !important; }
+}

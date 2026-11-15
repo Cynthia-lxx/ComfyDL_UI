@@ -1,0 +1,794 @@
+{
+  "schemaVersion": 2,
+  "_meta": {
+    "name": "ui-reference-kit",
+    "purpose": "从 MIT 源码抽离/翻译的 UI 参考资源清单，供 GPL-3.0 目标仓库装配",
+    "source": "p:/Dev/osu (MIT)",
+    "licence": "上游 MIT；派生编排部分随目标仓库 GPL-3.0",
+    "licenceFile": "00-overview/LICENSE-MIT.txt",
+    "audit": "00-overview/licence-audit.json",
+    "constraint": "不使用 osu!/ppy/lazer 品牌；组件统一 ui- 前缀"
+  },
+  "css": {
+    "tokens": "03-colour-typography/tokens.css",
+    "generatedTheme": "dist/themes.css",
+    "note": "tokens.css 为基础层；主题 CSS 由装配器按 themes/*.json 生成"
+  },
+  "themes": {
+    "dir": "03-colour-typography/themes",
+    "index": "03-colour-typography/themes/index.json",
+    "default": "blue",
+    "appliesTo": "data-theme"
+  },
+  "settings": "00-overview/settings.json",
+  "i18n": {
+    "dir": "00-overview/i18n",
+    "default": "en",
+    "fallback": "en",
+    "available": [
+      "en",
+      "zh-CN"
+    ],
+    "provenance": "键名与英文 fallback 取自 MIT 源码 Localisation/*Strings.cs；zh-CN 为本资源包自行翻译，未复制上游 Crowdin 译文",
+    "excluded": "含品牌词的字符串（如 UserInterfaceStrings.cs:55）"
+  },
+  "components": [
+    {
+      "id": "ui-button",
+      "kind": "custom-element",
+      "tag": "ui-button",
+      "files": {
+        "js": "04-components/ui-button/ui-button.js",
+        "css": "04-components/ui-button/ui-button.css"
+      },
+      "mount": "[data-ui-mount='button']",
+      "settings": [
+        "ui.hoverFeedback",
+        "ui.holdActivationDelay",
+        "motion.duration.fast",
+        "motion.reduce",
+        "theme.scheme"
+      ],
+      "i18nKeys": [
+        "common.back",
+        "common.next",
+        "common.finish"
+      ],
+      "exports": [
+        "default",
+        "UiButtonElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/OsuButton.cs:133-176",
+        "osu.Game/Graphics/UserInterface/ShearedButton.cs:191-249",
+        "osu.Game/Graphics/UserInterface/HoverClickSounds.cs:42-58 (视觉反馈部分)"
+      ]
+    },
+    {
+      "id": "ui-panel",
+      "kind": "dom-factory",
+      "files": {
+        "js": "04-components/ui-panel/ui-panel.js",
+        "css": "04-components/ui-panel/ui-panel.css"
+      },
+      "mount": "[data-ui-mount='panel']",
+      "settings": [
+        "theme.scheme",
+        "graphics.blur",
+        "graphics.dim",
+        "motion.duration.normal",
+        "motion.reduce"
+      ],
+      "i18nKeys": [
+        "common.name",
+        "common.description",
+        "common.default"
+      ],
+      "exports": [
+        "mount",
+        "unmount",
+        "setTheme"
+      ],
+      "source": [
+        "osu.Game/Screens/Select/Panel.cs:135-205,331-385",
+        "osu.Game/Graphics/Containers/BeatSyncedContainer.cs"
+      ]
+    },
+    {
+      "id": "ui-action-rail",
+      "kind": "custom-element",
+      "tag": "ui-action-rail",
+      "files": {
+        "js": "04-components/ui-action-rail/ui-action-rail.js",
+        "css": "04-components/ui-action-rail/ui-action-rail.css"
+      },
+      "mount": "[data-ui-mount='menu-buttons']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiActionRailElement",
+        "setItems",
+        "setState",
+        "setTheme",
+        "unmount"
+      ],
+      "source": [
+        "osu.Game/Screens/Menu/ButtonSystem.cs:38-137,424-528",
+        "osu.Game/Screens/Menu/MainMenuButton.cs:97-356",
+        "osu.Game/Screens/Menu/ButtonArea.cs:26-132",
+        "osu.Game/Screens/Menu/FlowContainerWithOrigin.cs:15-34",
+        "osu.Game/Screens/Menu/OsuLogo.cs:291-452"
+      ],
+      "note": "用户点名的「hub 右侧一横排楔形按钮」：4 种宽度状态、节拍驱动 hover、加性按压层、hub 追踪、键盘导航"
+    },
+    {
+      "id": "ui-reveal-overlay",
+      "kind": "custom-element",
+      "tag": "ui-reveal-overlay",
+      "files": {
+        "js": "04-components/ui-reveal-overlay/ui-reveal-overlay.js",
+        "css": "04-components/ui-reveal-overlay/ui-reveal-overlay.css"
+      },
+      "mount": "[data-ui-mount='overlay']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "graphics.dim"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiRevealOverlayElement",
+        "open",
+        "close",
+        "toggle",
+        "setTheme",
+        "unmount"
+      ],
+      "source": [
+        "osu.Game/Graphics/Containers/WaveContainer.cs:19-192",
+        "osu.Game/Overlays/WaveOverlayContainer.cs:10-49",
+        "osu.Game/Overlays/Mods/ShearedOverlayContainer.cs:132-174",
+        "osu.Game/Overlays/SettingsPanel.cs:170-204",
+        "osu.Game/Overlays/Dialog/PopupDialog.cs:324-354"
+      ],
+      "note": "用户点名的「叠加界面滑入附带几何效果」：Wave 四层旋转、Shear 斜切、侧栏 X 位移、底部 Y 位移、圆形弹性揭示，共 5 种 variant"
+    },
+    {
+      "id": "ui-layered-view",
+      "kind": "custom-element",
+      "tag": "ui-layered-view",
+      "files": {
+        "js": "04-components/ui-layered-view/ui-layered-view.js",
+        "css": "04-components/ui-layered-view/ui-layered-view.css"
+      },
+      "mount": "[data-ui-mount='layered-view']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "motion.duration.normal",
+        "graphics.dim"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiLayeredViewElement",
+        "open",
+        "close",
+        "toggle",
+        "replay",
+        "seek",
+        "setRate",
+        "setPreset",
+        "setLayerVisible",
+        "setTheme",
+        "unmount"
+      ],
+      "source": [
+        "osu.Game/Graphics/Containers/WaveContainer.cs:19-192",
+        "osu.Game/Overlays/WaveOverlayContainer.cs:35-48",
+        "osu.Game/Overlays/FullscreenOverlay.cs:47-129",
+        "osu.Game/OsuGame.cs:283-284,1108-1161"
+      ],
+      "note": "12 层并行的展开/收起编排；每层独立时长/缓动/延迟，收起用动画栅栏延迟清理"
+    },
+    {
+      "id": "ui-textbox",
+      "kind": "custom-element",
+      "tag": "ui-textbox",
+      "files": {
+        "js": "04-components/ui-textbox/ui-textbox.js",
+        "css": "04-components/ui-textbox/ui-textbox.css"
+      },
+      "mount": "[data-ui-mount='textbox']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [
+        "common.name",
+        "ui.user_search"
+      ],
+      "exports": [
+        "default",
+        "UiTextboxElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/OsuTextBox.cs:73-93,258-282,321-397",
+        "osu.Game/Graphics/UserInterface/SearchTextBox.cs:15-19",
+        "osu.Game/Graphics/UserInterface/OsuNumberBox.cs"
+      ],
+      "note": "文本输入：聚焦 3px 描边、Background5/4/Commit 三态背景、逐字坠落入场（FallingDownContainer 替身）、光标节拍脉冲、search/number 变体、非法输入红闪"
+    },
+    {
+      "id": "ui-slider",
+      "kind": "custom-element",
+      "tag": "ui-slider",
+      "files": {
+        "js": "04-components/ui-slider/ui-slider.js",
+        "css": "04-components/ui-slider/ui-slider.css"
+      },
+      "mount": "[data-ui-mount='slider']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.normal"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiSliderElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/RoundedSliderBar.cs:62-129,190-205",
+        "osu.Game/Graphics/UserInterface/Nub.cs:82-105,162-178",
+        "osu.Game/Graphics/UserInterface/OsuSliderBar.cs:61-86"
+      ],
+      "note": "滑杆：accent/背景双箱轨道、nub 250ms OutQuint 跟随、hover/drag 辉光（40ms 闪 + 800ms 回落）、30ms 节流 tick 脉冲、双击恢复默认、方向键/翻页键/Shift 大步进"
+    },
+    {
+      "id": "ui-dropdown",
+      "kind": "custom-element",
+      "tag": "ui-dropdown",
+      "files": {
+        "js": "04-components/ui-dropdown/ui-dropdown.js",
+        "css": "04-components/ui-dropdown/ui-dropdown.css"
+      },
+      "mount": "[data-ui-mount='dropdown']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.transition"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiDropdownElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/OsuDropdown.cs:79-127,247-254,326-335,346-462"
+      ],
+      "note": "下拉：菜单 300ms OutQuint 淡入+高度过渡、悬停条 100ms 入/600ms 出、悬停 chevron -3px 滑入、头部 chevron 纵向翻转、方向键预选/Enter 选择/Esc 关闭、选项标签截断省略"
+    },
+    {
+      "id": "ui-tabs",
+      "kind": "custom-element",
+      "tag": "ui-tabs",
+      "files": {
+        "js": "04-components/ui-tabs/ui-tabs.js",
+        "css": "04-components/ui-tabs/ui-tabs.css"
+      },
+      "mount": "[data-ui-mount='tabs']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.transition"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiTabsElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/OsuTabControl.cs:31-53,88-101,121-146,177-213"
+      ],
+      "note": "选项卡：间距 10、文字 14px 上下边距 5、悬停/激活底栏 1px 淡入 500ms OutQuint、激活加粗白字/未激活 accent 字、strip 底线宽度 500ms OutQuint 跟随（strip 属性启用）、方向键/Home/End"
+    },
+    {
+      "id": "ui-checkbox",
+      "kind": "custom-element",
+      "tag": "ui-checkbox",
+      "files": {
+        "js": "04-components/ui-checkbox/ui-checkbox.js",
+        "css": "04-components/ui-checkbox/ui-checkbox.css"
+      },
+      "mount": "[data-ui-mount='checkbox']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiCheckboxElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/OsuCheckbox.cs:42-113",
+        "osu.Game/Graphics/UserInterface/Nub.cs:82-105,162-178"
+      ],
+      "note": "开关：nub 靠右（宽 50 + 间距 10）、选中 width 1.0/border 8.5 OutElasticHalf 200ms、未选 width 0.75/border 3 OutQuint 200ms、悬停辉光、切换脉冲、空格/回车切换、role=switch"
+    },
+    {
+      "id": "ui-scroll",
+      "kind": "custom-element",
+      "tag": "ui-scroll",
+      "files": {
+        "js": "04-components/ui-scroll/ui-scroll.js",
+        "css": "04-components/ui-scroll/ui-scroll.css"
+      },
+      "mount": "[data-ui-mount='scroll']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiScrollElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/Containers/OsuScrollContainer.cs:32-33,67-73,79-157"
+      ],
+      "note": "滚动容器：原生滚动 + 自绘滚动条（宽 10 + 3px 边距、圆角 5、最小拇指 30）、Gray8→GrayF 悬停 100ms、拖拽 Highlight1 高亮、轨道点击绝对滚动（含拇指半径居中修正）、内容自适应 ResizeObserver"
+    },
+    {
+      "id": "ui-breadcrumb",
+      "kind": "custom-element",
+      "tag": "ui-breadcrumb",
+      "files": {
+        "js": "04-components/ui-breadcrumb/ui-breadcrumb.js",
+        "css": "04-components/ui-breadcrumb/ui-breadcrumb.css"
+      },
+      "mount": "[data-ui-mount='breadcrumb']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.transition"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiBreadcrumbElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/BreadcrumbControl.cs:20-46,48-111",
+        "osu.Game/Graphics/UserInterface/OsuTabControl.cs:121-146"
+      ],
+      "note": "面包屑：高 32 / 间距 10 / 文字 18px、选中之后的项 500ms OutQuint 淡出+横向缩至 0.8、选中项之前的项显示分隔 chevron、激活白字加粗+底栏、方向键/Home/End 仅在可见项间移动"
+    },
+    {
+      "id": "ui-menu",
+      "kind": "custom-element",
+      "tag": "ui-menu",
+      "files": {
+        "js": "04-components/ui-menu/ui-menu.js",
+        "css": "04-components/ui-menu/ui-menu.css"
+      },
+      "mount": "[data-ui-mount='menu']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.normal"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiMenuElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/OsuMenu.cs:21-22,41-47,68-99,127-153",
+        "osu.Game/Graphics/UserInterface/DrawableOsuMenuItem.cs:25-28,44-45,58-68,90-104,121-150",
+        "osu.Game/Graphics/UserInterface/OsuContextMenu.cs:21-32"
+      ],
+      "note": "多级菜单：FadeIn 280 OutQuint 开、50ms 延迟后 FadeOut 关、子菜单右上锚定+视口翻面、悬停 80ms 常规↔加粗文字互换（双 span 不跳宽）、destructive/highlighted 文字色、disabled 0.2、分隔条 scaleY 0.6、MaxHeight 250 滚动、Esc/外点关闭"
+    },
+    {
+      "id": "ui-hold-button",
+      "kind": "custom-element",
+      "tag": "ui-hold-button",
+      "files": {
+        "js": "04-components/ui-hold-button/ui-hold-button.js",
+        "css": "04-components/ui-hold-button/ui-hold-button.css"
+      },
+      "mount": "[data-ui-mount='hold-button']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.holdActivationDelay",
+        "motion.duration.normal"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default",
+        "UiHoldButtonElement"
+      ],
+      "source": [
+        "osu.Game/Graphics/Containers/HoldToConfirmContainer.cs:27,91-124",
+        "osu.Game/Overlays/HoldToConfirmOverlay.cs:52-58"
+      ],
+      "note": "长按确认：环形 SVG 进度（12 点起、accent / dangerous 走错误色）、激活延迟读 --hold-activation-delay（dangerous 固定 500ms）、进度 Out 推进、中止保持 200ms 后 InSine 衰减、完成发一次 ui-confirm、空格/回车等价长按"
+    },
+    {
+      "id": "ui-spinner",
+      "kind": "custom-element",
+      "tag": "ui-spinner",
+      "files": {
+        "js": "04-components/ui-spinner/ui-spinner.js",
+        "css": "04-components/ui-spinner/ui-spinner.css"
+      },
+      "mount": "[data-ui-mount='spinner']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/LoadingSpinner.cs:26,42,49-97,174-196",
+        "osu.Game/Graphics/UserInterface/LoadingLayer.cs:44-57,87",
+        "osu.Game/Graphics/UserInterface/LoadingButton.cs:17-31,44-50"
+      ],
+      "note": "加载指示：60x60 / 3150ms 旋转、box/plain 双形态、inverted、500ms OutQuint 入场 / 250ms 离场、dim 铺满父级 (clamp 20-80)、loading 属性由 ui-button 内嵌 12px"
+    },
+    {
+      "id": "ui-progress",
+      "kind": "custom-element",
+      "tag": "ui-progress",
+      "files": {
+        "js": "04-components/ui-progress/ui-progress.js",
+        "css": "04-components/ui-progress/ui-progress.css"
+      },
+      "mount": "[data-ui-mount='progress']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/ProgressBar.cs:24-36,57-93",
+        "osu.Game/Graphics/UserInterface/Bar.cs:13-59,78-116",
+        "osu.Game/Graphics/UserInterface/ExpandingBar.cs:31-101"
+      ],
+      "note": "进度条：0..1 映射、四向生长、250ms InOutCubic 尺寸插值、FillColour 150ms OutQuint、seek 拖动发 seek/commit、expanding 4px↔2px 400ms OutElastic"
+    },
+    {
+      "id": "ui-counter",
+      "kind": "custom-element",
+      "tag": "ui-counter",
+      "files": {
+        "js": "04-components/ui-counter/ui-counter.js",
+        "css": "04-components/ui-counter/ui-counter.css"
+      },
+      "mount": "[data-ui-mount='counter']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/RollingCounter.cs:37-95,135-178",
+        "osu.Game/Graphics/UserInterface/ScoreCounter.cs:13-44",
+        "osu.Game/Graphics/UserInterface/PercentageCounter.cs:15-39",
+        "osu.Game/Graphics/UserInterface/CommaSeparatedScoreCounter.cs:11-22"
+      ],
+      "note": "滚动计数：DisplayedCount/Current 双值 rAF 插值、plain/digits/separated/accuracy 四种格式、前导零、比例时长、tabular-nums 防抖宽、SetFraction/StopRolling/ResetCount"
+    },
+    {
+      "id": "ui-graph",
+      "kind": "custom-element",
+      "tag": "ui-graph",
+      "files": {
+        "js": "04-components/ui-graph/ui-graph.js",
+        "css": "04-components/ui-graph/ui-graph.css"
+      },
+      "mount": "[data-ui-mount='graph']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/BarGraph.cs:28-41,81-102,192-240",
+        "osu.Game/Graphics/UserInterface/LineGraph.cs:38-67,75-92",
+        "osu.Game/Graphics/UserInterface/SegmentedGraph.cs:89-153",
+        "osu.Game/Graphics/UserInterface/StarCounter.cs:104-135,152-164"
+      ],
+      "note": "图表：bar 250ms InOutCubic 逐帧插值（最小 1.5px）、line 1500ms OutQuint 宽度揭示、segmented tier 分层静态重算、stars 80ms 错峰 + OutElasticHalf 缩放"
+    },
+    {
+      "id": "ui-range-slider",
+      "kind": "custom-element",
+      "tag": "ui-range-slider",
+      "files": {
+        "js": "04-components/ui-range-slider/ui-range-slider.js",
+        "css": "04-components/ui-range-slider/ui-range-slider.css"
+      },
+      "mount": "[data-ui-mount='range-slider']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/RangeSlider.cs:90,109,128-129,138-160,174-215",
+        "osu.Game/Graphics/UserInterface/ShearedRangeSlider.cs:93-135,167-168",
+        "osu.Game/Graphics/UserInterface/ExpandableSlider.cs:86-109",
+        "osu.Game/Graphics/UserInterface/TimeSlider.cs:11-13"
+      ],
+      "note": "双端滑块：minRange=0.1 双向钳制、按最近 nub 切分命中、nub 内嵌标签、方向键/Shift×10、plain/sheared(30px 斜切)/time(ms 后缀)/expandable 四变体"
+    },
+    {
+      "id": "ui-motion-container",
+      "kind": "custom-element",
+      "tag": "ui-motion-container",
+      "files": {
+        "js": "04-components/ui-motion-container/ui-motion-container.js",
+        "css": "04-components/ui-motion-container/ui-motion-container.css"
+      },
+      "mount": "[data-ui-mount='motion-container']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/Containers/ShakeContainer.cs:17,23",
+        "osu.Game/Extensions/DrawableExtensions.cs:19-37",
+        "osu.Game/Graphics/Containers/ParallaxContainer.cs:20,29,63-92",
+        "osu.Game/Graphics/Containers/OsuHoverContainer.cs:16,24-84"
+      ],
+      "note": "容器动效：shake() ±8px 四段摆动（40/80/80/80/40ms）、parallax 指针 damp 跟随（100ms OutQuint）、hover 白→黄 500ms OutQuint，包装任意轻 DOM 内容"
+    },
+    {
+      "id": "ui-sections",
+      "kind": "custom-element",
+      "tag": "ui-sections",
+      "files": {
+        "js": "04-components/ui-sections/ui-sections.js",
+        "css": "04-components/ui-sections/ui-sections.css"
+      },
+      "mount": "[data-ui-mount='sections']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/SectionHeader.cs:36-82",
+        "osu.Game/Graphics/Containers/SectionsContainer.cs:49,163-212,249-308",
+        "osu.Game/Graphics/Containers/OsuRearrangeableListContainer.cs:22-64"
+      ],
+      "note": "分段容器：16 SemiBold 标题 + 28x2 高亮条 + details、scrollToSection 目标置于 10% 视高处、sortable 拖拽重排（35ms 节流）"
+    },
+    {
+      "id": "ui-hotkey",
+      "kind": "custom-element",
+      "tag": "ui-hotkey",
+      "files": {
+        "js": "04-components/ui-hotkey/ui-hotkey.js",
+        "css": "04-components/ui-hotkey/ui-hotkey.css"
+      },
+      "mount": "[data-ui-mount='hotkey']",
+      "settings": [
+        "theme.scheme",
+        "motion.reduce",
+        "ui.hoverFeedback",
+        "motion.duration.fast"
+      ],
+      "i18nKeys": [],
+      "exports": [
+        "default"
+      ],
+      "source": [
+        "osu.Game/Graphics/UserInterface/Hotkey.cs:16-71",
+        "osu.Game/Graphics/UserInterface/HotkeyDisplay.cs:19-35,49-90,92-123"
+      ],
+      "note": "热键展示：keys 组合解析为多个 badge（圆角 3、Background4 底、Light2 字、12 Bold 大写、间距 5）"
+    }
+  ],
+  "motion": {
+    "data": "05-motion/motion.json",
+    "inventory": "05-motion/effect-inventory.json",
+    "css": "05-motion/motion.css",
+    "timeline": "05-motion/timeline.js",
+    "effects": "05-motion/effects.js",
+    "source": "全仓动效普查（2026-11-13）：523 文件含 Transform、27 种 Easing、约 173 处具名时长、140 条归档动效",
+    "note": "motion.json 为可执行配置（曲线/时长/序列）；motion-inventory.json 为带源码行号的全量考据档案"
+  },
+  "layered": {
+    "inventory": "05-motion/expansion-inventory.json",
+    "presets": "05-motion/layered-view.json",
+    "engine": "05-motion/layered-view.js",
+    "geometry": "05-motion/layered-view.css",
+    "component": "04-components/ui-layered-view/ui-layered-view.js",
+    "statistics": "138 项展开/收起（叠层 50 / 图形 12 / 屏幕 30 / 折叠 26 / 复合 12 / 状态 8）+ 48 条逐图层编排",
+    "source": "全仓视图生命周期普查（2026-11-14）：470 文件含视图生命周期词、2580 次 Transform / 509 文件、132 个屏幕生命周期声明",
+    "note": "用户点名的浏览视图展开/收起：12 个独立动画图层，进场 800ms 出场 500ms，非对称缓动，OnComplete 栅栏"
+  },
+  "effects": {
+    "shaders": {
+      "triangleBorder": "06-visual-effects/geometry/edge-geometry.js",
+      "flashlight": "06-visual-effects/geometry/focus-mask.js"
+    },
+    "particles": {
+      "engine": "06-visual-effects/particles/particles.js",
+      "presets": "06-visual-effects/particles/presets.json"
+    },
+    "glow": {
+      "js": "06-visual-effects/glow/glow.js",
+      "css": "06-visual-effects/glow/glow.css"
+    },
+    "scenes": {
+      "entrance": "06-visual-effects/compositions/entrance-timeline.js",
+      "judgement": "06-visual-effects/compositions/status-pulse.js",
+      "judgementCss": "06-visual-effects/compositions/status-pulse.css"
+    },
+    "note": "上游 GLSL 文本不在仓库内（在 NuGet 包）；此处按 C# 侧算法用 WebGL2 / Canvas 2D / CSS 独立重写，未复制 shader 源码"
+  },
+  "extraCss": [
+    "05-motion/motion.css",
+    "05-motion/layered-view.css",
+    "04-components/ui-action-rail/ui-action-rail.css",
+    "04-components/ui-reveal-overlay/ui-reveal-overlay.css",
+    "06-visual-effects/glow/glow.css",
+    "06-visual-effects/compositions/status-pulse.css"
+  ],
+  "extraFiles": [
+    "05-motion/motion.json",
+    "05-motion/effect-inventory.json",
+    "05-motion/expansion-inventory.json",
+    "05-motion/layered-view.json",
+    "05-motion/layered-view.js",
+    "05-motion/layered-view.css",
+    "05-motion/motion.css",
+    "05-motion/timeline.js",
+    "05-motion/effects.js",
+    "04-components/ui-action-rail/ui-action-rail.js",
+    "04-components/ui-action-rail/ui-action-rail.css",
+    "04-components/ui-reveal-overlay/ui-reveal-overlay.js",
+    "04-components/ui-reveal-overlay/ui-reveal-overlay.css",
+    "06-visual-effects/geometry/edge-geometry.js",
+    "06-visual-effects/geometry/focus-mask.js",
+    "06-visual-effects/particles/particles.js",
+    "06-visual-effects/particles/presets.json",
+    "06-visual-effects/glow/glow.css",
+    "06-visual-effects/glow/glow.js",
+    "06-visual-effects/compositions/entrance-timeline.js",
+    "06-visual-effects/compositions/status-pulse.js",
+    "06-visual-effects/compositions/status-pulse.css"
+  ],
+  "demoFragment": "10-templates/effects-demo.html",
+  "navigationDemoFragment": "10-templates/navigation-demo.html",
+  "preview": {
+    "shell": "10-templates/preview/shell.html",
+    "dir": "10-templates/preview",
+    "server": "10-templates/preview_server.py",
+    "output": "dist/preview.html",
+    "classic": "dist/index.html",
+    "views": [
+      "overview",
+      "theme",
+      "components",
+      "motion",
+      "layers",
+      "effects",
+      "data"
+    ],
+    "api": [
+      "health",
+      "manifest",
+      "inventory",
+      "expansion",
+      "layers",
+      "motion",
+      "themes",
+      "settings",
+      "i18n/<lang>",
+      "audit",
+      "files",
+      "validate"
+    ],
+    "note": "完整预览站：hash 路由 7 个视图覆盖全部抽离资源；Python 3 标准库服务器提供 /api/* 与 no-store 缓存头"
+  },
+  "assembly": {
+    "script": "10-templates/assemble.py",
+    "runtime": "Python 3.9+",
+    "inputs": [
+      "00-overview/ui-manifest.json",
+      "00-overview/settings.json",
+      "03-colour-typography/themes/*.json",
+      "00-overview/i18n/*.json",
+      "05-motion/*",
+      "04-components/**/*",
+      "06-visual-effects/**/*",
+      "10-templates/effects-demo.html",
+      "10-templates/navigation-demo.html",
+      "10-templates/preview/*",
+      "10-templates/preview_server.py"
+    ],
+    "outputs": [
+      "dist/tokens.css",
+      "dist/themes.css",
+      "dist/settings.json",
+      "dist/manifest.json",
+      "dist/i18n/",
+      "dist/themes/*.json",
+      "dist/components/",
+      "dist/05-motion/",
+      "dist/06-visual-effects/",
+      "dist/04-components/",
+      "dist/preview/",
+      "dist/preview.html",
+      "dist/preview_server.py",
+      "dist/index.html"
+    ],
+    "defaultTheme": "blue",
+    "defaultLang": "en"
+  },
+  "layers": {
+    "style": "CSS 自定义属性 + JSON 主题配置（优先）",
+    "component": "原生 JS ES module；Custom Elements + Shadow DOM 或 mount/unmount/setTheme 纯 DOM 工厂",
+    "data": "本 manifest + settings.json + motion-inventory.json + i18n 语言包 JSON",
+    "assembly": "Python 3 装配器"
+  }
+}

@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: MIT — HotkeyDisplay.HotkeyBox 映射 */
+:host { display: inline-flex; align-items: center; gap: 5px; }
+.box {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--gray-0, #000) 70%, transparent);
+  color: var(--ui-text-muted, #ccc);
+  font-family: var(--font-family, system-ui, sans-serif);
+  font-size: var(--font-size-caption2, 12px);
+  font-weight: var(--font-weight-bold, 700);
+  line-height: 1.3;
+  white-space: nowrap;
+}

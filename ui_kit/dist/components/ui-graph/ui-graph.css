@@ -1,0 +1,38 @@
+/* SPDX-License-Identifier: MIT — BarGraph / LineGraph / SegmentedGraph / StarCounter 映射 */
+:host { display: block; position: relative; height: 80px; contain: layout style; }
+.root { position: absolute; inset: 0; }
+
+/* BarGraph：最小 1.5px 掩盖小数抗锯齿缺失 */
+.bar {
+  flex: 1 1 0;
+  min-height: 1.5px;
+  background: var(--ui-accent, #66ccff);
+  border-radius: 1px 1px 0 0;
+}
+:host([data-variant='bar']) .root { display: flex; gap: 2px; align-items: flex-end; }
+
+/* LineGraph：PathRadius 1、遮罩宽度揭示 */
+.line { width: 100%; height: 100%; overflow: visible; }
+.line polyline {
+  fill: none;
+  stroke: var(--ui-accent, #66ccff);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* SegmentedGraph：tier 越高越亮，段间无动画 */
+:host([data-variant='segmented']) .root { overflow: hidden; border-radius: 3px; background: var(--ui-surface-sunken, #222); }
+.segment { position: absolute; top: 0; bottom: 0; background: var(--ui-accent, #66ccff); }
+
+/* StarCounter：未点亮星保留 0.4 透明度轮廓 */
+:host([data-variant='stars']) { height: 24px; }
+:host([data-variant='stars']) .root { display: flex; align-items: center; gap: 4px; }
+.star {
+  display: inline-block;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ui-accent, #66ccff);
+  transform-origin: center;
+}

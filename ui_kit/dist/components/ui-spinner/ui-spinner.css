@@ -1,0 +1,66 @@
+/* SPDX-License-Identifier: MIT — LoadingSpinner / LoadingLayer / LoadingButton 映射 */
+:host {
+  display: inline-block;
+  width: var(--spinner-size, 60px);
+  height: var(--spinner-size, 60px);
+  position: relative;
+  contain: layout style;
+}
+
+/* LoadingSpinner withBox：黑 0.7 圆角 20（随尺寸 = size/4）、白色 CircleNotch 0.6 */
+.box {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--spinner-size, 60px) / 4);
+  background: color-mix(in srgb, var(--gray-0, #000) 70%, transparent);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.notch {
+  width: 60%;
+  height: 60%;
+  border: 0.1em solid var(--ui-text, #fff);
+  border-right-color: transparent;
+  border-radius: 50%;
+  box-sizing: border-box;
+  /* spin_duration = 3150ms 顺时针；节拍同步每拍 +90° 的替身 */
+  animation: ui-spinner-spin 3150ms linear infinite;
+}
+@keyframes ui-spinner-spin { to { transform: rotate(360deg); } }
+
+/* 无盒形态：圆形遮罩 + 垂直渐变三角（渐变 + 0.4 alpha 近似 TrianglesV2） */
+:host([data-variant='plain']) .box {
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 120%,
+    color-mix(in srgb, var(--ui-text, #fff) 40%, transparent), transparent 70%);
+  transform: scale(0.8);
+}
+:host([data-inverted='true']) .box { background: color-mix(in srgb, var(--ui-text, #fff) 70%, transparent); }
+:host([data-inverted='true']) .notch { border-color: var(--gray-0, #000); border-right-color: transparent; }
+
+/* LoadingLayer：铺满父级 + 黑 0.5 遮罩；尺寸 clamp(短边*0.25, 20, 80) */
+.dim { display: none; }
+:host([data-dim='true']) { position: absolute; inset: 0; width: 100%; height: 100%; }
+:host([data-dim='true'][active='false']) .dim { display: none; }
+:host([data-dim='true']) .dim {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--gray-0, #000) 50%, transparent);
+}
+:host([data-dim='true']) .box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(20px, 25vmin, 80px);
+  height: clamp(20px, 25vmin, 80px);
+  transform: translate(-50%, -50%);
+  border-radius: 25%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notch { animation-duration: 0ms !important; }
+}
