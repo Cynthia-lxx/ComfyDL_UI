@@ -1,0 +1,74 @@
+name: Sync Docs to Wiki
+
+on:
+  push:
+    branches: [ master ] # 如果你本地的主分支叫 master，请把这里改成 master
+    paths:
+      - 'comfydl/FUNCTIONS.md'
+      - 'QUANTIZATION.md'
+      - 'docs/**'
+  workflow_dispatch: # 允许你在网页上手动点击触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Wiki repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki-checkout
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Prepare and Sync files
+        run: |
+          mkdir -p temp-wiki
+          
+          # 高优先级文档处理
+          if [ -f "comfydl/FUNCTIONS.md" ]; then
+            cp "comfydl/FUNCTIONS.md" temp-wiki/Home.md
+          fi
+          
+          if [ -f "QUANTIZATION.md" ]; then
+            cp "QUANTIZATION.md" temp-wiki/Priority-1-QUANTIZATION.md
+          fi
+          
+          # HTML 转换为 MD
+          if [ -f "docs/network-and-layers.html" ]; then
+            pandoc "docs/network-and-layers.html" -o "temp-wiki/Priority-2-Network-and-Layers.md"
+          fi
+
+          # 遍历 docs/ 下的所有 md 文件，加前缀并展平
+          if ls docs/*.md 1> /dev/null 2>&1; then
+            for f in docs/*.md; do
+              filename=$(basename "$f")
+              cp "$f" "temp-wiki/Docs-$filename"
+            done
+          fi
+
+          # 同步到 Wiki 仓库（注意：这会删除 Wiki 里原本存在但 temp-wiki 里没有的文件）
+          rsync -av --delete --exclude='.git' temp-wiki/ wiki-checkout/
+
+      - name: Commit and Push
+        working-directory: wiki-checkout
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to sync."
+            exit 0
+          fi
+          
+          git add -A
+          git commit -m "Auto-sync docs to Wiki (Prioritized layout)"
+          git push
