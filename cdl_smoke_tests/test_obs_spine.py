@@ -707,6 +707,20 @@ def _p6b_frontend_checks() -> None:
     check("P6b-g bilingual i18n + dock-gap repair",
           "const I18N" in js and "en:" in js and "zh:" in js
           and "function ensureDockGap" in js and "--cdl-dock-left" in js)
+    check("P6b-h switches right-aligned with dim active state",
+          'class="cdl-p6b-switch-name"' in js
+          and "margin-left: auto" in css
+          and "ui-checkbox[checked] { --ui-accent: var(--ui-accent-weak" in css
+          and 'btn.dataset.active' in js
+          and '.cdl-p6b-btn[data-active="true"]' in css)
+    check("P6b-i theme moved out of Optimizer into Settings > ComfyDL",
+          "theme_title" not in js and "renderTheme" not in js
+          and 'data-p6b="theme"' not in js
+          and "/comfydl/ui-assets/kit-settings.js" in patch
+          and (base.parent / "ui_assets" / "kit-settings.js").is_file())
+    check("P6b-j default position clears the workflow tab row",
+          "right: 14px;" in css and "--workflow-tabs-height" in css
+          and "function safeTop" in js and "p.top < safeTop()" in js)
     check("P7-h bench card wired into the Optimizer panel (read-only)",
           '"/comfydl/attention/bench"' in js
           and "function renderBench" in js and 'data-p6b="bench"' in js

@@ -1,12 +1,12 @@
 /* ComfyDL Optimizer panel (M-D P6b).  Own prefix so it never collides with
  * the P6 Observation overlay; z-index 2100 matches the P6 overlay band
  * (above the topbar, below full-screen surfaces, clear of the minimap).
- * Default position is horizontally offset from obs.css's 240px window so
- * both windows can be open at once without stacking. */
+ * Default to the right gutter, below the first workflow-tab row (~38px):
+ * the old dock+270px start covered the first tab on a fresh profile. */
 #cdl-p6b-overlay {
   position: fixed;
-  left: calc(var(--cdl-dock-left, 59px) + 270px);
-  top: calc(var(--comfy-topbar-height, 48px) + 12px);
+  right: 14px;
+  top: calc(var(--workflow-tabs-height, 38px) + 14px);
   width: 280px;
   max-height: calc(100vh - 80px);
   z-index: 2100;
@@ -48,6 +48,12 @@
   border-radius: 4px;
 }
 .cdl-p6b-btn:hover { background: var(--comfy-input-bg, #222); }
+.cdl-p6b-btn[data-active="true"] {
+  border-color: var(--ui-accent-weak, #4a7d99);
+  background: color-mix(in srgb, var(--ui-accent-weak, #4a7d99) 22%,
+    var(--comfy-input-bg, #222));
+  color: var(--input-text-read-only, #9a9a9a);
+}
 
 .cdl-p6b-body {
   padding: 6px 8px 8px;
@@ -75,13 +81,18 @@
   padding: 2px 0;
   cursor: pointer;
 }
-.cdl-p6b-switch-row input { flex: none; margin: 0; }
 .cdl-p6b-switch-name {
   flex: 1;
+  min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Checked state borrows osu's dim-active idiom: the nub keeps its shape
+ * but loses saturation, so "on" reads as a quieter accent, not a beacon. */
+ui-checkbox[checked] { --ui-accent: var(--ui-accent-weak, #4a7d99); }
+ui-checkbox, ui-button { display: inline-flex; }
 .cdl-p6b-tag {
   flex: none;
   color: var(--input-text-read-only, #9a9a9a);
@@ -113,15 +124,8 @@
 }
 .cdl-p6b-hint { margin-top: 4px; }
 
-/* U stick 2: kit component fallbacks (the kit css styles :host, but if the
- * kit fails to load these keep the rows usable instead of collapsing). */
-.cdl-p6b-switch-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.cdl-p6b-switch-row ui-checkbox { flex: 0 0 auto; }
-ui-checkbox, ui-dropdown, ui-button { display: inline-flex; }
+/* If the kit fails to load, keep the right-hand nub in place. */
+.cdl-p6b-switch-row ui-checkbox { flex: 0 0 auto; margin-left: auto; }
 
 /* P7: attention bench card - one geometry block per cached benchmark row. */
 .cdl-p6b-bench-row {
@@ -149,8 +153,8 @@ ui-checkbox, ui-dropdown, ui-button { display: inline-flex; }
 
 #cdl-p6b-reopen {
   position: fixed;
-  left: calc(var(--cdl-dock-left, 59px) + 270px);
-  top: calc(var(--comfy-topbar-height, 48px) + 12px);
+  right: 14px;
+  top: calc(var(--workflow-tabs-height, 38px) + 14px);
   z-index: 2100;
   padding: 3px 8px;
   cursor: pointer;

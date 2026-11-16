@@ -66,7 +66,6 @@
       hits: "hits", misses: "misses", entries: "entries", bytes: "cached MB",
       bench: "bench namespace",
       bench_title: "Attention bench",
-      theme_title: "Accent theme",
       nobench: "No cached benchmark yet - run the Attention Optimizer node.",
       geo: (r) => "seq " + r.seq_len + " · " + r.heads + "h · d" + r.head_dim +
         (r.device ? " · " + String(r.device).replace("device(", "").replace(")", "") : ""),
@@ -82,7 +81,6 @@
       hits: "命中", misses: "未命中", entries: "条目", bytes: "缓存 MB",
       bench: "基准命名空间",
       bench_title: "Attention 实测基准",
-      theme_title: "主题色",
       nobench: "暂无缓存基准——先跑一次 Attention Optimizer 节点。",
       geo: (r) => "seq " + r.seq_len + " · " + r.heads + " 头 · d" + r.head_dim +
         (r.device ? " · " + String(r.device).replace("device(", "").replace(")", "") : ""),
@@ -116,26 +114,30 @@
     try { localStorage.setItem(key, value ? "1" : "0"); } catch (e) { /* private mode */ }
   }
 
-  // U stick 2: string-valued settings (the kit hue theme selection).
-  function loadStr(key, fallback) {
+  function safeTop() {
+    // The first workflow-tab row occupies the top 38px; never let the panel
+    // sit on it, including after a stale persisted position or a drag.
     try {
-      const raw = localStorage.getItem(key);
-      return raw === null ? fallback : raw;
-    } catch (e) { return fallback; }
+      const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue("--workflow-tabs-height").trim();
+      const px = parseFloat(raw);
+      if (Number.isFinite(px) && px > 0) return px + 8;
+    } catch (e) { /* fall through to the measured fallback */ }
+    return 46;
   }
-  function saveStr(key, value) {
-    try { localStorage.setItem(key, value); } catch (e) { /* private mode */ }
-  }
-  const THEME_KEY = "ComfyDL.P6b.theme";
-  const THEMES = ["blue", "aquamarine", "green", "lime", "orange",
-    "pink", "plum", "purple", "red"];
 
   function loadPos() {
     try {
       const raw = localStorage.getItem(POS_KEY);
       if (!raw) return null;
       const p = JSON.parse(raw);
-      if (Number.isFinite(p?.left) && Number.isFinite(p?.top)) return p;
+      if (Number.isFinite(p?.left) && Number.isFinite(p?.top)) {
+        if (p.top < safeTop()) {
+          log("discarding stale top-left position", { left: p.left, top: p.top });
+          return null;
+        }
+        return p;
+      }
     } catch (e) { /* corrupt payload -> CSS default */ }
     return null;
   }
@@ -194,7 +196,6 @@
     hidden: loadBool(HIDDEN_KEY, false),
     pos: loadPos(),
     switches: [], backends: {}, cache: null, bench: null, busy: false,
-    theme: loadStr(THEME_KEY, ""),
   };
 
   function ensureDockGap() {
@@ -218,8 +219,8 @@
     if (!root || !state.pos) return;
     const left = clamp(state.pos.left, 0,
       Math.max(0, window.innerWidth - root.offsetWidth));
-    const top = clamp(state.pos.top, 0,
-      Math.max(0, window.innerHeight - root.offsetHeight));
+    const top = clamp(state.pos.top, safeTop(),
+      Math.max(safeTop(), window.innerHeight - root.offsetHeight));
     root.style.left = left + "px";
     root.style.top = top + "px";
     state.pos = { left, top };
@@ -240,6 +241,7 @@
       btn.textContent = state.collapsed ? "+" : "−";
       btn.title = state.collapsed ? t("expand") : t("collapse");
       btn.setAttribute("aria-label", state.collapsed ? t("expand") : t("collapse"));
+      btn.dataset.active = state.collapsed ? "false" : "true";
     }
   }
 
@@ -282,8 +284,8 @@
         const height = root.offsetHeight || 44;
         const left = clamp(start.left + ev.clientX - start.x, 0,
           Math.max(0, window.innerWidth - width));
-        const top = clamp(start.top + ev.clientY - start.y, 0,
-          Math.max(0, window.innerHeight - height));
+        const top = clamp(start.top + ev.clientY - start.y, safeTop(),
+          Math.max(safeTop(), window.innerHeight - height));
         root.style.left = left + "px";
         root.style.top = top + "px";
         state.pos = { left, top };
@@ -368,18 +370,26 @@
       const on = !!s.enabled;
       const hard = !!s.hard_disabled;
       const label = id.replace(/^comfydl\./, "");
-      return '<label class="cdl-p6b-switch-row' + (hard ? " cdl-p6b-hard" : "") + '">' +
-        // U stick 2: kit checkbox (checked/disabled/label attributes; the
-        // hard-disabled ones stay CLICKABLE on purpose - the 409 snap-back
-        // demo is part of the contract, P6b-d).
-        '<ui-checkbox data-p6b-switch="' + esc(id) + '"' +
-        ' label="' + esc(label) + '" title="' + esc(id) + '"' +
-        (on ? " checked" : "") + ">" +
-        "</ui-checkbox>" +
+      return '<div class="cdl-p6b-switch-row' + (hard ? " cdl-p6b-hard" : "") + '">' +
+        '<span class="cdl-p6b-switch-name" title="' + esc(id) + '">' +
+        esc(label) + "</span>" +
         '<span class="cdl-p6b-tag">' +
         (hard ? esc(t("hard")) : (on ? esc(t("on")) : esc(t("off")))) +
-        "</span></label>";
+        "</span>" +
+        // Kit checkbox: nub on the right (osu OsuCheckbox default), with a
+        // dimmer accent when checked. Hard-disabled ones stay CLICKABLE on
+        // purpose - the 409 snap-back is part of the contract (P6b-d).
+        '<ui-checkbox data-p6b-switch="' + esc(id) + '"' +
+        ' title="' + esc(id) + '"' + (on ? " checked" : "") +
+        "></ui-checkbox></div>";
     }).join("");
+    host.querySelectorAll(".cdl-p6b-switch-row").forEach((row) => {
+      const box = row.querySelector("ui-checkbox[data-p6b-switch]");
+      if (!box) return;
+      row.addEventListener("click", (ev) => {
+        if (ev.target !== box && !box.contains(ev.target)) box.click();
+      });
+    });
     host.querySelectorAll("ui-checkbox[data-p6b-switch]").forEach((box) => {
       box.addEventListener("ui-change", async (ev) => {
         const wanted = !!(ev.detail && ev.detail.checked);
@@ -535,11 +545,6 @@
             "</div>" +
           '<div class="cdl-p6b-card-body" data-p6b="bench"></div>' +
         "</div>" +
-        '<div class="cdl-p6b-card">' +
-          '<div class="cdl-p6b-card-title">' + esc(t("theme_title")) +
-            "</div>" +
-          '<div class="cdl-p6b-card-body" data-p6b="theme"></div>' +
-        "</div>" +
         '<div class="cdl-p6b-hint">' + esc(t("hint")) + "</div>" +
       "</div>";
     document.body.appendChild(root);
@@ -567,49 +572,18 @@
       status: root.querySelector('[data-p6b="status"]'),
       cache: root.querySelector('[data-p6b="cache"]'),
       bench: root.querySelector('[data-p6b="bench"]'),
-      theme: root.querySelector('[data-p6b="theme"]'),
     };
     applyShape();
     applyPosition();
     log("overlay mounted: collapsed=" + state.collapsed,
       "hidden=" + state.hidden,
-      "pos=" + JSON.stringify(state.pos),
-      "theme=" + JSON.stringify(state.theme));
-  }
-
-  // U stick 2: the kit hue-theme selector.  Persisted in localStorage; sets
-  // data-theme on <html> so the token layer (themes.css) re-derives every
-  // --colour-* / --ui-accent for ALL kit surfaces at once.
-  function renderTheme() {
-    const host = state.refs?.theme;
-    if (!host) return;
-    host.innerHTML =
-      '<ui-dropdown data-p6b="theme-dd" placeholder="theme">' +
-      THEMES.map((th) =>
-        '<ui-option value="' + th + '" label="' + th + '"></ui-option>').join("") +
-      "</ui-dropdown>";
-    const dd = host.querySelector("ui-dropdown");
-    if (state.theme) {
-      dd.setAttribute("value", state.theme);
-      document.documentElement.dataset.theme = state.theme;
-    }
-    dd.addEventListener("ui-select", (ev) => {
-      const v = String((ev.detail && ev.detail.value) || "");
-      log("theme ui-select:", v);
-      if (!THEMES.includes(v)) { log("theme rejected (not in THEMES)"); return; }
-      state.theme = v;
-      saveStr(THEME_KEY, v);
-      document.documentElement.dataset.theme = v;
-      log("theme applied:", v,
-        "html[data-theme]=" + document.documentElement.dataset.theme);
-    });
+      "pos=" + JSON.stringify(state.pos));
   }
 
   function mountOverlay() {
     if (document.getElementById(OVERLAY_ID)) return;
     injectCss();
     buildOverlay();
-    renderTheme();
   }
 
   function destroyOverlay() {
@@ -639,8 +613,6 @@
         try {
           await import("/comfydl/ui/components/ui-checkbox/ui-checkbox.js");
           log("kit import ui-checkbox OK");
-          await import("/comfydl/ui/components/ui-dropdown/ui-dropdown.js");
-          log("kit import ui-dropdown OK");
         } catch (e) { log("kit import FAIL (panel degrades):", String(e)); }
         mountOverlay();
         fetchAll(); // three cheap GETs; keep the first paint honest

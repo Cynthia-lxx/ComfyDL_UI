@@ -126,6 +126,14 @@ UIKIT_LOADER_TAG = (
 )
 UIKIT_LOADER_MARK = "<!--ComfyDL_UI:uikit-loader-->"
 
+# UI kit settings module: registers the accent-theme selector in the official
+# Settings > ComfyDL group.  Served from /comfydl/ui-assets/kit-settings.js.
+KIT_SETTINGS_LOADER_TAG = (
+    '<!--ComfyDL_UI:kit-settings-loader-->'
+    '<script type="module" src="/comfydl/ui-assets/kit-settings.js"></script>'
+)
+KIT_SETTINGS_LOADER_MARK = "<!--ComfyDL_UI:kit-settings-loader-->"
+
 
 def _patch_verbose_loader(web_root: Path) -> bool:
     """Inject the VERBOSE loader exactly once; return True when it changed.
@@ -473,6 +481,14 @@ def apply_frontend_patches(web_root: str) -> None:
             applied.append("uikit loader")
     except Exception as exc:
         logging.warning(f"{TAG} uikit loader not applied: {exc}")
+
+    # UI kit settings: the accent-theme selector moved OUT of the Optimizer
+    # panel into Settings > ComfyDL (it is not a performance control).
+    try:
+        if _patch_kit_settings_loader(Path(web_root)):
+            applied.append("kit settings loader")
+    except Exception as exc:
+        logging.warning(f"{TAG} kit settings loader not applied: {exc}")
 
     # The Motion module: pre-hide CSS in the head, loader script before </body>.
     try:
@@ -1139,6 +1155,24 @@ def _patch_uikit_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </head> in {path.name}")
     _write(path, text.replace("</head>", UIKIT_LOADER_TAG + "</head>"))
     logging.info(f"{TAG} uikit stylesheet loader injected into {path.name}")
+    return True
+
+
+def _patch_kit_settings_loader(web_root: Path) -> bool:
+    """Inject the UI-kit settings module exactly once; return True on change.
+
+    The module registers the accent-theme combo in Settings > ComfyDL via the
+    public extension API.  No upstream Vue asset is touched.
+    """
+    path = web_root / "index.html"
+    text = _text(path)
+    if KIT_SETTINGS_LOADER_MARK in text:
+        logging.debug(f"{TAG} kit settings loader already applied")
+        return False
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", KIT_SETTINGS_LOADER_TAG + "</body>"))
+    logging.info(f"{TAG} kit settings loader injected into {path.name}")
     return True
 
 

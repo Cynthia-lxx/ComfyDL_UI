@@ -120,6 +120,12 @@ def main() -> int:
               and "/comfydl/p6b/p6b.js" in index_text)
         check("real frontend: p6b loader re-apply is a no-op",
               _fp._patch_p6b_loader(web_root) is False)
+        # UI kit settings: theme selector no longer lives in the Optimizer.
+        check("real frontend: kit settings loader injected exactly once",
+              index_text.count(_fp.KIT_SETTINGS_LOADER_MARK) == 1
+              and "/comfydl/ui-assets/kit-settings.js" in index_text)
+        check("real frontend: kit settings loader re-apply is a no-op",
+              _fp._patch_kit_settings_loader(web_root) is False)
 
     # --- synthetic chunk: happy path ---------------------------------------- #
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_fepatch_"))
