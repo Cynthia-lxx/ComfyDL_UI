@@ -573,9 +573,16 @@
     };
     applyShape();
     applyPosition();
+    const rect = root.getBoundingClientRect();
     log("overlay mounted: collapsed=" + state.collapsed,
       "hidden=" + state.hidden,
-      "pos=" + JSON.stringify(state.pos));
+      "pos=" + JSON.stringify(state.pos),
+      "viewport=" + window.innerWidth + "x" + window.innerHeight,
+      "rect=" + JSON.stringify({
+        left: Math.round(rect.left), top: Math.round(rect.top),
+        w: Math.round(rect.width), h: Math.round(rect.height),
+      }));
+    if (state.hidden) log("NOTE: hidden=1 (persisted) - only the reopen button shows");
   }
 
   function mountOverlay() {
