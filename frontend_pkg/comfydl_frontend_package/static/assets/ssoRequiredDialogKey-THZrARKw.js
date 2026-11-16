@@ -1,0 +1,1 @@
+var e=`sso-required`,t=`sso-account-outside-organization`;export{e as n,t};

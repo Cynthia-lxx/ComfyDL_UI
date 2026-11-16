@@ -56,13 +56,15 @@ def main() -> int:
     if (web_root / "assets").is_dir():
         apply_frontend_patches(str(web_root))
         assets = web_root / "assets"
+        # Frontend 1.59.2 moved loadDefaultWorkflow into the workflow-service
+        # chunk, so scan every chunk rather than a fixed file name.
         marked = [
             p.name
-            for p in sorted(assets.glob("settingStore-*.js"))
+            for p in sorted(assets.glob("*.js"))
             if DEFAULT_WORKFLOW_MARK in p.read_text(encoding="utf-8")
         ]
-        check("real frontend: exactly one patched settingStore chunk", len(marked) == 1,
-              str(marked))
+        check("real frontend: exactly one patched default-workflow chunk",
+              len(marked) == 1, str(marked))
         if marked:
             src = (assets / marked[0]).read_text(encoding="utf-8")
             check("real frontend: redirects to the ComfyDL template",

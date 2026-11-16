@@ -6,9 +6,11 @@
 #   torch cu130 build, NVIDIA GPU (RTX 5060 / Blackwell sm_120)
 #
 # --- Core runtime: ComfyUI frontend / templates / docs -----------------------
-comfyui-frontend-package==1.51.9
-comfyui-workflow-templates==0.11.50
-comfyui-embedded-docs==0.5.10
+# The UI actually served is our repo fork (frontend_pkg/, see its README);
+# this pip package stays pinned as the fallback + frontend-patch test target.
+comfyui-frontend-package==1.59.2
+comfyui-workflow-templates==0.11.63
+comfyui-embedded-docs==0.5.17
 
 # --- Core runtime: PyTorch (CUDA 13 build) -----------------------------------
 # Install torch with the cu130 wheel explicitly, e.g.:
@@ -35,8 +37,8 @@ filelock
 pandas>=2.0.0
 openpyxl>=3.1.0
 av>=17.0.0
-comfy-kitchen==0.2.31
-comfy-aimdo==0.4.15
+comfy-kitchen==0.2.41
+comfy-aimdo==0.6.0
 requests
 simpleeval>=1.0.0
 blake3

@@ -1,0 +1,1 @@
+var e=`global-layer-editor`;export{e as t};

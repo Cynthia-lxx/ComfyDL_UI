@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";import{m as e,o as t}from"./tierPricing-ByVmPFoE.js";function getPlanCreditGrant({tier:n,duration:r,teamMonthlyCredits:i}){if(!n)return null;let a=e(n),o=i??(a?t(a):null);return o?r===`ANNUAL`?{credits:o*12,cycle:`yearly`}:r===`MONTHLY`||a===`founder`?{credits:o,cycle:`monthly`}:null:null}export{getPlanCreditGrant as t};

@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";var e={name:`Comfy.CreateLightInfo`,nodeCreated(e){if(e.constructor.comfyClass!==`CreateLightInfo`)return;let[t,n]=e.size;e.setSize([Math.max(t,360),Math.max(n,580)])}};window.comfyAPI=window.comfyAPI||{},window.comfyAPI.lightInfo=window.comfyAPI.lightInfo||{},window.comfyAPI.lightInfo.lightInfoExtension=e;export{e as lightInfoExtension};

@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";function omit(e,t){let n={...e};for(let e=0;e<t.length;e++){let r=t[e];delete n[r]}return n}export{omit as t};

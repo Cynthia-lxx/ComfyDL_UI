@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";var e=`[Assertion failed]: `,t=null;function setAssertReporter(e,n={}){t=e,e!==null&&n.forwardsToRum}function assert(n,r,i){if(n)return;let a=`${e}${r}`;console.error(a);try{t?.(a,i)}catch(e){console.error(`[Assertion reporter failed]`,e)}}export{setAssertReporter as n,assert as t};

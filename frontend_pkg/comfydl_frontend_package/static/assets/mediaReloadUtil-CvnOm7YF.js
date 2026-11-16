@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";function reloadFailedMedia(e){let t=e.currentTime,n=e.src;if(e.load(),!(t>0))return;let r=new AbortController,{signal:i}=r;e.addEventListener(`seeking`,()=>r.abort(),{signal:i}),e.addEventListener(`loadedmetadata`,()=>{r.abort(),e.src===n&&e.currentTime===0&&(e.currentTime=t)},{signal:i})}export{reloadFailedMedia as t};

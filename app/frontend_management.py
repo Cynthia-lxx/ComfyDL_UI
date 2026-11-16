@@ -230,6 +230,9 @@ class FrontendManager:
 
     @classmethod
     def default_frontend_path(cls) -> str:
+        fork = cls.comfydl_fork_path()
+        if fork:
+            return fork
         try:
             import comfyui_frontend_package
 
@@ -247,6 +250,66 @@ comfyui-frontend-package is not installed.
 """.strip()
             )
             sys.exit(-1)
+
+    # Ultimate-form frontend (user decision, 2026-11-16): the repo-owned fork
+    # in ``frontend_pkg/`` is the pristine base; we serve a runtime copy under
+    # ``user/frontend_runtime/<version>/`` (gitignored) so
+    # ``apply_frontend_patches`` keeps editing files there and never dirties
+    # the repository.  The pip ``comfyui-frontend-package`` stays installed as
+    # a fallback and as the frontend-patch test harness target.
+    FORK_VERSION = "1.59.2-cdl.1"  # keep in sync with frontend_pkg/pyproject.toml
+
+    @classmethod
+    def comfydl_fork_path(cls) -> Optional[str]:
+        """Return the runtime path of the repo fork's static tree, or None.
+
+        The fork base lives in ``<repo>/frontend_pkg/comfydl_frontend_package/
+        static``.  On version-marker mismatch (or first run) the whole tree is
+        re-synced to ``<repo>/user/frontend_runtime/<FORK_VERSION>/``; on sync
+        failure we degrade to serving the fork read-only (patches would then
+        modify repo files - logged loudly).
+        """
+        try:
+            repo_root = Path(__file__).resolve().parents[1]
+            fork_static = (
+                repo_root / "frontend_pkg" / "comfydl_frontend_package" / "static"
+            )
+            if not fork_static.is_dir():
+                return None
+            runtime_root = repo_root / "user" / "frontend_runtime" / cls.FORK_VERSION
+            marker = runtime_root / ".synced"
+            if (
+                not marker.exists()
+                or marker.read_text(encoding="utf-8").strip() != cls.FORK_VERSION
+            ):
+                import shutil
+
+                if runtime_root.exists():
+                    shutil.rmtree(runtime_root)
+                runtime_root.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(fork_static, runtime_root)
+                marker.write_text(cls.FORK_VERSION, encoding="utf-8")
+                logging.info(
+                    "[ComfyDL_UI] frontend fork synced to %s (base %s)",
+                    runtime_root,
+                    cls.FORK_VERSION,
+                )
+            return str(runtime_root)
+        except Exception as exc:
+            logging.warning(
+                "[ComfyDL_UI] frontend fork sync failed (%s); "
+                "serving the fork read-only",
+                exc,
+            )
+            try:
+                return str(
+                    Path(__file__).resolve().parents[1]
+                    / "frontend_pkg"
+                    / "comfydl_frontend_package"
+                    / "static"
+                )
+            except Exception:
+                return None
 
     @classmethod
     def template_asset_map(cls) -> Optional[Dict[str, str]]:

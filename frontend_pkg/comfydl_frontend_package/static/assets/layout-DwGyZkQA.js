@@ -1,0 +1,1 @@
+import{t as e}from"./src-CyjjXqnX.js";var t=e([`not-disabled:bg-input`,`not-disabled:text-foreground`,`[[readonly]]:bg-input/50`,`border-none`,`rounded-md`]);export{t};

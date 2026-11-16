@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";function isPlainObject(e){if(!e||typeof e!=`object`)return!1;let t=Object.getPrototypeOf(e);return t!==null&&t!==Object.prototype&&Object.getPrototypeOf(t)!==null?!1:Object.prototype.toString.call(e)===`[object Object]`}export{isPlainObject as t};

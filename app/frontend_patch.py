@@ -530,6 +530,37 @@ def _locate(assets: Path, pattern: str, marker: str) -> Path:
     raise FileNotFoundError(f"no {pattern} containing {marker!r}")
 
 
+def _locate_any(assets: Path, marker: str) -> Path:
+    """Return the ``*.js`` asset containing ``marker`` (chunk names drift)."""
+    for path in sorted(assets.glob("*.js")):
+        if marker in _text(path):
+            return path
+    raise FileNotFoundError(f"no js asset containing {marker!r}")
+
+
+def _locate_palette_file(assets: Path) -> Path:
+    """Return the asset holding the theme palettes (``node_slot:{`` tables).
+
+    Chunk names drift per build; the palette file is simply the one with the
+    most ``node_slot:{`` occurrences (>=2 so a stray merge expression in a
+    store chunk can never win).
+    """
+    best: tuple[int, Path] | None = None
+    for path in sorted(assets.glob("*.js")):
+        count = _text(path).count("node_slot:{")
+        if count >= 2 and (best is None or count > best[0]):
+            best = (count, path)
+    if best is None:
+        raise FileNotFoundError("no theme palette file with node_slot:{ tables")
+    return best[1]
+
+
+# 1.59.2 ships 11 built-in theme palettes (arc/dark/fennec/github/light/
+# solarized/nord/spooky/skeleton/witch/zombie).  A different count means an
+# upstream palette change - fail loudly rather than colour a subset silently.
+THEME_PALETTE_COUNT = 11
+
+
 def _replace_once(text: str, old: str, new: str) -> str:
     count = text.count(old)
     if count != 1:
@@ -583,10 +614,23 @@ def _patch_default_workflow(assets: Path) -> bool:
     A frontend already baked with a previous template name is upgraded in
     place (see ``_upgrade_baked_template_url``).
 
+    Frontend 1.59.2 moved the implementation into the workflow-service store
+    chunk as ``loadDefaultWorkflow=()=>queueWorkflowLoad(()=>S().loadGraphData(G))``;
+    older builds had ``loadDefaultWorkflow=async()=>{await S.loadGraphData(G)}``
+    in the settings-store chunk.  Both shapes are supported.
+
     Returns ``True`` when the asset was rewritten, ``False`` when the marker
     was already there and the URL was current.
     """
-    path = _locate(assets, "settingStore-*.js", "loadDefaultWorkflow=async()=>{")
+    # Locate by the implementation body, not the bare name: the command
+    # registration in GraphView also mentions loadDefaultWorkflow.
+    try:
+        path = _locate_any(
+            assets, "loadDefaultWorkflow=()=>queueWorkflowLoad(")
+        legacy_shape = False
+    except FileNotFoundError:
+        path = _locate_any(assets, "loadDefaultWorkflow=async()=>{")
+        legacy_shape = True
     text = _text(path)
     if DEFAULT_WORKFLOW_MARK in text:
         text, upgraded = _upgrade_baked_template_url(text)
@@ -600,23 +644,41 @@ def _patch_default_workflow(assets: Path) -> bool:
         logging.debug(f"{TAG} default workflow already applied")
         return False
 
-    match = re.search(
-        r"loadDefaultWorkflow=async\(\)=>\{await "
-        r"([A-Za-z_$][\w$]*)\.loadGraphData\(([A-Za-z_$][\w$]*)\)\}",
-        text,
-    )
-    if match is None:
-        raise ValueError("loadDefaultWorkflow call signature not found")
-
-    service, stock_graph = match.group(1), match.group(2)
-    patched = (
-        f"loadDefaultWorkflow=async()=>{{"
-        f"try{{const _cdlRes=await fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`,"
-        f"{{cache:`no-store`}});"
-        f"if(_cdlRes.ok){{await {service}.loadGraphData(await _cdlRes.json());return}}}}"
-        f"catch(_cdlErr){{}}"
-        f"await {service}.loadGraphData({stock_graph}){DEFAULT_WORKFLOW_MARK}}}"
-    )
+    if legacy_shape:
+        match = re.search(
+            r"loadDefaultWorkflow=async\(\)=>\{await "
+            r"([A-Za-z_$][\w$]*)\.loadGraphData\(([A-Za-z_$][\w$]*)\)\}",
+            text,
+        )
+        if match is None:
+            raise ValueError("loadDefaultWorkflow call signature not found")
+        service, stock_graph = match.group(1), match.group(2)
+        patched = (
+            f"loadDefaultWorkflow=async()=>{{"
+            f"try{{const _cdlRes=await fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`,"
+            f"{{cache:`no-store`}});"
+            f"if(_cdlRes.ok){{await {service}.loadGraphData(await _cdlRes.json());return}}}}"
+            f"catch(_cdlErr){{}}"
+            f"await {service}.loadGraphData({stock_graph}){DEFAULT_WORKFLOW_MARK}}}"
+        )
+    else:
+        # 1.59.2 shape: the loader runs through queueWorkflowLoad(...).
+        match = re.search(
+            r"loadDefaultWorkflow=\(\)=>queueWorkflowLoad\(\(\)=>"
+            r"([A-Za-z_$][\w$]*)\(\)\.loadGraphData\(([A-Za-z_$][\w$]*)\)\)",
+            text,
+        )
+        if match is None:
+            raise ValueError("loadDefaultWorkflow call signature not found")
+        service, stock_graph = f"{match.group(1)}()", match.group(2)
+        patched = (
+            f"loadDefaultWorkflow=()=>queueWorkflowLoad(async()=>{{"
+            f"try{{const _cdlRes=await fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`,"
+            f"{{cache:`no-store`}});"
+            f"if(_cdlRes.ok){{await {service}.loadGraphData(await _cdlRes.json());return}}}}"
+            f"catch(_cdlErr){{}}"
+            f"await {service}.loadGraphData({stock_graph}){DEFAULT_WORKFLOW_MARK}}})"
+        )
     text = _replace_once(text, match.group(0), patched)
     _write(path, text)
     logging.info(
@@ -886,7 +948,7 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
     Returns ``True`` when the asset was rewritten, ``False`` when the marker was
     already there.
     """
-    path = _locate(assets, "settingStore-*.js", "node_slot:{")
+    path = _locate_palette_file(assets)
     text = _text(path)
     if TENSOR_MARK in text:
         logging.debug(f"{TAG} TENSOR slot colour already applied")
@@ -913,8 +975,9 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
         tables += 1
     out.append(text[pos:])
 
-    if tables != 6:
-        raise ValueError(f"expected 6 theme palettes, found {tables}")
+    if tables != THEME_PALETTE_COUNT:
+        raise ValueError(
+            f"expected {THEME_PALETTE_COUNT} theme palettes, found {tables}")
     _write(path, "".join(out))
     logging.info(f"{TAG} TENSOR slot colour added to {tables} palettes in {path.name}")
     return True
@@ -933,7 +996,7 @@ def _patch_nn_model_slot_colour(assets: Path) -> bool:
     Returns ``True`` when the asset was rewritten, ``False`` when the marker was
     already there.
     """
-    path = _locate(assets, "settingStore-*.js", "node_slot:{")
+    path = _locate_palette_file(assets)
     text = _text(path)
     # Drop the stale NNMODEL entry from the earlier rename so it does not linger.
     text = text.replace(",NNMODEL:`#FF6B6B`", "")
@@ -962,8 +1025,9 @@ def _patch_nn_model_slot_colour(assets: Path) -> bool:
         tables += 1
     out.append(text[pos:])
 
-    if tables != 6:
-        raise ValueError(f"expected 6 theme palettes, found {tables}")
+    if tables != THEME_PALETTE_COUNT:
+        raise ValueError(
+            f"expected {THEME_PALETTE_COUNT} theme palettes, found {tables}")
     _write(path, "".join(out))
     logging.info(f"{TAG} nn_model slot colour added to {tables} palettes in {path.name}")
     return True
@@ -979,7 +1043,7 @@ def _patch_dataset_slot_colour(assets: Path) -> bool:
     Returns ``True`` when the asset was rewritten, ``False`` when the marker was
     already there.
     """
-    path = _locate(assets, "settingStore-*.js", "node_slot:{")
+    path = _locate_palette_file(assets)
     text = _text(path)
     if DATASET_MARK in text:
         logging.debug(f"{TAG} DATASET slot colour already applied")
@@ -1006,8 +1070,9 @@ def _patch_dataset_slot_colour(assets: Path) -> bool:
         tables += 1
     out.append(text[pos:])
 
-    if tables != 6:
-        raise ValueError(f"expected 6 theme palettes, found {tables}")
+    if tables != THEME_PALETTE_COUNT:
+        raise ValueError(
+            f"expected {THEME_PALETTE_COUNT} theme palettes, found {tables}")
     _write(path, "".join(out))
     logging.info(f"{TAG} DATASET slot colour added to {tables} palettes in {path.name}")
     return True

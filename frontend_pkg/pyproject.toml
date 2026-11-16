@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfydl-frontend-package"
+version = "1.59.2-cdl.1"
+description = "ComfyDL fork of the ComfyUI frontend static package (base: comfyui-frontend-package 1.59.2)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0" }
+
+[tool.setuptools]
+packages = ["comfydl_frontend_package"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+comfydl_frontend_package = ["static/**/*"]

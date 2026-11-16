@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";function shuffle(e){let t=e.slice();for(let e=t.length-1;e>=1;e--){let n=Math.floor(Math.random()*(e+1));[t[e],t[n]]=[t[n],t[e]]}return t}export{shuffle as t};

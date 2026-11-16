@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";function useChainCallback(e,...t){return function(...n){typeof e==`function`&&e.call(this,...n);for(let e of t)e.call(this,...n)}}export{useChainCallback as t};

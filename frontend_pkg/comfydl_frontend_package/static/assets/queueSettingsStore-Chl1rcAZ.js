@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";import{d as e}from"./vendor-vue-core-DyDHSBJn.js";function isInstantMode(e){return e===`instant-idle`||e===`instant-running`}function isInstantRunningMode(e){return e===`instant-running`}var t=e(`queueSettingsStore`,{state:()=>({mode:`disabled`,batchCount:1})});export{isInstantRunningMode as n,t as r,isInstantMode as t};

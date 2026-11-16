@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";import{i as e}from"./remoteConfig-BmTXVrLK.js";function getDevOverride(e){}function isHostTelemetryEnabled(){return e.value.enable_telemetry===!0}export{getDevOverride as n,isHostTelemetryEnabled as t};

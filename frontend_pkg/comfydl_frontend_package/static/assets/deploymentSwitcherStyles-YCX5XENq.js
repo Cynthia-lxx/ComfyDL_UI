@@ -1,0 +1,1 @@
+var e=`group min-h-8 gap-2 rounded-sm px-2 py-1 text-xs`,t=`flex w-3.5 shrink-0 justify-center`,n=`data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95`;export{n,t as r,e as t};

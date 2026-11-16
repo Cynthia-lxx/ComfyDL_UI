@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";import{at as e,rt as t}from"./vendor-vue-core-DyDHSBJn.js";import{t as n}from"./colorPaletteTheme-BFWdinOk.js";function useDocumentDarkTheme(){let r=``;e(()=>{let{style:e}=document.documentElement;r=e.cssText,n(e)}),t(()=>{document.documentElement.style.cssText=r})}export{useDocumentDarkTheme as t};

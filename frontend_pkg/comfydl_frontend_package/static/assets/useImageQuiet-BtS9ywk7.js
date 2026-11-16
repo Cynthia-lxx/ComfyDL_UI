@@ -1,0 +1,1 @@
+import"./rolldown-runtime-CM1DJQSe.js";import{lr as e}from"./vendor-reka-ui-OGOi3FeL.js";function useImageQuiet(t,n){return e(t,{...n,onError:()=>{}})}export{useImageQuiet as t};

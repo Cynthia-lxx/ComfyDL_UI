@@ -1,0 +1,1 @@
+import{t as e}from"./createLoad3d-C4OslB8u.js";export{e as createLoad3d};

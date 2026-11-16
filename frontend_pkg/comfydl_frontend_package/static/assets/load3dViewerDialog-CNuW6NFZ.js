@@ -1,0 +1,1 @@
+var e={size:`full`,maximizable:!0};window.comfyAPI=window.comfyAPI||{},window.comfyAPI.load3dViewerDialog=window.comfyAPI.load3dViewerDialog||{},window.comfyAPI.load3dViewerDialog.LOAD3D_VIEWER_DIALOG_PROPS=e;export{e as t};

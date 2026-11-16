@@ -1,0 +1,1 @@
+import{a as e,i as t,n,o as r,r as i,s as a,t as o}from"./useLoad3d-c9mfP5pj.js";export{o as getLoad3dOutputCache,n as getLoad3dSceneRevision,i as isLoad3dSceneDirty,t as markLoad3dSceneDirty,e as nodeToLoad3dMap,r as setLoad3dOutputCache,a as useLoad3d};
