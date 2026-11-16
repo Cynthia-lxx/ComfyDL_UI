@@ -707,12 +707,17 @@ def _p6b_frontend_checks() -> None:
     check("P6b-g bilingual i18n + dock-gap repair",
           "const I18N" in js and "en:" in js and "zh:" in js
           and "function ensureDockGap" in js and "--cdl-dock-left" in js)
-    check("P6b-h switches right-aligned with dim active state",
+    check("P6b-h switches right-aligned with faithful nub states",
           'class="cdl-p6b-switch-name"' in js
           and "margin-left: auto" in css
-          and "ui-checkbox[checked] { --ui-accent: var(--ui-accent-weak" in css
+          and "ui-checkbox::part(nub)" in css
+          and "ui-checkbox[checked]::part(nub)" in css
+          and "width: 18px !important" in css
+          and "0 1px 3px rgba(0, 0, 0, .4)" in css
           and 'btn.dataset.active' in js
-          and '.cdl-p6b-btn[data-active="true"]' in css)
+          and '.cdl-p6b-btn[data-active="true"]' in css
+          and "(hard ? '<span class=\"cdl-p6b-tag\">'" in js
+          and 'on ? esc(t("on"))' not in js)
     check("P6b-i theme moved out of Optimizer into Settings > ComfyDL",
           "theme_title" not in js and "renderTheme" not in js
           and 'data-p6b="theme"' not in js

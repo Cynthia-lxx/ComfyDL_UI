@@ -373,9 +373,7 @@
       return '<div class="cdl-p6b-switch-row' + (hard ? " cdl-p6b-hard" : "") + '">' +
         '<span class="cdl-p6b-switch-name" title="' + esc(id) + '">' +
         esc(label) + "</span>" +
-        '<span class="cdl-p6b-tag">' +
-        (hard ? esc(t("hard")) : (on ? esc(t("on")) : esc(t("off")))) +
-        "</span>" +
+        (hard ? '<span class="cdl-p6b-tag">' + esc(t("hard")) + "</span>" : "") +
         // Kit checkbox: nub on the right (osu OsuCheckbox default), with a
         // dimmer accent when checked. Hard-disabled ones stay CLICKABLE on
         // purpose - the 409 snap-back is part of the contract (P6b-d).

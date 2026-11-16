@@ -89,9 +89,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Checked state borrows osu's dim-active idiom: the nub keeps its shape
- * but loses saturation, so "on" reads as a quieter accent, not a beacon. */
-ui-checkbox[checked] { --ui-accent: var(--ui-accent-weak, #4a7d99); }
+/* Faithful osu Nub states (fixing the translated kit, where the OFF nub was
+ * filled with the same bright accent as ON): OFF is a small dim grey dot with
+ * an outer frame and drop shadow; ON is a wider accent-tinted pill with a
+ * soft glow.  The shape/colour difference alone encodes the state. */
+ui-checkbox::part(nub) {
+  width: 18px !important;
+  height: 14px;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 42%,
+    var(--comfy-input-bg, #222)) !important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 55%, transparent),
+    0 0 0 1px var(--border-color, #4a4a4a),
+    0 1px 3px rgba(0, 0, 0, .4) !important;
+  opacity: .8;
+}
+ui-checkbox[checked]::part(nub) {
+  width: 38px !important;
+  border-radius: 8px !important;
+  background: var(--ui-accent-weak, var(--ui-accent, #66ccff)) !important;
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--ui-accent, #66ccff) 35%, white 65%),
+    0 0 0 1px color-mix(in srgb, var(--ui-accent, #66ccff) 45%, transparent),
+    0 0 6px color-mix(in srgb, var(--ui-accent, #66ccff) 30%, transparent) !important;
+  opacity: 1;
+}
 ui-checkbox, ui-button { display: inline-flex; }
 .cdl-p6b-tag {
   flex: none;
