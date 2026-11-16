@@ -46,10 +46,13 @@
       const vueApp = root && root.__vue_app__;
       const pinia = vueApp && vueApp.config && vueApp.config.globalProperties.$pinia;
       const store = pinia && pinia._s && pinia._s.get("setting");
-      if (!store) return false;
-      // Same fallback as p6b/perftools: an older store build may not expose
-      // isReady(); its mere presence means the bootstrap finished.
-      return store.isReady ? store.isReady() === true : true;
+      // The 2026-10-30 blank-UI lesson: `isReady` is a boolean PROPERTY on
+      // the raw pinia store; registerExtension() processes `settings`
+      // IMMEDIATELY, and registering before the official store loaded its
+      // values aborts the whole bootstrap chain.  There is deliberately NO
+      // "register anyway after 30s" fallback here - a missing gate must
+      // degrade to "theme control unavailable", never to a blank UI.
+      return !!store && store.isReady === true;
     } catch (e) { return false; }
   }
 

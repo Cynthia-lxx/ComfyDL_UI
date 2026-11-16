@@ -92,7 +92,10 @@
 /* Faithful osu Nub states (fixing the translated kit, where the OFF nub was
  * filled with the same bright accent as ON): OFF is a small dim grey dot with
  * an outer frame and drop shadow; ON is a wider accent-tinted pill with a
- * soft glow.  The shape/colour difference alone encodes the state. */
+ * soft glow.  The shape/colour difference alone encodes the state.  All rings
+ * are OPAQUE (no white, no translucent washes - the translated kit's hover
+ * glow mixes with white and reads as a jagged pale stroke, so hover states
+ * are overridden here too). */
 ui-checkbox::part(nub) {
   width: 18px !important;
   height: 14px;
@@ -100,7 +103,8 @@ ui-checkbox::part(nub) {
   background: color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 42%,
     var(--comfy-input-bg, #222)) !important;
   box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 55%, transparent),
+    inset 0 0 0 2px color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 42%,
+      var(--comfy-input-bg, #222)),
     0 0 0 1px var(--border-color, #4a4a4a),
     0 1px 3px rgba(0, 0, 0, .4) !important;
   opacity: .8;
@@ -110,10 +114,28 @@ ui-checkbox[checked]::part(nub) {
   border-radius: 8px !important;
   background: var(--ui-accent-weak, var(--ui-accent, #66ccff)) !important;
   box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--ui-accent, #66ccff) 65%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--ui-accent, #66ccff) 40%, transparent),
-    0 0 6px color-mix(in srgb, var(--ui-accent, #66ccff) 30%, transparent) !important;
+    inset 0 0 0 2px var(--ui-accent, #66ccff),
+    0 0 0 1px var(--border-color, #4a4a4a),
+    0 1px 3px rgba(0, 0, 0, .4) !important;
   opacity: 1;
+}
+ui-checkbox:hover::part(nub) {
+  background: color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 60%,
+    var(--comfy-input-bg, #222)) !important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--input-text-read-only, #9a9a9a) 60%,
+      var(--comfy-input-bg, #222)),
+    0 0 0 1px var(--border-color, #4a4a4a),
+    0 1px 3px rgba(0, 0, 0, .4) !important;
+}
+ui-checkbox[checked]:hover::part(nub) {
+  background: color-mix(in srgb, var(--ui-accent, #66ccff) 70%,
+    var(--ui-accent-weak, #4a7d99)) !important;
+  box-shadow:
+    inset 0 0 0 2px var(--ui-accent, #66ccff),
+    0 0 0 1px var(--border-color, #4a4a4a),
+    0 0 6px color-mix(in srgb, var(--ui-accent, #66ccff) 35%, transparent),
+    0 1px 3px rgba(0, 0, 0, .4) !important;
 }
 ui-checkbox, ui-button { display: inline-flex; }
 .cdl-p6b-tag {
