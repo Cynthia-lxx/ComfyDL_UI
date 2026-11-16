@@ -47,7 +47,9 @@
       const pinia = vueApp && vueApp.config && vueApp.config.globalProperties.$pinia;
       const store = pinia && pinia._s && pinia._s.get("setting");
       if (!store) return false;
-      return store.isReady ? store.isReady() === true : false;
+      // Same fallback as p6b/perftools: an older store build may not expose
+      // isReady(); its mere presence means the bootstrap finished.
+      return store.isReady ? store.isReady() === true : true;
     } catch (e) { return false; }
   }
 

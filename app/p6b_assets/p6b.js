@@ -182,12 +182,37 @@
   }
 
   function injectCss() {
-    if (document.querySelector("link[data-cdl-p6b-css]")) return;
+    const existing = document.querySelector("link[data-cdl-p6b-css]");
+    if (existing) return existing;
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = CSS_URL;
     link.setAttribute("data-cdl-p6b-css", "1");
     document.head.appendChild(link);
+    return link;
+  }
+
+  // A cold load can finish boot() before the stylesheet link resolves; the
+  // overlay would then paint unstyled (a full-width transparent block) and
+  // position/drag math would run against wrong offsets.  Mount only after
+  // the sheet is really in the CSSOM (bounded wait: degrade, never hang).
+  function whenCssReady(link, timeoutMs) {
+    const budget = timeoutMs || 3000;
+    return new Promise((resolve) => {
+      if (!link || link.sheet) return resolve(!!(link && link.sheet));
+      let settled = false;
+      const done = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearInterval(timer);
+        clearTimeout(timeout);
+        resolve(ok);
+      };
+      const timer = setInterval(() => { if (link.sheet) done(true); }, 50);
+      const timeout = setTimeout(() => done(false), budget);
+      link.addEventListener("load", () => done(true));
+      link.addEventListener("error", () => done(false));
+    });
   }
 
   const state = {
@@ -508,7 +533,7 @@
   }
 
   // ---------------------------------------------------------------- shell --
-  function buildOverlay() {
+  function buildOverlay(cssReady) {
     const root = document.createElement("div");
     root.id = OVERLAY_ID;
     root.className = "cdl-p6b-overlay p6b-entrance";
@@ -577,18 +602,21 @@
     log("overlay mounted: collapsed=" + state.collapsed,
       "hidden=" + state.hidden,
       "pos=" + JSON.stringify(state.pos),
+      "cssReady=" + cssReady,
       "viewport=" + window.innerWidth + "x" + window.innerHeight,
       "rect=" + JSON.stringify({
         left: Math.round(rect.left), top: Math.round(rect.top),
         w: Math.round(rect.width), h: Math.round(rect.height),
       }));
     if (state.hidden) log("NOTE: hidden=1 (persisted) - only the reopen button shows");
+    if (!cssReady) log("WARN: p6b.css did not enter the CSSOM within the wait budget");
   }
 
-  function mountOverlay() {
+  async function mountOverlay() {
     if (document.getElementById(OVERLAY_ID)) return;
-    injectCss();
-    buildOverlay();
+    const link = injectCss();
+    const cssReady = await whenCssReady(link);
+    buildOverlay(cssReady);
   }
 
   function destroyOverlay() {
@@ -619,7 +647,7 @@
           await import("/comfydl/ui/components/ui-checkbox/ui-checkbox.js");
           log("kit import ui-checkbox OK");
         } catch (e) { log("kit import FAIL (panel degrades):", String(e)); }
-        mountOverlay();
+        await mountOverlay();
         fetchAll(); // three cheap GETs; keep the first paint honest
         return;
       }
