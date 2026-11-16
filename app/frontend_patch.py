@@ -959,6 +959,7 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
     out = []
     pos = 0
     search = 0
+    seen = 0
     tables = 0
     while True:
         start = text.find(marker, search)
@@ -966,7 +967,12 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
             break
         body = start + len(marker)
         search = body
+        seen += 1
         if text[body:body + 3] == "...":
+            continue
+        if text[body:body + 1] == "}":
+            # 1.59.2 ships empty palettes (fennec/skeleton/witch/zombie);
+            # inserting into "{}" would yield a leading comma (SyntaxError).
             continue
         end = text.index("}", body)
         out.append(text[pos:end])
@@ -975,9 +981,9 @@ def _patch_tensor_slot_colour(assets: Path) -> bool:
         tables += 1
     out.append(text[pos:])
 
-    if tables != THEME_PALETTE_COUNT:
+    if seen != THEME_PALETTE_COUNT:
         raise ValueError(
-            f"expected {THEME_PALETTE_COUNT} theme palettes, found {tables}")
+            f"expected {THEME_PALETTE_COUNT} theme palettes, found {seen}")
     _write(path, "".join(out))
     logging.info(f"{TAG} TENSOR slot colour added to {tables} palettes in {path.name}")
     return True
@@ -1009,6 +1015,7 @@ def _patch_nn_model_slot_colour(assets: Path) -> bool:
     out = []
     pos = 0
     search = 0
+    seen = 0
     tables = 0
     while True:
         start = text.find(marker, search)
@@ -1016,7 +1023,12 @@ def _patch_nn_model_slot_colour(assets: Path) -> bool:
             break
         body = start + len(marker)
         search = body
+        seen += 1
         if text[body:body + 3] == "...":
+            continue
+        if text[body:body + 1] == "}":
+            # 1.59.2 ships empty palettes (fennec/skeleton/witch/zombie);
+            # inserting into "{}" would yield a leading comma (SyntaxError).
             continue
         end = text.index("}", body)
         out.append(text[pos:end])
@@ -1025,9 +1037,9 @@ def _patch_nn_model_slot_colour(assets: Path) -> bool:
         tables += 1
     out.append(text[pos:])
 
-    if tables != THEME_PALETTE_COUNT:
+    if seen != THEME_PALETTE_COUNT:
         raise ValueError(
-            f"expected {THEME_PALETTE_COUNT} theme palettes, found {tables}")
+            f"expected {THEME_PALETTE_COUNT} theme palettes, found {seen}")
     _write(path, "".join(out))
     logging.info(f"{TAG} nn_model slot colour added to {tables} palettes in {path.name}")
     return True
@@ -1054,6 +1066,7 @@ def _patch_dataset_slot_colour(assets: Path) -> bool:
     out = []
     pos = 0
     search = 0
+    seen = 0
     tables = 0
     while True:
         start = text.find(marker, search)
@@ -1061,7 +1074,12 @@ def _patch_dataset_slot_colour(assets: Path) -> bool:
             break
         body = start + len(marker)
         search = body
+        seen += 1
         if text[body:body + 3] == "...":
+            continue
+        if text[body:body + 1] == "}":
+            # 1.59.2 ships empty palettes (fennec/skeleton/witch/zombie);
+            # inserting into "{}" would yield a leading comma (SyntaxError).
             continue
         end = text.index("}", body)
         out.append(text[pos:end])
@@ -1070,9 +1088,9 @@ def _patch_dataset_slot_colour(assets: Path) -> bool:
         tables += 1
     out.append(text[pos:])
 
-    if tables != THEME_PALETTE_COUNT:
+    if seen != THEME_PALETTE_COUNT:
         raise ValueError(
-            f"expected {THEME_PALETTE_COUNT} theme palettes, found {tables}")
+            f"expected {THEME_PALETTE_COUNT} theme palettes, found {seen}")
     _write(path, "".join(out))
     logging.info(f"{TAG} DATASET slot colour added to {tables} palettes in {path.name}")
     return True
