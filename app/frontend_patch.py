@@ -210,7 +210,11 @@ BRAND_LOGO_TAG = (
     BRAND_LOGO_MARK
     + '<style id="cdl-brand-logo-style">'
     + '.comfyui-logo{display:none!important}'
-    + '.comfy-menu-button-wrapper .grid{width:42px;height:42px;'
+    # Legacy (<=1.51.x): the logo sat in .comfy-menu-button-wrapper .grid.
+    # 1.59.2 moved it into the sidebar ComfyMenuButton, whose wrapper is the
+    # unique `.grid.place-items-center-safe` combination.
+    + '.comfy-menu-button-wrapper .grid,.grid.place-items-center-safe{'
+    + 'width:42px;height:42px;'
     + f"background:url('{FAVICON_URL}') center/contain no-repeat}}"
     + '</style>'
 )
