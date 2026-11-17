@@ -206,9 +206,10 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
         '<ui-button class="cdl-obs-btn" data-obs="hide" label="×">×</ui-button>' +
       "</div>" +
       '<div class="cdl-obs-body">' +
-        '<div class="cdl-obs-off" data-obs="hint">' + esc(t("off_hint")) +
-          '<ui-spinner class="cdl-obs-hint-spinner" data-obs="spinner"' +
-          ' variant="boxless" size="14" hidden></ui-spinner></div>' +
+        '<div class="cdl-obs-off" data-obs="hint">' + esc(t("off_hint")) + "</div>" +
+        // Sibling, not a child: renderPanel() rewrites hint.textContent.
+        '<ui-spinner class="cdl-obs-hint-spinner" data-obs="spinner"' +
+          ' variant="boxless" size="14" hidden></ui-spinner>' +
         '<ui-button class="cdl-obs-enable" data-obs="enable" label="' +
           esc(t("enable")) + '">' + esc(t("enable")) + "</ui-button>" +
         '<div class="cdl-obs-rows" data-obs="rows" hidden>' +
