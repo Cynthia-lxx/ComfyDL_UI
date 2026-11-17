@@ -540,9 +540,19 @@
     try {
       const popup = document.querySelector(".help-center-popup");
       if (!popup || !popup.offsetWidth) return false;
+      // Escape any official stacking context (the app-mode canvas/layer
+      // chain sits above z-1700) by pinning the popup to <body> as the last
+      // child; the dock yields via helpOpen below as a second guarantee.
+      if (popup.parentElement !== document.body) document.body.appendChild(popup);
+      popup.style.zIndex = "9999";
+      const backdrop = document.querySelector(".help-center-backdrop");
+      if (backdrop) backdrop.style.zIndex = "9998";
       const menu = popup.querySelector(".help-center-menu") || popup;
       let removed = 0;
       menu.querySelectorAll("section").forEach((el) => { el.remove(); removed++; });
+      // Upstream leaves a decorative hairline separator below the link group.
+      menu.querySelectorAll("hr, [class*='divider'], [class*='separator'],"
+        + " [class*='border-t']").forEach((el) => { el.remove(); removed++; });
       menu.querySelectorAll("button.help-menu-item").forEach((el) => {
         if (!(el.textContent || "").trim().startsWith("ComfyDL")) {
           el.remove();

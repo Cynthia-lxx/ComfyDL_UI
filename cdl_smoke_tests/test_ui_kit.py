@@ -241,6 +241,7 @@ prof_css = (APP_ROOT / "profiling_assets" / "profiler.css").read_text(
     encoding="utf-8")
 cdlapp_src = (APP_ROOT / "cdlapp_assets" / "cdlapp.js").read_text(
     encoding="utf-8")
+fp_src = Path(fp.__file__).read_text(encoding="utf-8")
 check("T11a kit buttons are never mistaken for a drag start",
       'closest("button, ui-button")' in p6b_src
       and 'closest("button, ui-button")' in obs_src)
@@ -259,6 +260,16 @@ check("T11d markdown contrast, compact badge, exclusive profiler tabs",
 check("T11e CrashSite topbar shows a glyph instead of an empty icon box",
       'content: "CS"' in (APP_ROOT / "crashsite_assets" / "crashsite.js").read_text(
           encoding="utf-8"))
+check("T11f Help menu: no separator, bilingual labels, escapes stacking",
+      "[class*='separator']" in cdlapp_src
+      and "document.body.appendChild(popup)" in cdlapp_src
+      and "def _help_label_expr" in fp_src
+      and "ComfyDL · Docs" in fp_src
+      and "Comfy.Locale" in fp_src)
+check("T11g profiler tabs overflow with chevron scroll hints",
+      "cdlp-tabs-wrap" in prof_src and "cdlp-tabs-right" in prof_src
+      and "scrollBy" in prof_src
+      and ".cdlp-tab-arrow" in prof_css)
 
 
 def _report() -> int:

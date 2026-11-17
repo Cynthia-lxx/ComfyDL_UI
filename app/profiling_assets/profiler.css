@@ -166,9 +166,32 @@
 }
 
 /* U stick 3: kit section tabs (B3 spacing: 7px tight / 14px airy). */
+.cdlp-tabs-wrap { position: relative; min-width: 0; }
 .cdlp-section-tabs {
   margin: var(--cdl-space-tight, 7px) var(--cdl-space-airy, 14px);
   border-bottom: 1px solid var(--border-color, #2a2a2a);
+}
+.cdlp-tab-arrow {
+  position: absolute;
+  top: 5px;
+  z-index: 2;
+  display: none;
+  width: 18px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cdl-corner-radius, 5px);
+  background: var(--comfy-menu-bg, #222);
+  color: var(--ui-accent, #66ccff);
+  font-size: 16px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.cdlp-tab-arrow[data-dir="left"] { left: 2px; }
+.cdlp-tab-arrow[data-dir="right"] { right: 2px; }
+.cdlp-tabs-wrap.cdlp-tabs-left .cdlp-tab-arrow[data-dir="left"],
+.cdlp-tabs-wrap.cdlp-tabs-right .cdlp-tab-arrow[data-dir="right"] {
+  display: block;
 }
 ui-textbox[data-assumption] {
   width: 72px;

@@ -716,34 +716,65 @@ HELP_MENU_DOCS_URL = "https://github.com/Cynthia-lxx/ComfyDL_UI/tree/master/docs
 HELP_MENU_REPO_URL = "https://github.com/Cynthia-lxx/ComfyDL_UI"
 
 
+def _help_label_expr(zh: str, en: str) -> str:
+    """JS expression for a bilingual Help-menu label (live Comfy.Locale read)."""
+    return (
+        "(()=>{try{const L=window.comfyAPI?.app?.app?.extensionManager"
+        "?.setting?.get?.('Comfy.Locale')||'';"
+        f"return String(L).startsWith('zh')?`{zh}`:`{en}`}}"
+        f"catch(e){{return `{en}`}}}})()"
+    )
+
+
 def _patch_help_menu(assets: Path) -> bool:
     """Append the ComfyDL link group to the official Help dropdown menu."""
     path = _locate(assets, "GraphView-*.js", "Comfy.ContactSupport")
     text = _text(path)
     if HELP_MENU_MARK in text:
+        # Legacy generation baked Chinese-only labels; upgrade in place.
+        upgrades = {
+            "label:`ComfyDL · 项目文档`": (
+                "label:" + _help_label_expr("ComfyDL · 项目文档", "ComfyDL · Docs")),
+            "label:`ComfyDL · QQ 交流群`": (
+                "label:" + _help_label_expr("ComfyDL · QQ 交流群", "ComfyDL · QQ group")),
+            "label:`ComfyDL · Bilibili`": (
+                "label:" + _help_label_expr("ComfyDL · Bilibili", "ComfyDL · Bilibili")),
+            "label:`ComfyDL · GitHub 仓库`": (
+                "label:" + _help_label_expr("ComfyDL · GitHub 仓库", "ComfyDL · GitHub repo")),
+        }
+        changed = False
+        for old, new in upgrades.items():
+            if old in text:
+                text = text.replace(old, new)
+                changed = True
+        if changed:
+            _write(path, text)
+            logging.info(f"{TAG} help menu labels upgraded to bilingual in {path.name}")
+            return True
         logging.debug(f"{TAG} help menu already applied")
         return False
     anchor_idx = text.find(HELP_MENU_INSERT_BEFORE)
     if anchor_idx < 0:
         raise ValueError("help menu array tail not found")
 
-    def item(key: str, icon: str, label: str, url: str) -> str:
+    def item(key: str, icon: str, zh: str, en: str, url: str) -> str:
         return (
-            "{key:`" + key + "`,type:`item`,icon:`" + icon + "`,label:`" + label
-            + "`,showExternalIcon:!0,action:()=>{trackResourceClick(`" + key
+            "{key:`" + key + "`,type:`item`,icon:`" + icon + "`,label:"
+            + _help_label_expr(zh, en)
+            + ",showExternalIcon:!0,action:()=>{trackResourceClick(`" + key
             + "`,!0),openExternalLink(`" + url + "`)," + HELP_MENU_MARK
             + "x(`close`)}}"
         )
 
     group = ",".join([
         item("cdl-docs", "icon-[lucide--book-open]", "ComfyDL · 项目文档",
-             HELP_MENU_DOCS_URL),
+             "ComfyDL · Docs", HELP_MENU_DOCS_URL),
         item("cdl-qq", "icon-[comfy--qq]", "ComfyDL · QQ 交流群",
-             HELP_MENU_QQ_URL),
+             "ComfyDL · QQ group", HELP_MENU_QQ_URL),
         item("cdl-bilibili", "icon-[comfy--bilibili]", "ComfyDL · Bilibili",
-             HELP_MENU_BILIBILI_URL),
+             "ComfyDL · Bilibili", HELP_MENU_BILIBILI_URL),
         item("cdl-repo", "icon-[lucide--github]", "ComfyDL · GitHub 仓库",
-             HELP_MENU_REPO_URL),
+             "ComfyDL · GitHub repo", HELP_MENU_REPO_URL),
     ])
     text = (
         text[:anchor_idx]

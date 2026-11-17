@@ -2270,7 +2270,48 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
           item.setAttribute("label", label);
           tabs.appendChild(item);
         });
-        first.parentNode.insertBefore(tabs, first);
+        // Narrow sidebars clip the strip: wrap it with chevron scroll
+        // controls that appear only when the kit's internal .tabs overflows.
+        const wrap = document.createElement("div");
+        wrap.className = "cdlp-tabs-wrap";
+        const leftArrow = document.createElement("button");
+        leftArrow.className = "cdlp-tab-arrow";
+        leftArrow.dataset.dir = "left";
+        leftArrow.type = "button";
+        leftArrow.setAttribute("aria-label", "\u2039");
+        leftArrow.textContent = "\u2039";
+        const rightArrow = document.createElement("button");
+        rightArrow.className = "cdlp-tab-arrow";
+        rightArrow.dataset.dir = "right";
+        rightArrow.type = "button";
+        rightArrow.setAttribute("aria-label", "\u203a");
+        rightArrow.textContent = "\u203a";
+        wrap.appendChild(leftArrow);
+        wrap.appendChild(tabs);
+        wrap.appendChild(rightArrow);
+        first.parentNode.insertBefore(wrap, first);
+        const scroller = tabs.shadowRoot?.querySelector(".tabs");
+        if (scroller) {
+          const syncArrows = () => {
+            const overflow = scroller.scrollWidth - scroller.clientWidth;
+            wrap.classList.toggle("cdlp-tabs-left", scroller.scrollLeft > 2);
+            wrap.classList.toggle("cdlp-tabs-right",
+              overflow > 2 && scroller.scrollLeft < overflow - 2);
+          };
+          scroller.addEventListener("scroll", syncArrows);
+          if (window.ResizeObserver) {
+            new ResizeObserver(syncArrows).observe(tabs);
+          } else {
+            window.addEventListener("resize", syncArrows);
+          }
+          syncArrows();
+          wrap.querySelectorAll(".cdlp-tab-arrow").forEach((btn) => {
+            btn.addEventListener("click", () => scroller.scrollBy({
+              left: btn.dataset.dir === "left" ? -150 : 150,
+              behavior: "smooth",
+            }));
+          });
+        }
         tabs.addEventListener("ui-select", (ev) => {
           // Exclusive sections, following the NTLab PE-analyser pattern:
           // picking a section fully reveals it and removes every other
