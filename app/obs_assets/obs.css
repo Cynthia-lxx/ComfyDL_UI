@@ -2,7 +2,7 @@
  *
  * Minimap-sized floating widget. Position follows the App Panel's legacy dock
  * (upper-left, below the topbar) so it never covers the built-in minimap
- * (bottom-right, z-index 1000) or the bottom-left status text. z-index 2100
+ * (bottom-right, z-index 1000) or the bottom-left status text. z-index 1400
  * sits above the topbar (1001) and below full-screen overlays (9999).
  */
 #cdl-obs-overlay {
@@ -10,7 +10,7 @@
   left: calc(var(--cdl-dock-left, 59px) + 14px);
   top: calc(var(--comfy-topbar-height, 48px) + 12px);
   width: 240px;
-  z-index: 2100;
+  z-index: 1400; /* layer map: below the official 1700 overlay band */
   box-sizing: border-box;
   font-family: "Roboto", "Noto Sans SC", sans-serif;
   font-size: 12px;
@@ -171,7 +171,7 @@ ui-button.cdl-obs-enable[disabled] { opacity: 0.55; cursor: default; }
   position: fixed;
   left: calc(var(--cdl-dock-left, 59px) + 14px);
   top: calc(var(--comfy-topbar-height, 48px) + 12px);
-  z-index: 2100;
+  z-index: 1400; /* layer map: below the official 1700 overlay band */
   width: auto;
   padding: 4px 10px;
   font-size: 11px;

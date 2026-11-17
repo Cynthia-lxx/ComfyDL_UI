@@ -59,10 +59,6 @@
 .cdl-sem-new { color: var(--cdl-status-new); }
 .cdl-sem-chosen { color: var(--cdl-chosen); }
 
-/* Help Center must sit above the App-mode dock (z-2100) even before the
- * cdlapp poll has a chance to yield; the backdrop follows the popup. */
-.help-center-popup, .help-center-backdrop { z-index: 9999 !important; }
-
 /* Markdown Note readability: the upstream widget inherits a dim node-widget
  * colour; give its rendered markdown the normal panel text colour. */
 .widget-markdown .comfy-markdown-content,

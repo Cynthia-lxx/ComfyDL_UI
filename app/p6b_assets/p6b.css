@@ -1,5 +1,5 @@
 /* ComfyDL Optimizer panel (M-D P6b).  Own prefix so it never collides with
- * the P6 Observation overlay; z-index 2100 matches the P6 overlay band
+ * the P6 Observation overlay; z-index 1400 sits in the ComfyDL widget band
  * (above the topbar, below full-screen surfaces, clear of the minimap).
  * Default to the right gutter, below the first workflow-tab row (~38px):
  * the old dock+270px start covered the first tab on a fresh profile. */
@@ -9,7 +9,7 @@
   top: calc(var(--workflow-tabs-height, 38px) + 14px);
   width: 280px;
   max-height: calc(100vh - 80px);
-  z-index: 2100;
+  z-index: 1400; /* layer map: below the official 1700 overlay band */
   display: flex;
   flex-direction: column;
   background: var(--comfy-menu-bg, #353535);
@@ -210,7 +210,7 @@ ui-checkbox, ui-button { display: inline-flex; }
   position: fixed;
   right: 14px;
   top: calc(var(--workflow-tabs-height, 38px) + 14px);
-  z-index: 2100;
+  z-index: 1400; /* layer map: below the official 1700 overlay band */
   padding: 3px 8px;
   cursor: pointer;
   background: var(--comfy-menu-bg, #353535);

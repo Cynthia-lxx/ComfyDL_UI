@@ -128,6 +128,11 @@ def main() -> int:
               and "/comfydl/ui-assets/kit-settings.js" in index_text)
         check("real frontend: kit settings loader re-apply is a no-op",
               _fp._patch_kit_settings_loader(web_root) is False)
+        check("real frontend: help-menu semantics asset injected once",
+              index_text.count(_fp.HELP_MENU_ASSET_MARK) == 1
+              and "/comfydl/ui-assets/help-menu.js" in index_text)
+        check("real frontend: help-menu asset re-apply is a no-op",
+              _fp._patch_help_menu_asset(web_root) is False)
 
     # --- synthetic chunk: happy path ---------------------------------------- #
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_fepatch_"))

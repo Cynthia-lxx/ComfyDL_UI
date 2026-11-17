@@ -102,7 +102,7 @@
     api: { interruptMethod: "interrupt" },
     // z-index band (measured 1.51.9): official splash 9999, primevue
     // tooltip 2000, actionbar 1300.  Stay between tooltip and splash.
-    zIndex: { min: 2001, max: 9999, panel: 2100 },
+    zIndex: { min: 1400, max: 1700, panel: 1550 },
     // The workspace (extensionManager) store exposes command.execute -
     // the official command runner used by the hardcoded actionbar.
     // Verified in the workspaceStoreSetup object literal.
@@ -259,6 +259,7 @@
     mounted: false,
     collapsed: false,
     appMode: false,
+    helpOpenLogged: false,
     caps: {
       anchorsSeen: false,
       commandExecute: false,
@@ -532,37 +533,21 @@
     return false;
   }
 
-  // Help Center is a z-1700 popup rendered BELOW our z-2100 app dock, and its
-  // upstream entries (Give Feedback / Docs / Manager / What's New? ...) are
-  // noise in a ComfyDL build.  Keep only the ComfyDL-branded links and report
-  // the popup as open so the dock yields while it is visible.
-  function pruneHelpMenu() {
+  // Layer map (authoritative): see the banner at the top of cdlapp.css.
+  // The dock now lives at 1550, BELOW the official 1700 overlay band, so the
+  // Help menu needs no z-index games.  app/ui_assets/help-menu.js owns the
+  // menu's content/localisation; we only yield the dock while it is open.
+  function helpMenuOpen() {
     try {
       const popup = document.querySelector(".help-center-popup");
-      if (!popup || !popup.offsetWidth) return false;
-      // Escape any official stacking context (the app-mode canvas/layer
-      // chain sits above z-1700) by pinning the popup to <body> as the last
-      // child; the dock yields via helpOpen below as a second guarantee.
-      if (popup.parentElement !== document.body) document.body.appendChild(popup);
-      popup.style.zIndex = "9999";
-      const backdrop = document.querySelector(".help-center-backdrop");
-      if (backdrop) backdrop.style.zIndex = "9998";
-      const menu = popup.querySelector(".help-center-menu") || popup;
-      let removed = 0;
-      menu.querySelectorAll("section").forEach((el) => { el.remove(); removed++; });
-      // Upstream leaves a decorative hairline separator below the link group.
-      menu.querySelectorAll("hr, [class*='divider'], [class*='separator'],"
-        + " [class*='border-t']").forEach((el) => { el.remove(); removed++; });
-      menu.querySelectorAll("button.help-menu-item").forEach((el) => {
-        if (!(el.textContent || "").trim().startsWith("ComfyDL")) {
-          el.remove();
-          removed++;
-        }
-      });
-      if (removed) {
-        console.info(TAG, `help menu pruned ${removed} upstream entries`);
+      const open = !!popup && popup.offsetWidth > 0;
+      if (open !== state.helpOpenLogged && open) {
+        state.helpOpenLogged = open;
+        console.info(TAG, "help menu open; dock yields (dock z=1550 < overlay z=1700)");
+      } else if (!open) {
+        state.helpOpenLogged = false;
       }
-      return true;
+      return open;
     } catch (e) { return false; }
   }
 
@@ -687,7 +672,7 @@
       // open (live-verified 2026-10-31: the app-mode drawer renders UNDER
       // the fixed full-bleed dock, and the official splitter REMOUNTS on
       // every drawer toggle - so the dock gets out of the way entirely).
-      const helpOpen = pruneHelpMenu();
+      const helpOpen = helpMenuOpen();
       const dock = isPureAppMode() && !drawerOpen() && !modalDialogOpen()
         && !helpOpen;
       if (dock !== state.appMode) {

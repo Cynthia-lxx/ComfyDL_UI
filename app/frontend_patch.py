@@ -134,6 +134,15 @@ KIT_SETTINGS_LOADER_TAG = (
 )
 KIT_SETTINGS_LOADER_MARK = "<!--ComfyDL_UI:kit-settings-loader-->"
 
+# Help-menu semantics: a non-hashed module that watches the official popup
+# and applies our label/entry policy at runtime (hashed upstream chunks can be
+# served from a long-lived browser cache).
+HELP_MENU_ASSET_TAG = (
+    "<!--ComfyDL_UI:help-menu-asset-->"
+    '<script type="module" src="/comfydl/ui-assets/help-menu.js"></script>'
+)
+HELP_MENU_ASSET_MARK = "<!--ComfyDL_UI:help-menu-asset-->"
+
 
 def _patch_verbose_loader(web_root: Path) -> bool:
     """Inject the VERBOSE loader exactly once; return True when it changed.
@@ -491,6 +500,8 @@ def apply_frontend_patches(web_root: str) -> None:
     try:
         if _patch_kit_settings_loader(Path(web_root)):
             applied.append("kit settings loader")
+        if _patch_help_menu_asset(Path(web_root)):
+            applied.append("help menu asset")
     except Exception as exc:
         logging.warning(f"{TAG} kit settings loader not applied: {exc}")
 
@@ -1291,6 +1302,20 @@ def _patch_kit_settings_loader(web_root: Path) -> bool:
         raise ValueError(f"expected exactly one </body> in {path.name}")
     _write(path, text.replace("</body>", KIT_SETTINGS_LOADER_TAG + "</body>"))
     logging.info(f"{TAG} kit settings loader injected into {path.name}")
+    return True
+
+
+def _patch_help_menu_asset(web_root: Path) -> bool:
+    """Inject the runtime Help-menu semantics module exactly once."""
+    path = web_root / "index.html"
+    text = _text(path)
+    if HELP_MENU_ASSET_MARK in text:
+        logging.debug(f"{TAG} help menu asset already applied")
+        return False
+    if text.count("</body>") != 1:
+        raise ValueError(f"expected exactly one </body> in {path.name}")
+    _write(path, text.replace("</body>", HELP_MENU_ASSET_TAG + "</body>"))
+    logging.info(f"{TAG} help menu asset injected into {path.name}")
     return True
 
 

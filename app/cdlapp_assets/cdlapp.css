@@ -4,9 +4,29 @@
  * Theme contract: colors/backgrounds/borders come from the official ComfyUI
  * CSS variables where available (--comfy-menu-bg, --fg-color, --border-color,
  * --input-bg-color, --comfy-topbar-height) so official theme switches
- * propagate automatically; teal (#1ABC9C) is the ComfyDL accent.  z-index
- * lives inside the measured safe band (2001-9999; official splash = 9999,
- * primevue tooltip = 2000).
+ * propagate automatically; teal (#1ABC9C) is the ComfyDL accent.
+ *
+ * ===================== CANVAS / LAYER MAP (authoritative) ==================
+ * Measured from the shipped 1.59.2 stylesheet (--z-index-* vars) and our own
+ * assets.  Do NOT stack ad-hoc z-indices: pick the band that matches the
+ * surface.  Official overlays must always be able to cover our own chrome.
+ *
+ *   0..50     graph canvas, nodes, links, in-node widgets
+ *   999..1300 official docked panels / splitters / side bars
+ *   1400      ComfyDL floating widgets (Optimizer / Observation)
+ *   1500      official side panels (drawer content)
+ *   1550      ComfyDL App dock  <-- OUR CEILING; below every official overlay
+ *   1600      --z-index-onboarding
+ *   1700      --z-index-overlay (Help menu, dialogs, dropdown portals)
+ *   1800      --z-index-tour
+ *   9999      --z-index-toast
+ *   10000     --z-index-blocking (official hard blocker)
+ *
+ * Historical bug: this dock was 2100, above the official 1700 overlay, so
+ * the Help menu rendered UNDER an opaque full-bleed App layer.  Raising Help
+ * to 9999 only moved the conflict upstairs; the dock now sits at 1550.
+ * Old 2100 declarations in p6b/obs CSS are likewise retired to 1400.
+ * ==========================================================================
  *
  * Native dock (app mode with app selections): body.cdlapp-active CSS
  * re-positions the OFFICIAL `.arrange-panel` (the input widget panel the
@@ -42,7 +62,7 @@ body.cdlapp-active .comfyui-body .arrange-panel {
   top: var(--comfy-topbar-height, 2.5rem);
   bottom: 0;
   width: auto;
-  z-index: 2100; /* OFFICIAL_SURFACE.zIndex.panel */
+  z-index: 1550; /* ComfyDL App dock: below official overlay (1700) */
   overflow-y: auto;
   background: var(--comfy-menu-bg, #1e1e1e); /* opaque cover over the center view */
 }
@@ -324,7 +344,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   border-left: none;
   border-radius: 0 10px 10px 0;
   box-shadow: 4px 0 18px rgba(0, 0, 0, 0.35);
-  z-index: 2100; /* OFFICIAL_SURFACE.zIndex.panel */
+  z-index: 1550; /* ComfyDL App dock: below official overlay (1700) */
   font-family: inherit;
   font-size: 12px;
   transition: width 0.2s ease, padding 0.2s ease;
@@ -460,7 +480,7 @@ body.cdlapp-active .comfyui-body .arrange-panel > div > div > .cdlapp-splitter {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 2100; /* OFFICIAL_SURFACE.zIndex.panel */
+  z-index: 1550; /* ComfyDL App dock: below official overlay (1700) */
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
   background: var(--comfy-menu-bg, #1e1e1e);
 }

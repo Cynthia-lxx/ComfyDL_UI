@@ -248,10 +248,10 @@ check("T11a kit buttons are never mistaken for a drag start",
 check("T11b entrance replays on panel expansion",
       "replayEntrance" in p6b_src and "replayEntrance" in obs_src
       and "export function replayEntrance" in sem_src)
-check("T11c Help menu pruned + dock yields while it is open",
-      "pruneHelpMenu" in cdlapp_src
-      and 'startsWith("ComfyDL")' in cdlapp_src
-      and "!helpOpen" in cdlapp_src)
+check("T11c dock yields while Help is open, with VERBOSE log",
+      "helpMenuOpen" in cdlapp_src
+      and "!helpOpen" in cdlapp_src
+      and "help menu open; dock yields" in cdlapp_src)
 check("T11d markdown contrast, compact badge, exclusive profiler tabs",
       ".comfy-markdown-content" in bridge
       and 'button.comfyui-button[class*="cdlp-b-"]' in prof_css
@@ -260,12 +260,24 @@ check("T11d markdown contrast, compact badge, exclusive profiler tabs",
 check("T11e CrashSite topbar shows a glyph instead of an empty icon box",
       'content: "CS"' in (APP_ROOT / "crashsite_assets" / "crashsite.js").read_text(
           encoding="utf-8"))
-check("T11f Help menu: no separator, bilingual labels, escapes stacking",
-      "[class*='separator']" in cdlapp_src
-      and "document.body.appendChild(popup)" in cdlapp_src
-      and "def _help_label_expr" in fp_src
-      and "ComfyDL · Docs" in fp_src
-      and "Comfy.Locale" in fp_src)
+help_asset = (UI_ASSETS / "help-menu.js").read_text(encoding="utf-8")
+check("T11f Help menu: runtime semantics module with VERBOSE logs",
+      "[class*='separator']" in help_asset
+      and "MutationObserver" in help_asset
+      and 'Comfy.Locale' in help_asset
+      and "QQ group" in help_asset
+      and "console.log(TAG" in help_asset
+      and "HELP_MENU_ASSET_MARK" in fp_src
+      and "help-menu-asset" in fp_src)
+check("T11h authoritative layer map: dock below official overlay",
+      "CANVAS / LAYER MAP" in (APP_ROOT / "cdlapp_assets" / "cdlapp.css").read_text(
+          encoding="utf-8")
+      and "z-index: 1550" in (APP_ROOT / "cdlapp_assets" / "cdlapp.css").read_text(
+          encoding="utf-8")
+      and "z-index: 1400" in (APP_ROOT / "p6b_assets" / "p6b.css").read_text(
+          encoding="utf-8")
+      and "9999 !important" not in bridge
+      and "panel: 1550" in cdlapp_src)
 check("T11g profiler tabs overflow with chevron scroll hints",
       "cdlp-tabs-wrap" in prof_src and "cdlp-tabs-right" in prof_src
       and "scrollBy" in prof_src
