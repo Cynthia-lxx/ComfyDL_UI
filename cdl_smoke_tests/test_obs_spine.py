@@ -734,6 +734,29 @@ def _p6b_frontend_checks() -> None:
           and "GET /comfydl/attention/bench" in
           (REPO_ROOT / "app" / "spine" / "routes.py").read_text(encoding="utf-8"))
 
+    # U stick 3 [0.90]: kit components + B8 semantic colours on all panels.
+    obs_js = (REPO_ROOT / "app" / "obs_assets" / "obs.js").read_text(
+        encoding="utf-8")
+    prof_js = (REPO_ROOT / "app" / "profiling_assets" / "profiler.js").read_text(
+        encoding="utf-8")
+    prof_css = (REPO_ROOT / "app" / "profiling_assets" / "profiler.css").read_text(
+        encoding="utf-8")
+    check("P7-i 409 snap-back contract survives the ui-button swap",
+          'box.setAttribute("checked", String(!wanted))' in js
+          and "ui-press" in js and "<ui-button" in js
+          and '"loading", ""' in js)
+    check("P7-j Observation spinner + status pulse wired",
+          "<ui-spinner" in obs_js and 'data-obs="spinner"' in obs_js
+          and 'markStatus(el, "new", true)' in obs_js
+          and "cdl-obs-hint-spinner" in
+          (REPO_ROOT / "app" / "obs_assets" / "obs.css").read_text(encoding="utf-8"))
+    check("P7-k Profiler kit surfaces + verdict semantics wired",
+          '<ui-textbox variant="number"' in prof_js
+          and 'document.createElement("ui-tabs")' in prof_js
+          and 'markStatus(box.querySelector(".cdlp-verdict-badge")' in prof_js
+          and "--cdl-verdict-ok" in prof_css
+          and "--cdl-verdict-danger" in prof_css)
+
 
 # ------------------------------------------------------------------ main --
 def _main() -> int:

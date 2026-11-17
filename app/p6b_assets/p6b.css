@@ -35,20 +35,30 @@
   background: var(--comfy-menu-bg, #353535);
 }
 .cdl-p6b-title { flex: 1; font-weight: 700; letter-spacing: .02em; }
+/* U stick 3: head controls are ui-button kit components.  The minimap-sized
+ * window keeps compact icon buttons; the B3 40px control height applies to
+ * full-size panel controls (dialogs / sidebar), not to these 20px icons. */
 .cdl-p6b-btn {
   flex: none;
+  --control-height: 20px;
+  --corner-radius: var(--cdl-corner-radius, 5px);
   min-width: 20px;
   height: 20px;
-  line-height: 18px;
-  text-align: center;
-  cursor: pointer;
+}
+ui-button.cdl-p6b-btn::part(button) {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--border-color, #4a4a4a);
+  border-radius: var(--cdl-corner-radius, 5px);
   background: transparent;
   color: var(--input-text, #ddd);
-  border: 1px solid var(--border-color, #4a4a4a);
-  border-radius: 4px;
+  font-size: 12px;
 }
-.cdl-p6b-btn:hover { background: var(--comfy-input-bg, #222); }
-.cdl-p6b-btn[data-active="true"] {
+ui-button.cdl-p6b-btn:hover::part(button) {
+  background: var(--comfy-input-bg, #222);
+}
+ui-button.cdl-p6b-btn[data-active="true"]::part(button) {
   border-color: var(--ui-accent-weak, #4a7d99);
   background: color-mix(in srgb, var(--ui-accent-weak, #4a7d99) 22%,
     var(--comfy-input-bg, #222));
@@ -192,7 +202,7 @@ ui-checkbox, ui-button { display: inline-flex; }
 .cdl-p6b-bench-backend { color: var(--input-text, #ddd); }
 .cdl-p6b-bench-backend b { font-weight: 700; }
 .cdl-p6b-bench-backend.chosen {
-  color: #3fb950;
+  color: var(--cdl-chosen, #3fb950);
   font-weight: 700;
 }
 
@@ -207,6 +217,14 @@ ui-checkbox, ui-button { display: inline-flex; }
   color: var(--input-text, #ddd);
   border: 1px solid var(--border-color, #4a4a4a);
   border-radius: 6px;
+  font-size: 11px;
+}
+ui-button#cdl-p6b-reopen::part(button) {
+  padding: 3px 8px;
+  background: var(--comfy-menu-bg, #353535);
+  color: var(--input-text, #ddd);
+  border: 1px solid var(--border-color, #4a4a4a);
+  border-radius: var(--cdl-corner-radius, 5px);
   font-size: 11px;
 }
 #cdl-p6b-reopen[hidden] { display: none; }

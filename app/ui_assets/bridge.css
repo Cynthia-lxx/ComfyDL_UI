@@ -24,6 +24,66 @@
   --ui-text: var(--input-text, var(--colour-content-1));
   --ui-text-muted: var(--input-text-read-only, var(--colour-light-3));
   --ui-border: var(--border-color, var(--colour-dark-2));
+
+  /* B8 semantic colours (U stick 3): the ONLY literal home for verdict /
+   * run-status / highlight hues.  JS reads the same names via
+   * kit_semantics.js; panels use the cdl-sem-* classes below. */
+  --cdl-verdict-ok: #4ade80;
+  --cdl-verdict-warn: #fbbf24;
+  --cdl-verdict-danger: #f87171;
+  --cdl-verdict-unknown: #9a9a9a;
+  --cdl-status-active: #4a9eff;
+  --cdl-status-ran: #3ddc97;
+  --cdl-status-cached: #4a9eff;
+  --cdl-status-blocked: #e5484d;
+  --cdl-status-failed: #e5484d;
+  --cdl-status-new: #f5a524;
+  --cdl-chosen: #3fb950;
+
+  /* B3 panel layout tokens (osu UIReference: 40/5/7-14). */
+  --cdl-control-height: 40px;
+  --cdl-corner-radius: 5px;
+  --cdl-space-tight: 7px;
+  --cdl-space-airy: 14px;
+}
+
+.cdl-sem-ok { color: var(--cdl-verdict-ok); }
+.cdl-sem-warn { color: var(--cdl-verdict-warn); }
+.cdl-sem-danger { color: var(--cdl-verdict-danger); }
+.cdl-sem-unknown { color: var(--cdl-verdict-unknown); }
+.cdl-sem-active { color: var(--cdl-status-active); }
+.cdl-sem-ran { color: var(--cdl-status-ran); }
+.cdl-sem-cached { color: var(--cdl-status-cached); }
+.cdl-sem-blocked { color: var(--cdl-status-blocked); }
+.cdl-sem-failed { color: var(--cdl-status-failed); }
+.cdl-sem-new { color: var(--cdl-status-new); }
+.cdl-sem-chosen { color: var(--cdl-chosen); }
+
+/* VFX: status-pulse + entrance-timeline.  Both are gated by the same three
+ * motion switches as the rest of the kit (--motion-scale = 0 -> duration 0,
+ * plus explicit animation:none for the global OFF switches). */
+@keyframes cdl-status-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
+}
+@keyframes cdl-entrance-timeline {
+  from { opacity: 0; transform: translateY(calc(-4px * var(--motion-scale, 1))); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cdl-vfx-pulse {
+  animation: cdl-status-pulse calc(1800ms * var(--motion-scale, 1)) ease-in-out infinite;
+}
+.cdl-vfx-entrance {
+  animation: cdl-entrance-timeline calc(320ms * var(--motion-scale, 1)) ease-out both;
+}
+html.cdl-motion-off .cdl-vfx-pulse,
+html.cdl-motion-off .cdl-vfx-entrance,
+body.cdlapp-motion-off .cdl-vfx-pulse,
+body.cdlapp-motion-off .cdl-vfx-entrance {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cdl-vfx-pulse, .cdl-vfx-entrance { animation: none !important; }
 }
 
 /* Motion gates (U stick 1, small-plan item: motion-scale folds into the

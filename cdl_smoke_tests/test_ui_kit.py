@@ -148,8 +148,8 @@ check("T7a spike loads the full chain",
       and "/comfydl/ui-assets/bridge.css" in spike
       and "/comfydl/ui/components/ui-button/ui-button.js" in spike)
 check("T7b spike stamps machine-checkable verdicts",
-      'document.body.dataset' in spike
-      and "themeSwitch" in spike and "motionOff" in spike)
+      'document.documentElement.dataset' in spike
+      and "themeSwitch" in spike and "cdl-motion-off" in spike)
 
 # ---------------------------------------------------------------------------
 # T8: HTTP layer (the two mounts actually serve)
@@ -192,6 +192,47 @@ asyncio.run(_route_checks())
 banned = re.compile(r"(\bosu!?\b|\bppyl?\b)", re.IGNORECASE)
 dirty = [p.name for p in DIST.rglob("*") if p.is_file() and banned.search(p.name)]
 check("T9a no brand words in dist file names", dirty == [], str(dirty[:5]))
+
+# ---------------------------------------------------------------------------
+# T10: U stick 3 shared infrastructure (loader + B8 semantics + VFX)
+
+loader_src = (UI_ASSETS / "kit-loader.js").read_text(encoding="utf-8")
+sem_src = (UI_ASSETS / "kit_semantics.js").read_text(encoding="utf-8")
+check("T10a shared loader imports every dist component by the canonical path",
+      "ensureComponents" in loader_src
+      and 'COMPONENT_BASE = "/comfydl/ui/components"' in loader_src
+      and "${normalized}/${normalized}.js" in loader_src
+      and "customElements.get" in loader_src
+      and "import FAILED" in loader_src)
+
+check("T10b B8 semantic colours have a single literal home (bridge.css)",
+      "--cdl-verdict-ok" in bridge and "--cdl-verdict-warn" in bridge
+      and "--cdl-verdict-danger" in bridge and "--cdl-chosen" in bridge
+      and "verdictColor" in sem_src and "statusColor" in sem_src
+      and "--cdl-verdict-ok" in sem_src)
+
+check("T10c status-pulse / entrance timeline obey all three motion gates",
+      "@keyframes cdl-status-pulse" in bridge
+      and "@keyframes cdl-entrance-timeline" in bridge
+      and "--motion-scale" in bridge
+      and "html.cdl-motion-off .cdl-vfx-pulse" in bridge
+      and "body.cdlapp-motion-off .cdl-vfx-entrance" in bridge
+      and "prefers-reduced-motion" in bridge)
+
+APP_ROOT = REPO_ROOT / "app"
+p6b_src = (APP_ROOT / "p6b_assets" / "p6b.js").read_text(encoding="utf-8")
+obs_src = (APP_ROOT / "obs_assets" / "obs.js").read_text(encoding="utf-8")
+prof_src = (APP_ROOT / "profiling_assets" / "profiler.js").read_text(
+    encoding="utf-8")
+check("T10d all three panels use the shared loader",
+      all('from "/comfydl/ui-assets/kit-loader.js"' in s
+          for s in (p6b_src, obs_src, prof_src))
+      and all("ensureComponents(" in s for s in (p6b_src, obs_src, prof_src)))
+check("T10e natural kit surfaces land in each panel",
+      '<ui-button' in p6b_src and "ui-press" in p6b_src
+      and "<ui-spinner" in obs_src and "cdl-obs-hint-spinner" in obs_src
+      and '<ui-textbox variant="number"' in prof_src
+      and 'document.createElement("ui-tabs")' in prof_src)
 
 
 def _report() -> int:

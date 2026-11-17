@@ -16,6 +16,9 @@
  * three-gate motion.  IDs, CSS classes and localStorage keys are P6b-owned
  * so the two windows never share shape or position state.
  */
+import { ensureComponents } from "/comfydl/ui-assets/kit-loader.js";
+import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
+
 (() => {
   "use strict";
 
@@ -341,6 +344,7 @@
   async function fetchAll() {
     if (state.busy) return;
     state.busy = true;
+    state.refs?.refresh?.setAttribute?.("loading", "");
     try {
       const [sw, st, cache, bench] = await Promise.all([
         getJson(SWITCHES_URL).catch((e) => (log("fetch switches FAIL:", String(e)), null)),
@@ -358,6 +362,7 @@
         "bench=" + (bench ? "ok" : "null"));
     } finally {
       state.busy = false;
+      state.refs?.refresh?.removeAttribute?.("loading");
     }
     renderSwitches();
     renderStatus();
@@ -530,6 +535,7 @@
         '<div class="cdl-p6b-bench-geo">' + geo + "</div>" +
         '<div class="cdl-p6b-bench-list">' + backends + "</div></div>";
     }).join("");
+    host.querySelectorAll(".chosen").forEach((el) => markStatus(el, "chosen"));
   }
 
   // ---------------------------------------------------------------- shell --
@@ -537,15 +543,16 @@
     const root = document.createElement("div");
     root.id = OVERLAY_ID;
     root.className = "cdl-p6b-overlay p6b-entrance";
+    markEntrance(root);
     root.title = t("tooltip");
     root.innerHTML =
       '<div class="cdl-p6b-head" data-p6b="head">' +
         '<span class="cdl-p6b-title">' + esc(t("title")) + "</span>" +
-        '<button type="button" class="cdl-p6b-btn" data-p6b="refresh" title="' +
-          esc(t("refresh")) + '">⟳</button>' +
-        '<button type="button" class="cdl-p6b-btn" data-p6b="collapse">+</button>' +
-        '<button type="button" class="cdl-p6b-btn" data-p6b="hide" title="' +
-          esc(t("hide")) + '">×</button>' +
+        '<ui-button class="cdl-p6b-btn" data-p6b="refresh" label="⟳" title="' +
+          esc(t("refresh")) + '">⟳</ui-button>' +
+        '<ui-button class="cdl-p6b-btn" data-p6b="collapse" label="+">+</ui-button>' +
+        '<ui-button class="cdl-p6b-btn" data-p6b="hide" label="×" title="' +
+          esc(t("hide")) + '">×</ui-button>' +
       "</div>" +
       '<div class="cdl-p6b-body">' +
         '<div class="cdl-p6b-card">' +
@@ -572,18 +579,18 @@
       "</div>";
     document.body.appendChild(root);
 
-    const reopen = document.createElement("button");
+    const reopen = document.createElement("ui-button");
     reopen.id = REOPEN_ID;
-    reopen.type = "button";
+    reopen.setAttribute("label", t("reopen"));
     reopen.className = "cdl-p6b-reopen";
     reopen.textContent = t("reopen");
     reopen.title = t("tooltip");
     document.body.appendChild(reopen);
 
-    root.querySelector('[data-p6b="collapse"]').addEventListener("click", toggleCollapse);
-    root.querySelector('[data-p6b="hide"]').addEventListener("click", hideOverlay);
-    root.querySelector('[data-p6b="refresh"]').addEventListener("click", fetchAll);
-    reopen.addEventListener("click", showOverlay);
+    root.querySelector('[data-p6b="collapse"]').addEventListener("ui-press", toggleCollapse);
+    root.querySelector('[data-p6b="hide"]').addEventListener("ui-press", hideOverlay);
+    root.querySelector('[data-p6b="refresh"]').addEventListener("ui-press", fetchAll);
+    reopen.addEventListener("ui-press", showOverlay);
     setupDrag(root, root.querySelector('[data-p6b="head"]'));
 
     state.overlayEl = root;
@@ -591,6 +598,7 @@
     ensureDockGap(); // must run before the first paint / applyPosition
     state.refs = {
       collapse: root.querySelector('[data-p6b="collapse"]'),
+      refresh: root.querySelector('[data-p6b="refresh"]'),
       switches: root.querySelector('[data-p6b="switches"]'),
       status: root.querySelector('[data-p6b="status"]'),
       cache: root.querySelector('[data-p6b="cache"]'),
@@ -640,13 +648,9 @@
           locale = String(store?.get?.("Comfy.Locale") || "en").split("-")[0];
         } catch (e) { locale = "en"; }
         log("locale =", locale);
-        // U stick 2: make sure the kit components this panel uses are
-        // registered before the first render; if the kit is absent the
-        // panel still works (checkbox rows just render unstyled).
-        try {
-          await import("/comfydl/ui/components/ui-checkbox/ui-checkbox.js");
-          log("kit import ui-checkbox OK");
-        } catch (e) { log("kit import FAIL (panel degrades):", String(e)); }
+        // U stick 3: one shared loader for all kit components this panel
+        // uses; a missing kit degrades to plain unstyled elements.
+        await ensureComponents(["ui-checkbox", "ui-button"]);
         await mountOverlay();
         fetchAll(); // three cheap GETs; keep the first paint honest
         return;

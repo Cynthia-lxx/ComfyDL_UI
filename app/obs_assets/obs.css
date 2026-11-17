@@ -60,7 +60,20 @@
   font-weight: 700;
   color: var(--input-text-read-only, #9a9a9a);
 }
-.cdl-obs-badge-on { color: #3ddc97; border-color: #2f7f61; }
+.cdl-obs-badge-on {
+  color: var(--cdl-status-ran, #3ddc97);
+  border-color: color-mix(in srgb, var(--cdl-status-ran, #3ddc97) 55%, transparent);
+}
+ui-button.cdl-obs-btn { flex: none; --control-height: 20px; --corner-radius: var(--cdl-corner-radius, 5px); }
+ui-button.cdl-obs-btn::part(button) {
+  min-width: 20px; height: 20px; padding: 0 4px;
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: var(--cdl-corner-radius, 5px);
+  background: transparent; color: inherit; font: inherit; line-height: 1;
+}
+ui-button.cdl-obs-btn:hover::part(button) {
+  border-color: var(--cdl-status-active, #4a9eff);
+}
 
 .cdl-obs-btn {
   flex: none;
@@ -94,8 +107,23 @@
   font: inherit;
   cursor: pointer;
 }
-.cdl-obs-enable:hover, .cdl-obs-reopen:hover { border-color: #4a9eff; }
-.cdl-obs-enable:disabled { opacity: 0.55; cursor: default; }
+ui-button.cdl-obs-enable::part(button),
+ui-button#cdl-obs-reopen::part(button) {
+  width: 100%; padding: 5px 8px;
+  border-radius: var(--cdl-corner-radius, 5px);
+  border: 1px solid var(--border-color, #3a3a3a);
+  background: var(--comfy-input-bg, rgba(45, 45, 45, 0.9));
+  color: var(--input-text, #ddd); font: inherit;
+}
+ui-button.cdl-obs-enable:hover::part(button),
+ui-button#cdl-obs-reopen:hover::part(button) {
+  border-color: var(--cdl-status-active, #4a9eff);
+}
+ui-button.cdl-obs-enable[disabled] { opacity: 0.55; cursor: default; }
+.cdl-obs-hint-spinner {
+  width: 14px; height: 14px; vertical-align: middle; margin-left: 6px;
+}
+.cdl-obs-hint-spinner[hidden] { display: none; }
 .cdl-obs-off[hidden], .cdl-obs-enable[hidden], .cdl-obs-rows[hidden],
 .cdl-obs-reopen[hidden] { display: none; }
 
@@ -116,9 +144,9 @@
 }
 .cdl-obs-chart { display: block; width: 100%; height: 100%; }
 .cdl-obs-line { stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
-.cdl-obs-cpu { stroke: #4a9eff; }
-.cdl-obs-ram { stroke: #f5a524; }
-.cdl-obs-vram { stroke: #3ddc97; }
+.cdl-obs-cpu { stroke: var(--cdl-status-active, #4a9eff); }
+.cdl-obs-ram { stroke: var(--cdl-status-new, #f5a524); }
+.cdl-obs-vram { stroke: var(--cdl-status-ran, #3ddc97); }
 
 .cdl-obs-legend {
   display: flex;
@@ -128,9 +156,9 @@
 }
 .cdl-obs-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .cdl-obs-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.cdl-obs-dot.cdl-obs-cpu { background: #4a9eff; }
-.cdl-obs-dot.cdl-obs-ram { background: #f5a524; }
-.cdl-obs-dot.cdl-obs-vram { background: #3ddc97; }
+.cdl-obs-dot.cdl-obs-cpu { background: var(--cdl-status-active, #4a9eff); }
+.cdl-obs-dot.cdl-obs-ram { background: var(--cdl-status-new, #f5a524); }
+.cdl-obs-dot.cdl-obs-vram { background: var(--cdl-status-ran, #3ddc97); }
 
 .cdl-obs-meta { font-variant-numeric: tabular-nums; }
 .cdl-obs-dedup, .cdl-obs-schema {
@@ -171,9 +199,9 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
-.cdl-obs-badge-ran { color: #4a9eff; }
-.cdl-obs-badge-cached { color: #f5a524; }
-.cdl-obs-badge-blocked { color: #e5484d; }
+.cdl-obs-badge-ran { color: var(--cdl-status-cached, #4a9eff); }
+.cdl-obs-badge-cached { color: var(--cdl-status-new, #f5a524); }
+.cdl-obs-badge-blocked { color: var(--cdl-status-blocked, #e5484d); }
 .cdl-obs-badge-zero { opacity: 0.55; }
 
 .cdl-obs-runs { display: flex; flex-direction: column; gap: 3px; }
@@ -185,15 +213,17 @@
   white-space: nowrap;
 }
 .cdl-obs-run-status { flex: none; font-weight: 700; }
-.cdl-obs-run-completed { color: #3ddc97; }
-.cdl-obs-run-failed { color: #e5484d; }
+.cdl-obs-run-completed { color: var(--cdl-status-ran, #3ddc97); }
+.cdl-obs-run-failed { color: var(--cdl-status-failed, #e5484d); }
 /* R4 (1.7): per-row started_at / duration / this-session tag + caliber hint */
 .cdl-obs-run-time, .cdl-obs-run-dur {
   flex: none;
   color: var(--input-text-read-only, #9a9a9a);
   font-variant-numeric: tabular-nums;
 }
-.cdl-obs-run-new { flex: none; color: #f5a524; font-weight: 700; }
+.cdl-obs-run-new {
+  flex: none; color: var(--cdl-status-new, #f5a524); font-weight: 700;
+}
 .cdl-obs-runs-hint {
   color: var(--input-text-read-only, #9a9a9a);
   font-size: 9px;

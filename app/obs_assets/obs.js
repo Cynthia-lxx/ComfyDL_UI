@@ -13,6 +13,9 @@
  * instantaneous CPU/RAM/VRAM percentages, so this widget shows trends and
  * absolute values instead.
  */
+import { ensureComponents } from "/comfydl/ui-assets/kit-loader.js";
+import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
+
 (() => {
   "use strict";
 
@@ -193,18 +196,21 @@
     const root = document.createElement("div");
     root.id = OVERLAY_ID;
     root.className = "cdl-obs-overlay obs-entrance";
+    markEntrance(root);
     root.title = t("tooltip");
     root.innerHTML =
       '<div class="cdl-obs-head" data-obs="head">' +
         '<span class="cdl-obs-title">' + esc(t("title")) + "</span>" +
         '<span class="cdl-obs-badge" data-obs="badge">' + esc(t("badge_off")) + "</span>" +
-        '<button type="button" class="cdl-obs-btn" data-obs="collapse">+</button>' +
-        '<button type="button" class="cdl-obs-btn" data-obs="hide">×</button>' +
+        '<ui-button class="cdl-obs-btn" data-obs="collapse" label="+">+</ui-button>' +
+        '<ui-button class="cdl-obs-btn" data-obs="hide" label="×">×</ui-button>' +
       "</div>" +
       '<div class="cdl-obs-body">' +
-        '<div class="cdl-obs-off" data-obs="hint">' + esc(t("off_hint")) + "</div>" +
-        '<button type="button" class="cdl-obs-enable" data-obs="enable">' +
-          esc(t("enable")) + "</button>" +
+        '<div class="cdl-obs-off" data-obs="hint">' + esc(t("off_hint")) +
+          '<ui-spinner class="cdl-obs-hint-spinner" data-obs="spinner"' +
+          ' variant="boxless" size="14" hidden></ui-spinner></div>' +
+        '<ui-button class="cdl-obs-enable" data-obs="enable" label="' +
+          esc(t("enable")) + '">' + esc(t("enable")) + "</ui-button>" +
         '<div class="cdl-obs-rows" data-obs="rows" hidden>' +
           '<div class="cdl-obs-trend">' + esc(t("trend")) + "</div>" +
           '<div class="cdl-obs-chart-wrap" data-obs="chart-wrap"></div>' +
@@ -231,9 +237,9 @@
       "</div>";
     document.body.appendChild(root);
 
-    const reopen = document.createElement("button");
+    const reopen = document.createElement("ui-button");
     reopen.id = REOPEN_ID;
-    reopen.type = "button";
+    reopen.setAttribute("label", t("reopen"));
     reopen.className = "cdl-obs-reopen";
     reopen.textContent = t("reopen");
     reopen.title = t("tooltip");
@@ -251,10 +257,10 @@
     }
     root.querySelector('[data-obs="chart-wrap"]').appendChild(chart);
 
-    root.querySelector('[data-obs="collapse"]').addEventListener("click", toggleCollapse);
-    root.querySelector('[data-obs="hide"]').addEventListener("click", hideOverlay);
-    root.querySelector('[data-obs="enable"]').addEventListener("click", enableSpine);
-    reopen.addEventListener("click", showOverlay);
+    root.querySelector('[data-obs="collapse"]').addEventListener("ui-press", toggleCollapse);
+    root.querySelector('[data-obs="hide"]').addEventListener("ui-press", hideOverlay);
+    root.querySelector('[data-obs="enable"]').addEventListener("ui-press", enableSpine);
+    reopen.addEventListener("ui-press", showOverlay);
     setupDrag(root, root.querySelector('[data-obs="head"]'));
 
     state.overlayEl = root;
@@ -263,6 +269,7 @@
     state.refs = {
       badge: root.querySelector('[data-obs="badge"]'),
       hint: root.querySelector('[data-obs="hint"]'),
+      spinner: root.querySelector('[data-obs="spinner"]'),
       enable: root.querySelector('[data-obs="enable"]'),
       rows: root.querySelector('[data-obs="rows"]'),
       collapse: root.querySelector('[data-obs="collapse"]'),
@@ -437,6 +444,9 @@
     const r = state.refs;
     r.badge.textContent = state.enabled ? t("badge_on") : t("badge_off");
     r.badge.classList.toggle("cdl-obs-badge-on", state.enabled);
+    // U stick 3: the kit spinner replaces the bare "waiting" text as the
+    // loading indicator; keep the text for accessibility / kit-off fallback.
+    if (r.spinner) r.spinner.hidden = !(state.enabled && !state.sample);
     if (!state.enabled) {
       r.rows.hidden = true;
       r.hint.hidden = false;
@@ -499,7 +509,8 @@
       const name = String(run.experiment || run.run_id || "run");
       const status = String(run.status || "");
       const cls = status === "failed"
-        ? "cdl-obs-run-failed" : "cdl-obs-run-completed";
+        ? "cdl-obs-run-failed cdl-sem-failed"
+        : "cdl-obs-run-completed cdl-sem-ran";
       const started = String(run.started_at || "");
       const hm = started.length >= 19 ? started.slice(11, 19) : "";
       const dur = Number(run.duration_s);
@@ -518,7 +529,7 @@
         : "";
       const startedMs = Date.parse(started);
       const newTag = Number.isFinite(startedMs) && startedMs >= SESSION_START
-        ? '<span class="cdl-obs-run-new">' + esc(t("run_new")) + "</span>"
+        ? '<span class="cdl-obs-run-new cdl-sem-new">' + esc(t("run_new")) + "</span>"
         : "";
       return '<div class="cdl-obs-run"><span class="cdl-obs-run-name">' +
         esc(name) + '</span>' +
@@ -530,6 +541,9 @@
         esc(status) + "</span></div>";
     }).join("") +
       '<div class="cdl-obs-runs-hint">' + esc(t("runs_hint")) + "</div>";
+    // This-session runs breathe once; VFX obeys the same three motion gates.
+    host.querySelectorAll(".cdl-obs-run-new").forEach((el) =>
+      markStatus(el, "new", true));
   }
 
   function onExecEvent(name, payload) {
@@ -637,7 +651,11 @@
     const api = getApi(getApp());
     if (!api || typeof api.fetchApi !== "function") return;
     const btn = state.refs?.enable;
-    if (btn) { btn.disabled = true; btn.textContent = t("enabling"); }
+    if (btn) {
+      btn.setAttribute("disabled", "");
+      btn.textContent = t("enabling");
+    }
+    if (state.refs?.spinner) state.refs.spinner.hidden = false;
     try {
       await api.fetchApi(SPINE_URL, {
         method: "PATCH",
@@ -647,9 +665,10 @@
     } catch (e) { /* refreshState will fall back to the off hint */ }
     await refreshState();
     if (btn && !state.enabled) {
-      btn.disabled = false;
+      btn.removeAttribute("disabled");
       btn.textContent = t("enable");
     }
+    renderPanel();
   }
 
   function mountOverlay() {
@@ -716,6 +735,7 @@
           const v = app.extensionManager.setting.get("Comfy.Locale");
           if (typeof v === "string" && v) locale = v.split("-")[0];
         } catch (e) { /* keep the default locale */ }
+        await ensureComponents(["ui-button", "ui-spinner"]);
         mountOverlay();
       },
     });

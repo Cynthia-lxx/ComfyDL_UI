@@ -25,6 +25,9 @@
  * Everything degrades silently: no API this extension touches may break the
  * normal workflow. i18n: zh/en dictionaries, following Comfy.Locale.
  */
+import { ensureComponents } from "/comfydl/ui-assets/kit-loader.js";
+import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
+
 (() => {
   "use strict";
 
@@ -2009,8 +2012,8 @@
       usedAssumptions.forEach((a) => {
         html.push('<div class="cdlp-assumption">');
         html.push('<span class="cdlp-assumption-key">' + esc(a.key) + "</span>");
-        html.push('<input type="number" min="0" step="1" value="' + esc(a.value)
-          + '" data-assumption="' + esc(a.key) + '">');
+        html.push('<ui-textbox variant="number" value="' + esc(a.value)
+          + '" data-assumption="' + esc(a.key) + '"></ui-textbox>');
         html.push('<span class="cdlp-assumption-src">' + esc(t("assumption_" + a.source)) + "</span>");
         html.push("</div>");
       });
@@ -2196,14 +2199,18 @@
 
   function wirePanel(el) {
     el.querySelectorAll("[data-assumption]").forEach((input) => {
-      input.addEventListener("change", () => {
+      // ui-textbox emits ui-text-commit on Enter / blur; plain <input>
+      // (kit unavailable) still emits the native change event.
+      const commit = () => {
         const key = input.getAttribute("data-assumption");
         const value = parseInt(input.value, 10);
         if (!isNaN(value) && value > 0) {
           state.assumptions[key] = value;
           requestEstimate(true);
         }
-      });
+      };
+      input.addEventListener("ui-text-commit", commit);
+      input.addEventListener("change", commit);
     });
     // Collapsible section titles: click the title to fold / unfold the card.
     el.querySelectorAll(".cdlp-collapsible").forEach((titleEl) => {
@@ -2239,6 +2246,51 @@
       const btn = el.querySelector("#cdlp-export-" + kind);
       if (btn) btn.addEventListener("click", () => exportAssembled(kind));
     });
+
+    // U stick 3: a compact kit tab strip switches which card is expanded.
+    // The original clickable card titles stay intact (progressive upgrade).
+    if (customElements.get("ui-tabs")) {
+      const first = el.querySelector(".cdlp-card");
+      if (first) {
+        const tabs = document.createElement("ui-tabs");
+        tabs.className = "cdlp-section-tabs";
+        tabs.setAttribute("value", "");
+        [
+          ["nodes", t("table_title")],
+          ["history", t("history_title")],
+          ["cache", t("datacache_title")],
+          ["bursts", t("watchdog_bursts")],
+          ["serverlog", t("logs_title")],
+        ].forEach(([key, label]) => {
+          const item = document.createElement("ui-tab");
+          item.setAttribute("value", key);
+          item.setAttribute("label", label);
+          tabs.appendChild(item);
+        });
+        first.parentNode.insertBefore(tabs, first);
+        tabs.addEventListener("ui-select", (ev) => {
+          const chosen = String(ev.detail?.value || "");
+          tabs.setAttribute("value", chosen);
+          el.querySelectorAll(".cdlp-card").forEach((card) => {
+            const key = card.querySelector(".cdlp-collapsible")?.dataset.collapse;
+            state.collapsed[key] = chosen ? key !== chosen : false;
+            card.classList.toggle("cdlp-collapsed", !!state.collapsed[key]);
+          });
+        });
+      }
+    }
+    // B8: verdict badges get their colour from the shared semantic module;
+    // a red verdict breathes once (status-pulse, motion-gated in bridge.css).
+    el.querySelectorAll(".cdlp-verdict").forEach((box) => {
+      const cls = [...box.classList].find((c) => c.startsWith("cdlp-v-"));
+      const verdict = cls ? cls.slice("cdlp-v-".length) : "unknown";
+      markStatus(box.querySelector(".cdlp-verdict-badge"), verdict,
+        verdict === "red");
+    });
+    if (!el.dataset.cdlEntrance) {
+      el.dataset.cdlEntrance = "1";
+      markEntrance(el);
+    }
   }
 
   // M3: the full-dashboard overlay. Same content as the sidebar (one render
@@ -2348,6 +2400,9 @@
   async function init() {
     const app = getApp();
     if (!app) return;
+    // U stick 3: shared lazy loader; the panel still works with plain HTML
+    // controls when the kit is unavailable.
+    await ensureComponents(["ui-button", "ui-textbox", "ui-tabs"]);
     state.locale = await detectLocale();
     // Device-aware zh verdict wording; fire-and-forget - the panel renders
     // with the default wording first and picks the right one once known.

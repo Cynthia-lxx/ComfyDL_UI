@@ -117,14 +117,28 @@
 .cdlp-verdict-reason { color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
 .cdlp-verdict-largest { width: 100%; color: var(--input-text-read-only, #9a9a9a); font-size: 12px; }
 
-.cdlp-v-green  { background: rgba(74, 222, 128, 0.10); border-color: rgba(74, 222, 128, 0.35); }
-.cdlp-v-green .cdlp-verdict-badge  { background: #4ade80; }
-.cdlp-v-yellow { background: rgba(251, 191, 36, 0.10); border-color: rgba(251, 191, 36, 0.35); }
-.cdlp-v-yellow .cdlp-verdict-badge { background: #fbbf24; }
-.cdlp-v-red    { background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.45); }
-.cdlp-v-red .cdlp-verdict-badge    { background: #f87171; }
-.cdlp-v-unknown { background: rgba(154, 154, 154, 0.08); border-color: rgba(154, 154, 154, 0.25); }
-.cdlp-v-unknown .cdlp-verdict-badge { background: #9a9a9a; }
+/* B8: verdict colours live in bridge.css as --cdl-verdict-* and are read by
+ * kit_semantics.js; no literal hue may be repeated in panel CSS. */
+.cdlp-v-green  {
+  background: color-mix(in srgb, var(--cdl-verdict-ok, #4ade80) 10%, transparent);
+  border-color: color-mix(in srgb, var(--cdl-verdict-ok, #4ade80) 35%, transparent);
+}
+.cdlp-v-green .cdlp-verdict-badge  { background: var(--cdl-verdict-ok, #4ade80); }
+.cdlp-v-yellow {
+  background: color-mix(in srgb, var(--cdl-verdict-warn, #fbbf24) 10%, transparent);
+  border-color: color-mix(in srgb, var(--cdl-verdict-warn, #fbbf24) 35%, transparent);
+}
+.cdlp-v-yellow .cdlp-verdict-badge { background: var(--cdl-verdict-warn, #fbbf24); }
+.cdlp-v-red    {
+  background: color-mix(in srgb, var(--cdl-verdict-danger, #f87171) 12%, transparent);
+  border-color: color-mix(in srgb, var(--cdl-verdict-danger, #f87171) 45%, transparent);
+}
+.cdlp-v-red .cdlp-verdict-badge    { background: var(--cdl-verdict-danger, #f87171); }
+.cdlp-v-unknown {
+  background: color-mix(in srgb, var(--cdl-verdict-unknown, #9a9a9a) 8%, transparent);
+  border-color: color-mix(in srgb, var(--cdl-verdict-unknown, #9a9a9a) 25%, transparent);
+}
+.cdlp-v-unknown .cdlp-verdict-badge { background: var(--cdl-verdict-unknown, #9a9a9a); }
 
 /* Budget card */
 .cdlp-budget { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -144,8 +158,21 @@
 .cdlp-meter-fill {
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #4ade80, #fbbf24 70%, #f87171);
+  background: linear-gradient(90deg,
+    var(--cdl-verdict-ok, #4ade80),
+    var(--cdl-verdict-warn, #fbbf24) 70%,
+    var(--cdl-verdict-danger, #f87171));
   transition: width 300ms ease;
+}
+
+/* U stick 3: kit section tabs (B3 spacing: 7px tight / 14px airy). */
+.cdlp-section-tabs {
+  margin: var(--cdl-space-tight, 7px) var(--cdl-space-airy, 14px);
+  border-bottom: 1px solid var(--border-color, #2a2a2a);
+}
+ui-textbox[data-assumption] {
+  width: 72px;
+  border-radius: var(--cdl-corner-radius, 5px);
 }
 
 /* Assumptions */
