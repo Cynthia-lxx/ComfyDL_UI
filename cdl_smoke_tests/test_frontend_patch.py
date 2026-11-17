@@ -133,6 +133,13 @@ def main() -> int:
               and "/comfydl/ui-assets/help-menu.js" in index_text)
         check("real frontend: help-menu asset re-apply is a no-op",
               _fp._patch_help_menu_asset(web_root) is False)
+        # 2026-11-17: sidebar Help button must open the HelpCenter popup in
+        # App mode (upstream swapped it for a Typeform feedback survey).
+        gv = _fp._locate(assets, "GraphView-*.js", "Comfy.ContactSupport")
+        check("real frontend: sidebar Help opens menu in App mode",
+              _fp.SIDEBAR_HELP_LINEAR_MARK in _fp._text(gv))
+        check("real frontend: sidebar-help patch re-apply is a no-op",
+              _fp._patch_sidebar_help_linear_mode(assets) is False)
 
     # --- synthetic chunk: happy path ---------------------------------------- #
     sandbox = Path(tempfile.mkdtemp(prefix="cdl_fepatch_"))
@@ -195,6 +202,32 @@ def main() -> int:
             check("startup: drifted signature raises", False, "no ValueError")
         except ValueError:
             check("startup: drifted signature raises", True)
+
+        # --- synthetic chunk: sidebar help linear-mode swap ------------------ #
+        assets6 = sandbox / "assets6"
+        assets6.mkdir()
+        gv6 = assets6 / "GraphView-TEST.js"
+        gv6.write_text(
+            "Comfy.ContactSupport;=>W(i)?(q(),L(Hm,{key:0,side:o.value?`right`:"
+            '`left`,"side-offset":8}:0',
+            encoding="utf-8")
+        check("sidebar-help: patch applied",
+              _fp._patch_sidebar_help_linear_mode(assets6) is True)
+        stext6 = gv6.read_text(encoding="utf-8")
+        check("sidebar-help: marker present", _fp.SIDEBAR_HELP_LINEAR_MARK in stext6)
+        check("sidebar-help: ternary neutralised",
+              "=>!1" + _fp.SIDEBAR_HELP_LINEAR_MARK in stext6)
+        check("sidebar-help: second apply is a no-op",
+              _fp._patch_sidebar_help_linear_mode(assets6) is False)
+        drifted6 = sandbox / "assets7"
+        drifted6.mkdir()
+        (drifted6 / "GraphView-TEST.js").write_text(
+            "Comfy.ContactSupport;renamed()", encoding="utf-8")
+        try:
+            _fp._patch_sidebar_help_linear_mode(drifted6)
+            check("sidebar-help: drifted anchor raises", False, "no ValueError")
+        except ValueError:
+            check("sidebar-help: drifted anchor raises", True)
 
         # --- generational upgrade helper ------------------------------------ #
         current_url = f"fetch(`/templates/{DEFAULT_WORKFLOW_TEMPLATE}.json`"

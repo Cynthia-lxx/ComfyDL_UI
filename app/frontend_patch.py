@@ -419,6 +419,7 @@ def apply_frontend_patches(web_root: str) -> None:
         ("default workflow", _patch_default_workflow),
         ("startup workflow", _patch_startup_workflow),
         ("help menu group", _patch_help_menu),
+        ("sidebar help in app mode", _patch_sidebar_help_linear_mode),
         # Incremental i18n: frontends patched before the perf-tools settings
         # existed still need the new category name (own marker, safe to run
         # alongside the bulk zh merge).
@@ -797,6 +798,41 @@ def _patch_help_menu(assets: Path) -> bool:
     )
     _write(path, text)
     logging.info(f"{TAG} ComfyDL help group appended in {path.name}")
+    return True
+
+
+# --- Sidebar Help button in App mode (2026-11-17) ------------------------------
+#
+# Upstream SidebarHelpCenterIcon (GraphView-*.js) swaps the sidebar Help
+# button's behaviour when the official App mode ("linearMode") is active:
+# instead of calling toggleHelpCenter() it renders a Popover embedding a
+# Typeform feedback survey (tooltip: linearMode.giveFeedback).  That is why
+# the ComfyDL Help menu never opened in App mode.  We neutralise the
+# linear-mode ternary so the button always opens the HelpCenter popup; the
+# survey stays reachable via the topbar feedback button (Legacy tab-bar
+# layout) and via the menu's own entries.
+SIDEBAR_HELP_LINEAR_MARK = "/*ComfyDL_UI:sidebar-help-linear*/"
+SIDEBAR_HELP_LINEAR_ANCHOR = "=>W(i)?(q(),L(Hm,{key:0,side:"
+
+
+def _patch_sidebar_help_linear_mode(assets: Path) -> bool:
+    """Always wire the sidebar Help button to the HelpCenter popup."""
+    path = _locate(assets, "GraphView-*.js", "Comfy.ContactSupport")
+    text = _text(path)
+    if SIDEBAR_HELP_LINEAR_MARK in text:
+        logging.debug(f"{TAG} sidebar help linear-mode swap already applied")
+        return False
+    matches = text.count(SIDEBAR_HELP_LINEAR_ANCHOR)
+    if matches != 1:
+        raise ValueError(
+            "SidebarHelpCenterIcon linear ternary anchor not found "
+            f"({matches} matches in {path.name})")
+    replacement = "=>!1" + SIDEBAR_HELP_LINEAR_MARK + "?(q(),L(Hm,{key:0,side:"
+    text = text.replace(SIDEBAR_HELP_LINEAR_ANCHOR, replacement)
+    _write(path, text)
+    logging.info(
+        f"{TAG} sidebar Help button now opens the HelpCenter popup in App mode "
+        f"({path.name})")
     return True
 
 
