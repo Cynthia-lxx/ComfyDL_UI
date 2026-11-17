@@ -153,7 +153,8 @@
   --edge-margin: 12px;       /* SCREEN_EDGE_MARGIN */
   --content-padding-x: 22px;
   --content-padding-y: 12px;
-  --shear: 0.2;              /* SHEAR = 0.2，斜切布局 */
+  --shear: 0.2;              /* SHEAR = 0.2，斜切布局 (OsuGame.cs:114-116) */
+  --shear-angle: 11.31deg;   /* atan(0.2)：外层 skewX(-angle) + 内容 skewX(+angle) */
   --tooltip-max-width: 500px;
   --scrollbar-size: 10px;
 
@@ -179,17 +180,28 @@
   --text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
 
   /* ------------------------------------------------------------------ *
-   * 8. 动效 token（调研报告 C2；原仓库无全局 token，此处为翻译时的收拢）
+   * 8. 动效 token（调研报告 C2 收拢 + 2026-11-17 osu 原版校准）
+   *    osu 时长家族: 40/100/150/200/250/300/360/500/800ms，几乎全部 OutQuint
+   *    （ShearedButton.cs:191=150、Nub.cs:162-178=200、BeatmapCard.cs:24=360、
+   *    WaveContainer.cs:19=800）
    * ------------------------------------------------------------------ */
+  --duration-flash: 40ms;      /* hover 脉冲首段 (OsuButton.cs:152) */
+  --duration-state: 150ms;     /* 按钮状态切换 (ShearedButton.cs:191) */
+  --duration-toggle: 200ms;    /* Nub 弹性膨胀 (Nub.cs:162-178) */
+  --duration-card: 360ms;      /* 卡片 hover (BeatmapCard.cs:24) */
   --duration-fast: 120ms;
   --duration-normal: 300ms;
   --duration-transition: 500ms;
   --duration-entrance: 800ms;
   --motion-scale: 1;
-  --easing-out: cubic-bezier(0.22, 1, 0.36, 1);       /* OutQuint 近似 */
+  --easing-out: cubic-bezier(0.22, 1, 0.36, 1);        /* OutQuint 近似 */
   --easing-in: cubic-bezier(0.64, 0, 0.78, 0);         /* InQuint 近似 */
   --easing-in-out: cubic-bezier(0.37, 0, 0.63, 1);     /* InOutSine 近似 */
   --easing-elastic: cubic-bezier(0.34, 1.56, 0.64, 1); /* OutElastic 近似 */
+  --easing-elastic-half: cubic-bezier(0.3, 1.25, 0.5, 1);  /* OutElasticHalf (Nub) */
+  --easing-elastic-quarter: cubic-bezier(0.3, 1.2, 0.5, 1); /* OutElasticQuarter (SwitchButton) */
+  --easing-out-expo: cubic-bezier(0.19, 1, 0.22, 1);   /* OutExpo (SwitchButton 收回) */
+  --easing-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1); /* InOutQuart */
   --parallax-strength: 1;
   --hold-delay: 200ms;
   --tooltip-delay: 250ms;
@@ -204,6 +216,14 @@
   --backdrop-blur: calc(var(--blur-level) * 20px);
   --ui-shadow: 0 4px 16px rgb(0 0 0 / 40%);
   --ui-glow-effect: 0 0 var(--glow-radius) var(--glow-spread) var(--ui-glow);
+  /* osu EdgeEffect 家族（2026-11-17 原版校准）：
+   * 卡片 Shadow black/10% offset(0,1) r3 (ShearedOverlayHeader.cs:86-92)；
+   * 菜单 r4；浮层 hollow r10 /20% (FullscreenOverlay.cs:55-61)；
+   * Nub hover glow r8 alpha 10% (Nub.cs:64-70)。 */
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 10%);
+  --shadow-menu: 0 0 4px rgb(0 0 0 / 10%);
+  --shadow-float: 0 0 10px rgb(0 0 0 / 20%);
+  --shadow-glow: 0 0 8px color-mix(in srgb, var(--ui-glow, #66ccff) 10%, transparent);
   --z-background: 0;
   --z-content: 100;
   --z-footer: 1000;

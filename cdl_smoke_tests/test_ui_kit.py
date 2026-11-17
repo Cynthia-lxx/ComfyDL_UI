@@ -283,6 +283,47 @@ check("T11g profiler tabs overflow with chevron scroll hints",
       and "scrollBy" in prof_src
       and ".cdlp-tab-arrow" in prof_css)
 
+# ---------------------------------------------------------------------------
+# T12: rod-4 [0.91] osu-original style migration contracts
+
+btn_css = (DIST / "components" / "ui-button" / "ui-button.css").read_text(
+    encoding="utf-8")
+chk_css = (DIST / "components" / "ui-checkbox" / "ui-checkbox.css").read_text(
+    encoding="utf-8")
+tokens_src = (DIST / "tokens.css").read_text(encoding="utf-8")
+check("T12a osu motion family + shear angle tokenised",
+      "--duration-state: 150ms" in tokens_src
+      and "--duration-toggle: 200ms" in tokens_src
+      and "--duration-card: 360ms" in tokens_src
+      and "--easing-elastic-half" in tokens_src
+      and "--easing-out-expo" in tokens_src
+      and "--shear-angle: 11.31deg" in tokens_src
+      and "--shadow-card" in tokens_src)
+check("T12b default button is sheared with anti-sheared content",
+      "--shear-angle" in btn_css
+      and "transform: skewX(calc(-1 * var(--_shear)))" in btn_css
+      and "button > * { transform: skewX(var(--_shear)); }" in btn_css)
+check("T12c button hover is a white additive pulse (mix-blend screen)",
+      "mix-blend-mode: screen" in btn_css
+      and "@keyframes ui-hover-pulse" in btn_css
+      and "opacity: 0.2" in btn_css and "opacity: 0.1" in btn_css)
+check("T12d active state = saturated Highlight1 fill + dark Background6 text",
+      "--colour-highlight-1" in btn_css
+      and "--colour-background-6" in btn_css
+      and 'color: var(--colour-background-6, #17171c);' in btn_css)
+check("T12e gradient border via padding-box/border-box (radius-safe)",
+      "padding-box" in btn_css and "border-box" in btn_css
+      and "--colour-background-3" in btn_css
+      and "border-image" not in btn_css)
+check("T12f flat/icon/gray/show-more variants opt out of the shear",
+      "variant='flat']" in btn_css and "variant='gray']" in btn_css
+      and "variant='show-more']" in btn_css)
+check("T12g Nub: transparent unchecked + 3px border, filled 8.5px elastic check",
+      "background: transparent" in chk_css
+      and "border: 3px solid var(--ui-accent" in chk_css
+      and "border-width: 8.5px" in chk_css
+      and "--easing-elastic-half" in chk_css)
+
 
 def _report() -> int:
     passed = sum(1 for _, ok, _ in _RESULTS if ok)

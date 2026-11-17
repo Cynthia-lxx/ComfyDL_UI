@@ -1,14 +1,30 @@
 /* SPDX-License-Identifier: MIT
  * Derived from ppy/osu (MIT) — see 00-overview/LICENSE-MIT.txt
- * OsuButton.cs:133-176 / ShearedButton.cs:191-249 / FormControlBackground.cs:42-93
+ * OsuButton.cs:78-185 / ShearedButton.cs:18-198 / ShearedToggleButton.cs:49-54 /
+ * FormControlBackground.cs:42-93.  Rod-4 [0.91] rewrite (2026-11-17): states
+ * now follow the ORIGINAL C# spec, not the lossy HTML translation:
+ *   - default look is sheared (OsuGame.SHEAR=0.2 -> skewX(-11.31deg)), content
+ *     anti-sheared; flat/icon/gray/show-more variants opt out;
+ *   - hover = white additive pulse: 40ms -> 0.2 then 800ms settle -> 0.1
+ *     (OsuButton.cs:96-105,152-154) via mix-blend-mode:screen;
+ *   - click flash white 50% FadeOutFromOne 500ms (OsuButton.cs:107-114);
+ *   - press sinks to scale 0.9 slowly (OutQuint), release rebounds elastically
+ *     (OsuButton.cs:167-177);
+ *   - data-active (ShearedToggleButton): SATURATED fill (Highlight1) + DARK
+ *     text (Background6) — active reads as a brighter fill with dimmer text;
+ *   - 2px vertical gradient border Background3->Background1
+ *     (ShearedButton.cs:174-197) drawn with the padding-box/border-box trick
+ *     so border-radius keeps rounding.
  * Colours, durations and easing all come from 03-colour-typography/tokens.css.
  */
 
 :host {
   display: inline-block;
   contain: layout style;
-  --_fast: calc(var(--duration-fast, 120ms) * var(--motion-scale, 1));
+  --_flash: calc(var(--duration-flash, 40ms) * var(--motion-scale, 1));
+  --_state: calc(var(--duration-state, 150ms) * var(--motion-scale, 1));
   --_normal: calc(var(--duration-normal, 300ms) * var(--motion-scale, 1));
+  --_shear: var(--shear-angle, 11.31deg);
 }
 
 button {
@@ -20,90 +36,137 @@ button {
   min-width: 80px;
   height: var(--control-height, 40px);
   padding: 0 18px;
-  border: var(--border-width, 2px) solid var(--ui-border, #444);
-  border-radius: var(--corner-radius, 5px);
-  background: var(--ui-surface-raised, #333);
+  border: var(--border-width, 2px) solid transparent;
+  border-radius: 7px; /* ShearedButton.CORNER_RADIUS */
+  /* vertical gradient border (B3->B1) + panel fill, radius-safe */
+  background:
+    linear-gradient(var(--ui-surface, #2a2a2a), var(--ui-surface, #2a2a2a)) padding-box,
+    linear-gradient(180deg,
+      var(--colour-background-3, #393946),
+      var(--colour-background-1, #5c5c70)) border-box;
   color: var(--ui-text, #fff);
   font: inherit;
   font-weight: var(--font-weight-semibold, 600);
   text-shadow: var(--text-shadow, none);
   cursor: pointer;
   overflow: hidden;
+  /* signature shear: outer sheared, children anti-sheared */
+  transform: skewX(calc(-1 * var(--_shear)));
+  transform-origin: center;
   transition:
-    background-color var(--_fast) var(--easing-out, ease-out),
-    border-color var(--_fast) var(--easing-out, ease-out),
+    background-color var(--_state) var(--easing-out, ease-out),
+    border-color var(--_state) var(--easing-out, ease-out),
     box-shadow var(--_normal) var(--easing-out, ease-out),
-    transform var(--_fast) var(--easing-out, ease-out);
+    /* press sinks slowly (OutQuint), release rebounds elastically (1s) */
+    transform calc(1000ms * var(--motion-scale, 1)) var(--easing-elastic, ease-out);
 }
 
+button > * { transform: skewX(var(--_shear)); }
+
+/* White additive hover layer (OsuButton.cs:96-105): mix-blend-mode:screen is
+ * additive over dark surfaces.  Pulse: 40ms to 0.2, then 800ms settle to 0.1. */
 button::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--ui-accent, #66ccff);
+  background: #fff;
+  mix-blend-mode: screen;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--_normal) var(--easing-out, ease-out);
+}
+
+button:hover:not(:disabled)::after {
+  animation: ui-hover-pulse calc(840ms * var(--motion-scale, 1)) var(--easing-out, ease-out) forwards;
+}
+button:not(:hover)::after { transition: opacity var(--_normal) var(--easing-out, ease-out); }
+
+@keyframes ui-hover-pulse {
+  0% { opacity: 0; }
+  4.8% { opacity: 0.2; }   /* 40ms of 840ms */
+  100% { opacity: 0.1; }
 }
 
 /* 四态：normal / hovered / focused / disabled（对应 FormControlBackground） */
 button:hover:not(:disabled) {
-  background: var(--ui-surface, #2a2a2a);
-  border-color: var(--ui-accent, #66ccff);
+  /* Lighten(0.2) on both gradient stops (ShearedButton.cs:180-186) */
+  background:
+    linear-gradient(var(--ui-surface, #2a2a2a), var(--ui-surface, #2a2a2a)) padding-box,
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--colour-background-3, #393946), white 20%),
+      color-mix(in srgb, var(--colour-background-1, #5c5c70), white 20%)) border-box;
 }
-
-button:hover:not(:disabled)::after { opacity: 0.08; }
 
 button:focus-visible {
   outline: var(--border-width-strong, 2px) solid var(--ui-accent-strong, #66ccff);
   outline-offset: 2px;
 }
 
+/* Press: sink to 0.9 slowly; release uses the elastic transition above. */
 button:active:not(:disabled) {
-  transform: scale(0.97);
-  background: var(--ui-accent-weak, #3399cc);
+  transform: skewX(calc(-1 * var(--_shear))) scale(0.9);
+  transition-duration: calc(2000ms * var(--motion-scale, 1));
+  transition-timing-function: var(--easing-out, ease-out);
 }
-
-button:active:not(:disabled)::after { opacity: 0.22; }
 
 button:disabled {
-  opacity: 0.45;
   cursor: not-allowed;
   filter: saturate(0.4);
+  color: color-mix(in srgb, var(--ui-text, #fff) 60%, transparent);
 }
 
-/* Sheared 变体：上游 SHEAR = 0.2 rad ≈ 11.5deg，斜切必须成对抵消 */
+/* Sheared 变体：默认已是剪切观感（rod-4），此变体仅为兼容保留。
+ * flat 变体 = 取消剪切（ToolbarButton.cs 等未剪切的老式按钮）。 */
 :host([variant='sheared']) button,
 button[data-variant='sheared'] {
   border-radius: 7px;
-  transform: skewX(-11.5deg);
-  transform-origin: center;
+  transform: skewX(calc(-1 * var(--_shear)));
 }
 
-:host([variant='sheared']) button > *,
-button[data-variant='sheared'] > * {
-  transform: skewX(11.5deg);
+:host([variant='flat']) button,
+button[data-variant='flat'] {
+  transform: none;
+  background: var(--ui-surface-raised, #333);
 }
+:host([variant='flat']) button > *,
+button[data-variant='flat'] > * { transform: none; }
+:host([variant='flat']) button:active:not(:disabled),
+button[data-variant='flat']:active:not(:disabled) { transform: scale(0.97); }
 
-:host([variant='sheared']) button:active:not(:disabled),
-button[data-variant='sheared']:active:not(:disabled) {
-  transform: skewX(-11.5deg) scale(0.97);
-}
-
-/* 激活/切换态：dataset.active='true'（工具栏开关、自动轮换等 toggle 按钮） */
+/* 激活/切换态：dataset.active='true'（ShearedToggleButton.cs:49-54）：
+ * 高饱和 Highlight1 填充 + Background6 深色文字 + Colour0 描边。 */
 :host([data-active='true']) button,
 button[data-active='true'] {
-  border-color: var(--ui-accent, #66ccff);
-  background: color-mix(in srgb, var(--ui-accent, #66ccff) 22%, var(--ui-surface-raised, #333));
+  border-color: transparent;
+  background:
+    linear-gradient(
+      var(--colour-highlight-1, #8c8cd9),
+      var(--colour-highlight-1, #8c8cd9)) padding-box,
+    linear-gradient(180deg,
+      var(--colour-0, #b3b3e6),
+      var(--colour-highlight-1, #8c8cd9)) border-box;
+  color: var(--colour-background-6, #17171c);
+  text-shadow: none;
 }
+:host([data-active='true']) button::after,
+button[data-active='true']::after { mix-blend-mode: normal; }
 
 button[data-variant='danger'] {
-  border-color: var(--danger, #cc3378);
-  background: color-mix(in srgb, var(--danger, #cc3378) 25%, var(--ui-surface-raised, #333));
+  border-color: transparent;
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--danger, #cc3378) 25%, var(--ui-surface, #2a2a2a)),
+      color-mix(in srgb, var(--danger, #cc3378) 25%, var(--ui-surface, #2a2a2a))) padding-box,
+    linear-gradient(180deg, var(--danger, #cc3378), var(--danger, #cc3378)) border-box;
 }
 
 button[data-variant='danger']:hover:not(:disabled) {
-  border-color: var(--danger, #cc3378);
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--danger, #cc3378) 25%, var(--ui-surface, #2a2a2a)),
+      color-mix(in srgb, var(--danger, #cc3378) 25%, var(--ui-surface, #2a2a2a))) padding-box,
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--danger, #cc3378), white 20%),
+      color-mix(in srgb, var(--danger, #cc3378), white 20%)) border-box;
 }
 
 /* 上游 OsuButton 的点击 FlashColour(500ms)，此处以短促加性层表示 */
@@ -123,19 +186,17 @@ button[data-variant='danger']:hover:not(:disabled) {
 button[data-variant='sheared-button'] {
   height: 50px;
   border-radius: 7px;
-  border-width: 2px;
-  border-image: linear-gradient(var(--ui-surface-sunken, #222), var(--ui-text, #fff)) 1;
-  transform: skewX(-11.5deg);
-  transition-duration: 150ms;
+  transition-duration: var(--_state);
 }
 :host([variant='sheared-button']) button > *,
-button[data-variant='sheared-button'] > * { transform: skewX(11.5deg); }
+button[data-variant='sheared-button'] > * { transform: skewX(var(--_shear)); }
 
 /* DangerousRoundedButton.cs:9-15 —— Pink3 危险色（复用既有 danger 语义） */
 :host([variant='dangerous']) button,
 button[data-variant='dangerous'] { border-color: var(--danger, #cc3378); background: var(--danger, #cc3378); }
 
-/* GrayButton.cs:24-47 / IconButton.cs:12-14,62-84 —— 30x30 纯图标、圆角 10、hover 500ms */
+/* GrayButton.cs:24-47 / IconButton.cs:12-14,62-84 —— 30x30 纯图标、圆角 10、
+ * hover 500ms；上游未剪切，这里显式取消默认剪切。 */
 :host([variant='gray']) button, button[data-variant='gray'],
 :host([variant='icon']) button, button[data-variant='icon'] {
   width: 30px;
@@ -143,20 +204,27 @@ button[data-variant='dangerous'] { border-color: var(--danger, #cc3378); backgro
   padding: 0;
   border-radius: 10px;
   font-size: 18px;
+  transform: none;
   transition-duration: 500ms;
 }
+:host([variant='gray']) button > *, button[data-variant='gray'] > *,
+:host([variant='icon']) button > *, button[data-variant='icon'] > * { transform: none; }
 :host([variant='gray']) button,
 button[data-variant='gray'] { background: var(--gray-4, #444); }
 :host([variant='icon']:hover) button,
 button[data-variant='icon']:hover { color: var(--state-warning, #ffcc22); }
 
-/* TwoLayerButton.cs:29-39,172-189 —— 100→140 宽，600ms OutElastic 展开双层 */
+/* TwoLayerButton.cs:29-39,172-189 —— 100→140 宽，600ms OutElastic 展开双层；
+ * 老式控件未剪切。 */
 :host([variant='two-layer']) button,
 button[data-variant='two-layer'] {
   width: 100px;
   height: 50px;
+  transform: none;
   transition: width 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+:host([variant='two-layer']) button > *,
+button[data-variant='two-layer'] > * { transform: none; }
 :host([variant='two-layer']:hover) button,
 button[data-variant='two-layer']:hover { width: 140px; }
 
@@ -166,21 +234,28 @@ button[data-variant='dialog'] {
   height: 48px;
   font-size: 28px;
   font-weight: var(--font-weight-bold, 700);
-  transform: skewX(-11.5deg) scaleX(0.8);
+  transform: skewX(calc(-1 * var(--_shear))) scaleX(0.8);
   transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1), filter 400ms ease-out;
 }
 :host([variant='dialog']:hover) button,
-button[data-variant='dialog']:hover { transform: skewX(-11.5deg) scaleX(0.9); filter: brightness(1.1); }
+button[data-variant='dialog']:hover {
+  transform: skewX(calc(-1 * var(--_shear))) scaleX(0.9);
+  filter: brightness(1.1);
+}
 :host([variant='dialog']) button > *,
-button[data-variant='dialog'] > * { transform: skewX(11.5deg); }
+button[data-variant='dialog'] > * { transform: skewX(var(--_shear)); }
 
-/* ShowMoreButton.cs:45-52,99-137 —— 圆形 + 双 chevron + 加载时文字 200ms 淡出 */
+/* ShowMoreButton.cs:45-52,99-137 —— 圆形 + 双 chevron + 加载时文字 200ms 淡出；
+ * 圆形控件不剪切。 */
 :host([variant='show-more']) button,
 button[data-variant='show-more'] {
   border-radius: 999px;
+  transform: none;
   font-size: var(--font-size-caption2, 12px);
   font-weight: var(--font-weight-semibold, 600);
 }
+:host([variant='show-more']) button > *,
+button[data-variant='show-more'] > * { transform: none; }
 :host([variant='show-more']) button::before,
 button[data-variant='show-more']::before { content: '⌄'; margin-right: 10px; }
 :host([variant='show-more']) button::after,
@@ -203,6 +278,7 @@ button[data-variant='show-more']::after { content: '⌄'; margin-left: 10px; bac
 
 @media (prefers-reduced-motion: reduce) {
   button { transition-duration: 0ms; }
-  button:active:not(:disabled) { transform: none; }
+  button:hover:not(:disabled)::after { animation: none; opacity: 0.1; }
+  button:active:not(:disabled) { transform: skewX(calc(-1 * var(--_shear))); }
   .spinner { animation-duration: 0ms; }
 }
