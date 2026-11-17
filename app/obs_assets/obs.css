@@ -236,16 +236,8 @@ ui-button.cdl-obs-enable[disabled] { opacity: 0.55; cursor: default; }
   line-height: 1.45;
 }
 
-@keyframes obs-overlay-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-.obs-entrance { animation: obs-overlay-in 320ms ease-out backwards; }
-
-/* gates: UI motion master / App Panel motion / reduced-motion exemption */
-html.cdl-motion-off .obs-entrance,
-body.cdlapp-motion-off .obs-entrance { animation: none !important; }
+/* Entrance is owned by the shared cdl-vfx-entrance class in bridge.css so
+ * replayEntrance() can restart it and all three motion gates apply once. */
 @media (prefers-reduced-motion: reduce) {
-  .obs-entrance { animation: none !important; }
   #cdl-obs-overlay { transition: none !important; }
 }

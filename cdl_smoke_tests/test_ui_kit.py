@@ -234,6 +234,32 @@ check("T10e natural kit surfaces land in each panel",
       and '<ui-textbox variant="number"' in prof_src
       and 'document.createElement("ui-tabs")' in prof_src)
 
+# ---------------------------------------------------------------------------
+# T11: post-stick-3 bug-fix contracts
+
+prof_css = (APP_ROOT / "profiling_assets" / "profiler.css").read_text(
+    encoding="utf-8")
+cdlapp_src = (APP_ROOT / "cdlapp_assets" / "cdlapp.js").read_text(
+    encoding="utf-8")
+check("T11a kit buttons are never mistaken for a drag start",
+      'closest("button, ui-button")' in p6b_src
+      and 'closest("button, ui-button")' in obs_src)
+check("T11b entrance replays on panel expansion",
+      "replayEntrance" in p6b_src and "replayEntrance" in obs_src
+      and "export function replayEntrance" in sem_src)
+check("T11c Help menu pruned + dock yields while it is open",
+      "pruneHelpMenu" in cdlapp_src
+      and 'startsWith("ComfyDL")' in cdlapp_src
+      and "!helpOpen" in cdlapp_src)
+check("T11d markdown contrast, compact badge, exclusive profiler tabs",
+      ".comfy-markdown-content" in bridge
+      and 'button.comfyui-button[class*="cdlp-b-"]' in prof_css
+      and "cdlp-tab-hidden" in prof_css
+      and '"cdlp-tab-hidden", !selected' in prof_src)
+check("T11e CrashSite topbar shows a glyph instead of an empty icon box",
+      'content: "CS"' in (APP_ROOT / "crashsite_assets" / "crashsite.js").read_text(
+          encoding="utf-8"))
+
 
 def _report() -> int:
     passed = sum(1 for _, ok, _ in _RESULTS if ok)

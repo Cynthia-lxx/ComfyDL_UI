@@ -14,7 +14,7 @@
  * absolute values instead.
  */
 import { ensureComponents } from "/comfydl/ui-assets/kit-loader.js";
-import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
+import { markEntrance, replayEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
 
 (() => {
   "use strict";
@@ -298,7 +298,11 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
   function setupDrag(root, handle) {
     if (!handle) return;
     handle.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || (event.target.closest && event.target.closest("button"))) return;
+      // Kit buttons are custom elements: in a shadow-DOM event the target is
+      // retargeted to <ui-button>, so a bare `button` check would start a drag
+      // and preventDefault() would swallow the ui-press click.
+      if (event.button !== 0 || (event.target.closest &&
+          event.target.closest("button, ui-button"))) return;
       const rect = root.getBoundingClientRect();
       const start = {
         x: event.clientX, y: event.clientY, left: rect.left, top: rect.top,
@@ -396,6 +400,7 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
     saveBool(COLLAPSE_KEY, state.collapsed);
     applyShape();
     applyPosition(); // the expanded body is taller - keep it on screen
+    if (!state.collapsed) replayEntrance(state.overlayEl);
   }
 
   function hideOverlay() {
@@ -411,6 +416,7 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
     saveBool(COLLAPSE_KEY, false);
     applyShape();
     applyPosition();
+    replayEntrance(state.overlayEl);
   }
 
   function linePoints(values) {

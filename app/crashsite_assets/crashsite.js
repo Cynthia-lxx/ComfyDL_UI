@@ -560,8 +560,11 @@
       } catch (e) { return; }
     }
     try {
+      // Frontend 1.59.2 no longer ships the PrimeIcons classes the old
+      // `pi pi-replay` icon relied on, so the control rendered as a blank
+      // square.  A text glyph is theme-independent and self-explanatory.
       const button = new ComfyButton({
-        icon: "pi pi-replay",
+        content: "CS",
         tooltip: t("tab_tooltip"),
         action: openSidebarPanel,
       });
@@ -696,11 +699,11 @@
     if (state.masterEnabled) {
       el.classList.remove("cs-topbar-disabled");
       el.title = t("tab_tooltip");
-      try { btn.icon = "pi pi-replay"; } catch (e) { /* older ComfyButton */ }
+      try { btn.content = "CS"; } catch (e) { /* older ComfyButton */ }
     } else {
       el.classList.add("cs-topbar-disabled");
       el.title = t("disabled_tooltip");
-      try { btn.icon = "pi pi-exclamation-triangle"; } catch (e) { /* older */ }
+      try { btn.content = "!"; } catch (e) { /* older */ }
     }
   }
 

@@ -318,6 +318,33 @@ button.cdlp-b-gray, .cdlp-b-gray { color: #9a9a9a !important; }
 .cdlp-badge-fallback.cdlp-b-gray { color: #9a9a9a; }
 .cdlp-badge-fallback:hover { filter: brightness(1.2); }
 
+/* Topbar estimate capsule: the upstream ComfyButton paints a 16px label and
+ * an empty icon slot square.  Keep the value legible but compact (B3). */
+button.comfyui-button[class*="cdlp-b-"] {
+  min-height: 22px !important;
+  height: 22px !important;
+  padding: 0 6px !important;
+  gap: 0 !important;
+  font-size: 11px !important;
+  line-height: 18px !important;
+  font-weight: 700;
+  border-radius: var(--cdl-corner-radius, 5px);
+}
+button.comfyui-button[class*="cdlp-b-"]::before,
+button.comfyui-button[class*="cdlp-b-"] > i,
+button.comfyui-button[class*="cdlp-b-"] > .icon,
+button.comfyui-button[class*="cdlp-b-"] > .spinner {
+  display: none !important;
+}
+.cdlp-b-green { color: var(--cdl-verdict-ok, #4ade80); }
+.cdlp-b-yellow { color: var(--cdl-verdict-warn, #fbbf24); }
+.cdlp-b-red { color: var(--cdl-verdict-danger, #f87171); }
+.cdlp-b-gray { color: var(--cdl-verdict-unknown, #9a9a9a); }
+
+/* U stick 3 follow-up: tab-selected sections are exclusive, not just
+ * collapsed - the other cards leave the layout entirely. */
+.cdlp-card.cdlp-tab-hidden { display: none; }
+
 /* M2: compute ledger */
 .cdlp-flops-total {
   font-family: var(--cdlp-font-display);

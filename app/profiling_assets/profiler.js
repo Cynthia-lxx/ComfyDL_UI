@@ -58,6 +58,7 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
       sidebar_title: "Profiling",
       sidebar_tooltip: "Memory estimation for the current workflow",
       cmd_open: "Open the Profiling panel",
+      tab_all: "All sections",
       setting_log_level: "ComfyDL profiling log level",
       setting_dangerous: "ComfyDL profiling dangerous probe (executes real node code)",
       setting_enabled: "ComfyDL profiling enabled (master switch)",
@@ -253,6 +254,7 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
       sidebar_title: "性能分析",
       sidebar_tooltip: "当前工作流的内存估算",
       cmd_open: "打开性能分析面板",
+      tab_all: "全部分区",
       setting_log_level: "ComfyDL 性能分析日志级别",
       setting_dangerous: "ComfyDL 性能分析危险探针（执行真实节点代码）",
       setting_enabled: "启用 ComfyDL 性能分析（总开关）",
@@ -2254,8 +2256,9 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
       if (first) {
         const tabs = document.createElement("ui-tabs");
         tabs.className = "cdlp-section-tabs";
-        tabs.setAttribute("value", "");
+        tabs.setAttribute("value", "all");
         [
+          ["all", t("tab_all")],
           ["nodes", t("table_title")],
           ["history", t("history_title")],
           ["cache", t("datacache_title")],
@@ -2269,12 +2272,19 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
         });
         first.parentNode.insertBefore(tabs, first);
         tabs.addEventListener("ui-select", (ev) => {
-          const chosen = String(ev.detail?.value || "");
+          // Exclusive sections, following the NTLab PE-analyser pattern:
+          // picking a section fully reveals it and removes every other
+          // tabbed card from the layout.  Summary cards (verdict / budget)
+          // have no data-collapse key and stay visible as context.
+          const chosen = String(ev.detail?.value || "all");
           tabs.setAttribute("value", chosen);
           el.querySelectorAll(".cdlp-card").forEach((card) => {
             const key = card.querySelector(".cdlp-collapsible")?.dataset.collapse;
-            state.collapsed[key] = chosen ? key !== chosen : false;
-            card.classList.toggle("cdlp-collapsed", !!state.collapsed[key]);
+            if (!key) return;
+            const selected = chosen === "all" || chosen === key;
+            card.classList.toggle("cdlp-tab-hidden", !selected);
+            state.collapsed[key] = !selected;
+            card.classList.toggle("cdlp-collapsed", !selected);
           });
         });
       }

@@ -59,6 +59,20 @@
 .cdl-sem-new { color: var(--cdl-status-new); }
 .cdl-sem-chosen { color: var(--cdl-chosen); }
 
+/* Markdown Note readability: the upstream widget inherits a dim node-widget
+ * colour; give its rendered markdown the normal panel text colour. */
+.widget-markdown .comfy-markdown-content,
+.comfy-markdown-content {
+  color: var(--input-text, #e8e8e8) !important;
+  opacity: 1 !important;
+}
+.widget-markdown .comfy-markdown-content a { color: var(--ui-accent, #66ccff); }
+.widget-markdown .comfy-markdown-content code {
+  background: var(--comfy-input-bg, #222);
+  color: var(--input-text, #e8e8e8);
+  border-radius: var(--cdl-corner-radius, 5px);
+}
+
 /* VFX: status-pulse + entrance-timeline.  Both are gated by the same three
  * motion switches as the rest of the kit (--motion-scale = 0 -> duration 0,
  * plus explicit animation:none for the global OFF switches). */

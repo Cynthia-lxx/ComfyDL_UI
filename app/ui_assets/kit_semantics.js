@@ -106,4 +106,14 @@ export function markEntrance(el) {
   return el;
 }
 
+/** Replay the entrance after a collapsed panel expands (CSS animation
+ * restart via forced reflow).  Motion gates still own the effective value. */
+export function replayEntrance(el) {
+  if (!el) return el;
+  el.classList.remove("cdl-vfx-entrance");
+  void el.offsetWidth;
+  el.classList.add("cdl-vfx-entrance");
+  return el;
+}
+
 applySemanticVars();

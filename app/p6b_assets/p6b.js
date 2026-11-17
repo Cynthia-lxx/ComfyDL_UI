@@ -17,7 +17,7 @@
  * so the two windows never share shape or position state.
  */
 import { ensureComponents } from "/comfydl/ui-assets/kit-loader.js";
-import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
+import { markEntrance, replayEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
 
 (() => {
   "use strict";
@@ -279,7 +279,10 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
     saveBool(COLLAPSE_KEY, state.collapsed);
     applyShape();
     applyPosition();
-    if (!state.collapsed) fetchAll();
+    if (!state.collapsed) {
+      replayEntrance(state.overlayEl);
+      fetchAll();
+    }
   }
 
   function hideOverlay() {
@@ -295,13 +298,18 @@ import { markEntrance, markStatus } from "/comfydl/ui-assets/kit_semantics.js";
     saveBool(COLLAPSE_KEY, false);
     applyShape();
     applyPosition();
+    replayEntrance(state.overlayEl);
     fetchAll();
   }
 
   function setupDrag(root, handle) {
     if (!handle) return;
     handle.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || (event.target.closest && event.target.closest("button"))) return;
+      // Shadow-DOM retargeting makes event.target the <ui-button> host, not
+      // its internal <button>; without `ui-button` here every head-button
+      // click was swallowed as a drag start (preventDefault killed click).
+      if (event.button !== 0 || (event.target.closest &&
+          event.target.closest("button, ui-button"))) return;
       const rect = root.getBoundingClientRect();
       const start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
       handle.setPointerCapture(event.pointerId);

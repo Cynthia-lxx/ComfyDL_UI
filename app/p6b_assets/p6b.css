@@ -230,15 +230,9 @@ ui-button#cdl-p6b-reopen::part(button) {
 #cdl-p6b-reopen[hidden] { display: none; }
 .cdl-p6b-dragging { user-select: none; }
 
-/* Three-gate motion: global UI switch, App Panel switch, OS preference. */
-.p6b-entrance { animation: p6b-overlay-in .18s ease-out; }
-@keyframes p6b-overlay-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: none; }
-}
-html.cdl-motion-off .p6b-entrance,
-body.cdlapp-motion-off .p6b-entrance { animation: none; }
+/* Entrance is owned by the shared cdl-vfx-entrance class in bridge.css so
+ * replayEntrance() can restart it and all three motion gates apply once.
+ * Keep the legacy .p6b-entrance hook for markup compatibility. */
 @media (prefers-reduced-motion: reduce) {
-  .p6b-entrance { animation: none; }
   #cdl-p6b-overlay, #cdl-p6b-reopen, .cdl-p6b-btn { transition: none; }
 }

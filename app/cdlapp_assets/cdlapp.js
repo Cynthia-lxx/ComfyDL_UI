@@ -532,6 +532,30 @@
     return false;
   }
 
+  // Help Center is a z-1700 popup rendered BELOW our z-2100 app dock, and its
+  // upstream entries (Give Feedback / Docs / Manager / What's New? ...) are
+  // noise in a ComfyDL build.  Keep only the ComfyDL-branded links and report
+  // the popup as open so the dock yields while it is visible.
+  function pruneHelpMenu() {
+    try {
+      const popup = document.querySelector(".help-center-popup");
+      if (!popup || !popup.offsetWidth) return false;
+      const menu = popup.querySelector(".help-center-menu") || popup;
+      let removed = 0;
+      menu.querySelectorAll("section").forEach((el) => { el.remove(); removed++; });
+      menu.querySelectorAll("button.help-menu-item").forEach((el) => {
+        if (!(el.textContent || "").trim().startsWith("ComfyDL")) {
+          el.remove();
+          removed++;
+        }
+      });
+      if (removed) {
+        console.info(TAG, `help menu pruned ${removed} upstream entries`);
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
   // Official modal dialogs (templates browser, lightbox, gallery, ...) render
   // a teleport-to-body scrim at z≈1700-3702 - ABOVE the dock (z 2100, which
   // is trapped inside the .comfyui-body stacking context).  With the dock
@@ -653,11 +677,13 @@
       // open (live-verified 2026-10-31: the app-mode drawer renders UNDER
       // the fixed full-bleed dock, and the official splitter REMOUNTS on
       // every drawer toggle - so the dock gets out of the way entirely).
-      const dock = isPureAppMode() && !drawerOpen() && !modalDialogOpen();
+      const helpOpen = pruneHelpMenu();
+      const dock = isPureAppMode() && !drawerOpen() && !modalDialogOpen()
+        && !helpOpen;
       if (dock !== state.appMode) {
         console.info(TAG, "poll: dock " + state.appMode + " -> " + dock
           + " (rawMode=" + rawMode() + " drawerOpen=" + drawerOpen()
-          + " modalOpen=" + modalDialogOpen() + ")");
+          + " modalOpen=" + modalDialogOpen() + " helpOpen=" + helpOpen + ")");
         state.appMode = dock;
         if (dock) mountPanel();
         else unmountPanel();
